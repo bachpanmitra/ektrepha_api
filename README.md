@@ -10,13 +10,15 @@ Backend service built with Java 17 and Spring Boot.
 - PostgreSQL
 - Spring Data JPA, Spring Web, Spring Validation, Spring Boot Actuator
 - Spring Security (OAuth2 Client)
+- Flyway (schema migrations)
 - Lombok
 
 ## Prerequisites
 
 - JDK 17
-- PostgreSQL 16 (running locally, or reachable via `DB_URL`)
+- PostgreSQL 16 and Redis (run locally, via Docker Compose, or reachable via `DB_URL`)
 - Maven is not required — this repo includes the Maven Wrapper (`./mvnw`)
+- Docker, if using `docker-compose.yml` instead of native installs
 
 ## Project Structure
 
@@ -47,24 +49,30 @@ cd ektrepha_api
 
 ## 2. Set Up the Database
 
-### Local (`dev` profile)
+### Local (`dev` profile) — via Docker Compose (recommended)
 
-Install and start PostgreSQL:
+```bash
+export DB_PASSWORD=postgres_dev_pw
+docker compose up -d
+```
+
+Starts Postgres 16 on `5432` and Redis 7 on `6379`, matching the `dev` profile's expected credentials.
+
+### Local (`dev` profile) — native install
 
 ```bash
 brew install postgresql@16
 brew services start postgresql@16
-```
-
-Create the role and database:
-
-```bash
 export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
 psql -d postgres -c "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD 'yourpassword';"
 createdb -O postgres ektrepha_api
 ```
 
-The `dev` profile connects to `jdbc:postgresql://localhost:5432/ektrepha_api` as user `postgres`, with the password read from the `DB_PASSWORD` environment variable.
+Either way, the `dev` profile connects to `jdbc:postgresql://localhost:5432/ektrepha_api` as user `postgres`, with the password read from the `DB_PASSWORD` environment variable.
+
+### Schema migrations
+
+Schema is managed entirely by Flyway (`src/main/resources/db/migration/`) — Hibernate's `ddl-auto` is `validate` on every profile, never `update`. Add a new `V<n>__description.sql` file for any schema change; migrations run automatically on app startup.
 
 ### Stage / Prod
 
@@ -121,6 +129,14 @@ curl http://localhost:8080/actuator/health
 
 | Profile | Datasource | `ddl-auto` | Actuator endpoints |
 |---|---|---|---|
-| `dev` | hardcoded `localhost:5432/ektrepha_api` | `update` | health, info |
+| `dev` | hardcoded `localhost:5432/ektrepha_api` | `validate` | health, info |
 | `stage` | env vars (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) | `validate` | health, info, metrics |
 | `prod` | env vars (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`) | `validate` | health, info |
+
+## API Conventions
+
+All application endpoints are versioned under `/api/v1/...`. Actuator (`/actuator/...`) stays unversioned since it's operational, not part of the public contract. See [`docs/adr/0001-api-gateway-and-versioning.md`](docs/adr/0001-api-gateway-and-versioning.md) for the reasoning, including the reverse-proxy choice.
+
+## CI
+
+Every push and PR against `master` runs `.github/workflows/ci.yml`: builds against JDK 17 and runs the full test suite against a real Postgres 16 service container.
