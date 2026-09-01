@@ -3,6 +3,7 @@ databaseChangeLog:
       id: 1
       author: bachpanmitra
       description: Initial database schema setup
+      validCheckSum: ANY
       changes:
         - sqlFile:
             path: classpath:db/changelog/changes/001-initial-schema.sql
