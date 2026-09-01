@@ -1,8 +1,5 @@
 -- Initial database schema
--- Add your initial schema creation here
 
--- Example table structure:
-/*
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -19,6 +16,3 @@ CREATE TABLE IF NOT EXISTS user_roles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-*/
-
--- Replace the above with your actual schema
