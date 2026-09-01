@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ektrepha_api
     username: postgres
-    password: postgres
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
