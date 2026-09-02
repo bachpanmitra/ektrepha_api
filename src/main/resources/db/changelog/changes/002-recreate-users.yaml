@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2
+      author: bachpanmitra
+      description: Recreate users and user_roles tables (missing in prod despite changeset 1 being marked executed)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/002-recreate-users.sql
+            relativeToChangelogFile: false

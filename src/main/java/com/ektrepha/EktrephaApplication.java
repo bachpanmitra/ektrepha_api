@@ -12,7 +12,6 @@ import org.springframework.context.event.EventListener;
 public class EktrephaApplication {
 
 	private static final Logger log = LoggerFactory.getLogger(EktrephaApplication.class);
-
 	private final BuildProperties buildProperties;
 
 	public EktrephaApplication(BuildProperties buildProperties) {
