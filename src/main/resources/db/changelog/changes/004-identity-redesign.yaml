@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 4
+      author: bachpanmitra
+      description: Redesign identity model for multi-channel auth (Google/Phone/Email), UUID keys, OTP-based verification/reset
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/004-identity-redesign.sql
+            relativeToChangelogFile: false

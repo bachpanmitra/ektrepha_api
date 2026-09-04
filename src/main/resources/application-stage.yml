@@ -10,6 +10,23 @@ spring:
   liquibase:
     enabled: true
 
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID}
+  aws:
+    s3:
+      bucket: ${S3_BUCKET}
+      region: ${S3_REGION}
+  startup:
+    check-s3: ${STARTUP_CHECK_S3:true}
+    seed-admin: ${STARTUP_SEED_ADMIN:false}
+    seed-admin-email: ${SEED_ADMIN_EMAIL:}
+    seed-admin-password: ${SEED_ADMIN_PASSWORD:}
+
 management:
   endpoints:
     web:

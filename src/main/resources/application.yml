@@ -6,3 +6,18 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+
+app:
+  jwt:
+    access-token-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
+    refresh-token-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
+  otp:
+    ttl-minutes: ${OTP_TTL_MINUTES:5}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+  login-lockout:
+    max-failures: ${LOGIN_LOCKOUT_MAX_FAILURES:5}
+    lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}
+  # Safe, do-nothing defaults for any profile that doesn't override them below.
+  startup:
+    check-s3: ${STARTUP_CHECK_S3:false}
+    seed-admin: ${STARTUP_SEED_ADMIN:false}
