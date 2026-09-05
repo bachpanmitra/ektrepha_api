@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 3
+      author: bachpanmitra
+      description: Reshape users for JWT auth (single role, profile fields) and add refresh/reset token tables
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/003-auth-schema.sql
+            relativeToChangelogFile: false

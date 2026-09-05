@@ -3,3 +3,9 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/001-initial-schema.yaml
   - include:
       file: classpath:db/changelog/changes/002-recreate-users.yaml
+  - include:
+      file: classpath:db/changelog/changes/003-auth-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/004-identity-redesign.yaml
+  - include:
+      file: classpath:db/changelog/changes/005-bigint-ids.yaml

@@ -1,0 +1,356 @@
+{
+  "info": {
+    "name": "Ektrepha API (local)",
+    "description": "All endpoints against a locally running Ektrepha API (dev profile, http://localhost:8080). Covers Google/Phone/Email signup+login, register, refresh/logout, OTP-based forgot/reset password, and RBAC. Run top-to-bottom within a folder — later requests depend on variables set by earlier ones (accessToken, refreshToken, signupSessionId, testEmail/testPhone).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('testEmail')) {",
+          "    const ts = Date.now();",
+          "    pm.collectionVariables.set('testEmail', 'user+' + ts + '@example.com');",
+          "    pm.collectionVariables.set('testPhone', '+91900' + ts);",
+          "    pm.collectionVariables.set('testPassword', 'Password123!');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "testEmail", "value": "" },
+    { "key": "testPhone", "value": "" },
+    { "key": "testPassword", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "signupSessionId", "value": "" },
+    { "key": "phoneSignupOtp", "value": "PASTE_FROM_SERVER_LOG" },
+    { "key": "resetOtp", "value": "PASTE_FROM_SERVER_LOG" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status field is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Version",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/version", "host": ["{{baseUrl}}"], "path": ["api", "version"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sign Up",
+      "item": [
+        {
+          "name": "Signup - Google (expect 400, needs a real Google ID token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/google", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "google"] },
+            "body": { "mode": "raw", "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\",\n  \"role\": \"PARENT\"\n}" },
+            "description": "This will always 400 with a fake idToken — replace the value with a real Google ID token (from Google Sign-In on a client) to actually exercise this endpoint."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Signup - Phone, Step 1 (initiate)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/phone/initiate", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "phone", "initiate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('signupSessionId', pm.response.json().signupSessionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signup - Phone, Step 2 (verify — paste OTP from server log first)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/phone/verify", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "phone", "verify"] },
+            "body": { "mode": "raw", "raw": "{\n  \"signupSessionId\": \"{{signupSessionId}}\",\n  \"otp\": \"{{phoneSignupOtp}}\"\n}" },
+            "description": "SmsService is a stub — it just logs the OTP. After running Step 1, grep the app log for 'OTP for <phone> (purpose=SIGNUP)', set the collection variable phoneSignupOtp to it, then run this."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Status is 200 or 201 (200/400 if phoneSignupOtp was never set)', () => pm.expect([200, 201, 400]).to.include(pm.response.code));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signup - Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "email"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signup - Email, duplicate (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "email"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 409', () => pm.response.to.have.status(409));"] } }
+          ]
+        },
+        {
+          "name": "Register (full profile — email + phone + name)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"register+{{$timestamp}}@example.com\",\n  \"name\": \"Postman Register Test\",\n  \"password\": \"{{testPassword}}\",\n  \"phoneNumber\": \"+91901{{$timestamp}}\",\n  \"role\": \"NANNY\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201', () => pm.response.to.have.status(201));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login - Google (expect 400, needs a real Google ID token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/google", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "google"] },
+            "body": { "mode": "raw", "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Login - Phone",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/phone", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "phone"] },
+            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\"\n}" },
+            "description": "Only succeeds if the Phone Signup (Step 1 + 2) requests above were completed first for this phone number."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 401 (401 if phone signup was not completed)', () => pm.expect([200, 401]).to.include(pm.response.code));"] } }
+          ]
+        },
+        {
+          "name": "Login - Email, wrong password (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "email"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"wrong-password\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Login - Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "email"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "logout"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Password",
+      "item": [
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/forgot", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "forgot"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "Reset Password (paste OTP from server log first)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/reset", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "reset"] },
+            "body": { "mode": "raw", "raw": "{\n  \"phoneOrEmail\": \"{{testEmail}}\",\n  \"otp\": \"{{resetOtp}}\",\n  \"newPassword\": \"NewPassword456!\"\n}" },
+            "description": "EmailService is a stub — it logs the OTP instead of emailing it. After running Forgot Password, grep the app log for 'OTP for <email> (purpose=RESET_PASSWORD)', set resetOtp, then run this."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Status is 200 or 400 (400 if resetOtp was never set)', () => pm.expect([200, 400]).to.include(pm.response.code));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RBAC Demo",
+      "item": [
+        {
+          "name": "Create Booking, no token (expect 401)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Create Booking, as PARENT (expect 201)",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201', () => pm.response.to.have.status(201));"] } }
+          ]
+        },
+        {
+          "name": "Admin Endpoint, as PARENT (expect 403)",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/v1/admin/anything", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "anything"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403 (wrong role, not unauthenticated)', () => pm.response.to.have.status(403));"] } }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 5
+      author: bachpanmitra
+      description: Switch users/otps/refresh_tokens primary keys from UUID back to BIGSERIAL
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/005-bigint-ids.sql
+            relativeToChangelogFile: false

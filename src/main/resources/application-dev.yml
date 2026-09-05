@@ -11,6 +11,27 @@ spring:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
 
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-insecure-secret-change-me-0123456789abcdef0123456789abcdef}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  # Placeholder client ID — Google signup/login will 400 on verification
+  # without a real one, but the app still starts (nothing else depends on it).
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:dev-placeholder-client-id.apps.googleusercontent.com}
+  aws:
+    s3:
+      # Placeholder values: the S3 connectivity check is off by default in dev
+      # (see app.startup.check-s3 below), so these just need to be non-blank.
+      bucket: ${S3_BUCKET:ektrepha-dev-local}
+      region: ${S3_REGION:ap-south-1}
+  startup:
+    check-s3: ${STARTUP_CHECK_S3:false}
+    seed-admin: ${STARTUP_SEED_ADMIN:true}
+    seed-admin-email: ${SEED_ADMIN_EMAIL:admin@ektrepha.local}
+    seed-admin-password: ${SEED_ADMIN_PASSWORD:ChangeMe123!}
+
 management:
   endpoints:
     web:
