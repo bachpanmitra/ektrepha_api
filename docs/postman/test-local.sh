@@ -50,19 +50,19 @@ check "GET /api/version" 200 "$code"
 
 echo ""
 echo "=== Auth ==="
-code=$(req POST /api/v1/auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Curl Test Parent\",\"phoneNumber\":\"9999999999\",\"role\":\"PARENT\"}")
+code=$(req POST /api/v1/auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"name\":\"Curl Test Parent\",\"phoneNumber\":\"9999999999\",\"role\":\"PARENT\"}")
 check "Register Parent" 201 "$code"
 
-code=$(req POST /api/v1/auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Dup\",\"role\":\"PARENT\"}")
+code=$(req POST /api/v1/auth/register "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"name\":\"Dup\",\"phoneNumber\":\"9999999998\",\"role\":\"PARENT\"}")
 check "Register Duplicate Email" 409 "$code"
 
-code=$(req POST /api/v1/auth/register "{\"email\":\"wannabe-admin+$(date +%s)@example.com\",\"password\":\"$PASSWORD\",\"fullName\":\"Nope\",\"role\":\"ADMIN\"}")
+code=$(req POST /api/v1/auth/register "{\"email\":\"wannabe-admin+$(date +%s)@example.com\",\"password\":\"$PASSWORD\",\"name\":\"Nope\",\"phoneNumber\":\"9999999997\",\"role\":\"ADMIN\"}")
 check "Register as ADMIN (blocked)" 400 "$code"
 
-code=$(req POST /api/v1/auth/login "{\"email\":\"$EMAIL\",\"password\":\"wrong-password\"}")
+code=$(req POST /api/v1/auth/login/email "{\"email\":\"$EMAIL\",\"password\":\"wrong-password\"}")
 check "Login wrong password" 401 "$code"
 
-code=$(req POST /api/v1/auth/login "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+code=$(req POST /api/v1/auth/login/email "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
 check "Login" 200 "$code"
 ACCESS_TOKEN=$(body | jq -r .accessToken)
 REFRESH_TOKEN=$(body | jq -r .refreshToken)
@@ -79,22 +79,22 @@ check "Refresh Token" 200 "$code"
 ACCESS_TOKEN=$(body | jq -r .accessToken)
 REFRESH_TOKEN=$(body | jq -r .refreshToken)
 
-code=$(req POST /api/v1/auth/forgot-password "{\"email\":\"$EMAIL\"}")
+code=$(req POST /api/v1/auth/password/forgot "{\"email\":\"$EMAIL\"}")
 check "Forgot Password" 200 "$code"
 
-echo "  ----  Reset Password skipped: the reset token is only in the app's log"
+echo "  ----  Reset Password skipped: the reset OTP is only in the app's log"
 echo "        (EmailService stub logs it, doesn't send real email). To test it:"
-echo "        grep 'Password reset requested' <app log>, then:"
-echo "        curl -X POST $BASE/api/v1/auth/reset-password -H 'Content-Type: application/json' \\"
-echo "             -d '{\"token\":\"<paste>\",\"newPassword\":\"NewPassword456!\"}'"
+echo "        grep 'OTP for' <app log>, then:"
+echo "        curl -X POST $BASE/api/v1/auth/password/reset -H 'Content-Type: application/json' \\"
+echo "             -d '{\"phoneOrEmail\":\"$EMAIL\",\"otp\":\"<paste>\",\"newPassword\":\"NewPassword456!\"}'"
 
 code=$(req POST /api/v1/auth/logout "{\"refreshToken\":\"$REFRESH_TOKEN\"}")
-check "Logout" 204 "$code"
+check "Logout" 200 "$code"
 
 echo ""
 echo "=== RBAC Demo ==="
 # Re-login since the token above was just logged out.
-code=$(req POST /api/v1/auth/login "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+code=$(req POST /api/v1/auth/login/email "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
 ACCESS_TOKEN=$(body | jq -r .accessToken)
 
 code=$(req POST /api/v1/bookings)
@@ -105,6 +105,50 @@ check "Create Booking, as PARENT" 201 "$code"
 
 code=$(req GET /api/v1/admin/anything "" "$ACCESS_TOKEN")
 check "Admin Endpoint, as PARENT" 403 "$code"
+
+echo ""
+echo "=== Nanny Search & Reviews ==="
+# No endpoint exists yet to create a Parent/Nanny profile row (separate,
+# unstarted work) — a registered user only has a users row. So the
+# valid-shape search/review checks below expect 404/400 (no parent profile /
+# no eligible booking), not a real result. Insert parent/nanny/booking rows
+# via psql first if you want to see actual ranked results or a real review.
+
+code=$(req GET /api/v1/nanny-search/languages)
+check "Languages, no token" 401 "$code"
+
+code=$(req GET /api/v1/nanny-search/languages "" "$ACCESS_TOKEN")
+check "Languages" 200 "$code"
+
+code=$(req GET /api/v1/nanny-search/skills "" "$ACCESS_TOKEN")
+check "Skills" 200 "$code"
+
+code=$(req POST /api/v1/nanny-search "{\"radiusKm\":10,\"windowStart\":\"2026-09-10T10:00:00Z\",\"windowEnd\":\"2026-09-10T12:00:00Z\",\"childId\":1}")
+check "Search, no token" 401 "$code"
+
+code=$(req POST /api/v1/nanny-search "{\"radiusKm\":7,\"windowStart\":\"2026-09-10T10:00:00Z\",\"windowEnd\":\"2026-09-10T12:00:00Z\",\"childId\":1}" "$ACCESS_TOKEN")
+check "Search, invalid radius" 400 "$code"
+
+code=$(req POST /api/v1/nanny-search "{\"radiusKm\":10,\"windowStart\":\"2026-09-10T10:00:00Z\",\"windowEnd\":\"2026-09-10T12:00:00Z\",\"childId\":1}" "$ACCESS_TOKEN")
+if [ "$code" = "200" ] || [ "$code" = "404" ]; then
+  echo "  PASS  Search, valid shape (got $code)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  Search, valid shape (expected 200 or 404, got $code)"
+  FAIL=$((FAIL+1))
+fi
+
+code=$(req POST /api/v1/reviews "{\"bookingId\":1,\"rating\":6}" "$ACCESS_TOKEN")
+check "Submit Review, invalid rating" 400 "$code"
+
+code=$(req POST /api/v1/reviews "{\"bookingId\":1,\"rating\":5,\"comment\":\"Great!\"}" "$ACCESS_TOKEN")
+if [ "$code" = "201" ] || [ "$code" = "400" ] || [ "$code" = "404" ]; then
+  echo "  PASS  Submit Review, valid shape (got $code)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  Submit Review, valid shape (expected 201, 400, or 404, got $code)"
+  FAIL=$((FAIL+1))
+fi
 
 echo ""
 echo "=== Summary: $PASS passed, $FAIL failed ==="

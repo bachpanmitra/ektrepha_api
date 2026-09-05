@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 7
+      author: bachpanmitra
+      description: Seed initial language/skill catalog rows for nanny search filters
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/007-nanny-catalog-seed-data.sql
+            relativeToChangelogFile: false

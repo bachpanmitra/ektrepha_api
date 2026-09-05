@@ -11,3 +11,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/005-bigint-ids.yaml
   - include:
       file: classpath:db/changelog/changes/006-nanny-marketplace-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/007-nanny-catalog-seed-data.yaml

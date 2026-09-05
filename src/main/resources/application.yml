@@ -21,3 +21,7 @@ app:
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}
     seed-admin: ${STARTUP_SEED_ADMIN:false}
+  search:
+    allowed-radii-km: ${SEARCH_ALLOWED_RADII_KM:2,5,10,20}
+    default-page-size: ${SEARCH_DEFAULT_PAGE_SIZE:20}
+    candidate-fetch-limit: ${SEARCH_CANDIDATE_FETCH_LIMIT:500}
