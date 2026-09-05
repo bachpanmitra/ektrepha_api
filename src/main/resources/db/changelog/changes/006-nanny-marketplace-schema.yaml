@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 6
+      author: bachpanmitra
+      description: Nanny marketplace schema (parent/nanny, verification, catalogs, service area, children, addresses, booking, review, ranking_config)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/006-nanny-marketplace-schema.sql
+            relativeToChangelogFile: false
