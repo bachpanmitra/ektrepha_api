@@ -10,6 +10,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,6 +47,8 @@ public class Children {
 	@Column(name = "gender", length = 10)
 	private String gender;
 
+	// @JdbcTypeCode(JSON) required — see Nanny.metaData for why columnDefinition alone isn't enough.
+	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "meta_data", columnDefinition = "jsonb")
 	private String metaData;
 

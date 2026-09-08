@@ -353,6 +353,65 @@
       ]
     },
     {
+      "name": "Nanny Profile",
+      "description": "No endpoint exists yet to create a Nanny profile row (separate, unstarted work) — a registered NANNY-role user only has a `users` row. So the valid-shape request below 404s unless you've manually inserted a `nanny` row for the logged-in user via psql.",
+      "item": [
+        {
+          "name": "Set Service Area, no token (expect 401)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, as PARENT (expect 403)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
+            "description": "{{accessToken}} in this collection comes from a PARENT signup/login above — this is deliberately the wrong role."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403', () => pm.response.to.have.status(403));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, invalid lat (expect 400)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 999,\n  \"lng\": 77.5946\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, valid shape, radius omitted (expect 200 or 404)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
+            "description": "radiusKm omitted — should default to 10 (matching the schema default) if a nanny profile row exists for this user. Re-running this a second time updates the same row rather than creating a second one."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 404 (404 if no nanny profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Nanny Search",
       "description": "No endpoint exists yet to create a Parent/Nanny profile row (that's separate, unstarted work) — a registered user only has a `users` row. So the search/review requests below that need a Parent profile will 404 with 'No parent profile found for this account' unless you've manually inserted parent/nanny/nanny_service_area rows for the logged-in user via psql. The 401/400-before-lookup and catalog-listing requests work end-to-end with no manual setup.",
       "item": [

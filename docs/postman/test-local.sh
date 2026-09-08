@@ -107,6 +107,30 @@ code=$(req GET /api/v1/admin/anything "" "$ACCESS_TOKEN")
 check "Admin Endpoint, as PARENT" 403 "$code"
 
 echo ""
+echo "=== Nanny Profile ==="
+NANNY_EMAIL="curltestnanny+$(date +%s)@example.com"
+code=$(req POST /api/v1/auth/register "{\"email\":\"$NANNY_EMAIL\",\"password\":\"$PASSWORD\",\"name\":\"Curl Test Nanny\",\"phoneNumber\":\"8888888888\",\"role\":\"NANNY\"}")
+NANNY_TOKEN=$(body | jq -r .accessToken)
+
+code=$(req PUT /api/v1/nannies/me/service-area "{\"lat\":12.9716,\"lng\":77.5946}")
+check "Set Service Area, no token" 401 "$code"
+
+code=$(req PUT /api/v1/nannies/me/service-area "{\"lat\":12.9716,\"lng\":77.5946}" "$ACCESS_TOKEN")
+check "Set Service Area, as PARENT" 403 "$code"
+
+code=$(req PUT /api/v1/nannies/me/service-area "{\"lat\":999,\"lng\":77.5946}" "$NANNY_TOKEN")
+check "Set Service Area, invalid lat" 400 "$code"
+
+code=$(req PUT /api/v1/nannies/me/service-area "{\"lat\":12.9716,\"lng\":77.5946}" "$NANNY_TOKEN")
+if [ "$code" = "200" ] || [ "$code" = "404" ]; then
+  echo "  PASS  Set Service Area, valid shape (got $code)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL  Set Service Area, valid shape (expected 200 or 404, got $code)"
+  FAIL=$((FAIL+1))
+fi
+
+echo ""
 echo "=== Nanny Search & Reviews ==="
 # No endpoint exists yet to create a Parent/Nanny profile row (separate,
 # unstarted work) — a registered user only has a users row. So the

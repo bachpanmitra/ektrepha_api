@@ -53,6 +53,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/nanny-search/languages", "/api/v1/nanny-search/skills").authenticated()
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-search").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/reviews").hasRole("PARENT")
+						.requestMatchers(HttpMethod.PUT, "/api/v1/nannies/me/service-area").hasRole("NANNY")
 						.anyRequest().authenticated())
 				.exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint()))
 				// JwtAuthenticationFilter must be registered (and get an order assigned)

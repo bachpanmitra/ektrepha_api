@@ -42,7 +42,13 @@ public class NannySearchRepository {
 			int candidateFetchLimit) {
 	}
 
-	/** One raw candidate nanny row, pre-ranking. Ranking/scoring happens in the service layer, not in SQL. */
+	/**
+	 * One raw candidate nanny row, pre-ranking. Ranking/scoring happens in the service layer, not
+	 * in SQL. {@code distanceM} is meters, not kilometers — {@code earth_distance()} already
+	 * returns meters (the earthdistance module's default earth radius is in meters), and the
+	 * "Nanny Proximity Search" PRD specifies distance_m as the response unit; the client converts
+	 * to "X km away" for display.
+	 */
 	public record CandidateRow(
 			Long nannyId,
 			String firstName,
@@ -51,7 +57,7 @@ public class NannySearchRepository {
 			Integer yearsExperience,
 			String educationLevel,
 			String profilePhotoS3Key,
-			double distanceKm) {
+			double distanceM) {
 	}
 
 	// Runs the bounding-box + exact-distance geo filter (idx_nanny_service_area_geo), the
@@ -61,7 +67,7 @@ public class NannySearchRepository {
 		StringBuilder sql = new StringBuilder("""
 				SELECT n.id AS nanny_id, n.first_name, n.last_name, n.hourly_rate,
 				       n.years_experience, n.education_level, n.profile_photo_s3_key,
-				       earth_distance(ll_to_earth(:lat, :lng), ll_to_earth(nsa.lat, nsa.lng)) / 1000.0 AS distance_km
+				       earth_distance(ll_to_earth(:lat, :lng), ll_to_earth(nsa.lat, nsa.lng)) AS distance_m
 				FROM nanny n
 				JOIN users u ON u.id = n.user_id
 				JOIN nanny_service_area nsa ON nsa.nanny_id = n.id
@@ -110,7 +116,7 @@ public class NannySearchRepository {
 			params.addValue("skillIds", criteria.skillIds());
 		}
 
-		sql.append(" ORDER BY distance_km ASC LIMIT :limit");
+		sql.append(" ORDER BY distance_m ASC LIMIT :limit");
 		params.addValue("limit", criteria.candidateFetchLimit());
 
 		return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new CandidateRow(
@@ -121,7 +127,7 @@ public class NannySearchRepository {
 				(Integer) rs.getObject("years_experience"),
 				rs.getString("education_level"),
 				rs.getString("profile_photo_s3_key"),
-				rs.getDouble("distance_km")));
+				rs.getDouble("distance_m")));
 	}
 
 }

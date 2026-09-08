@@ -18,7 +18,7 @@ public class DistanceScorer implements RankingFactorScorer {
 	// Raw score is just the precomputed distance from the search query — closer is better.
 	@Override
 	public double rawScore(CandidateRow candidate, NannySearchRequest request) {
-		return candidate.distanceKm();
+		return candidate.distanceM();
 	}
 
 	// Inverted normalization: the closest candidate in the set scores 1.0, the farthest scores 0.0.

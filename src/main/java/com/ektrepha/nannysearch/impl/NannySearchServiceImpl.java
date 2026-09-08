@@ -172,7 +172,7 @@ public class NannySearchServiceImpl implements NannySearchService {
 				candidate.hourlyRate(),
 				candidate.yearsExperience(),
 				candidate.educationLevel(),
-				candidate.distanceKm(),
+				candidate.distanceM(),
 				ranked.totalScore());
 	}
 

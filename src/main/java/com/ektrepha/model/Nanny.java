@@ -14,6 +14,11 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -58,10 +63,27 @@ public class Nanny {
 	@Column(name = "hourly_rate", precision = 10, scale = 2)
 	private BigDecimal hourlyRate;
 
-	/** Derived rollup, recomputed in the service layer whenever a nanny_verification row changes — never set directly from a request. */
+	/**
+	 * Derived rollup, recomputed by {@code NannyVerificationServiceImpl} whenever a
+	 * nanny_verification row changes. No public setter — {@code @Setter(NONE)} here overrides the
+	 * class-level {@code @Setter} so this field can only change via {@link #applyRecomputedVerificationStatus},
+	 * not a stray {@code setOverallVerificationStatus} call from anywhere else in the codebase.
+	 */
+	@Setter(AccessLevel.NONE)
 	@Column(name = "overall_verification_status", nullable = false)
 	private NannyVerificationStatus overallVerificationStatus;
 
+	/** The only way to change {@link #overallVerificationStatus} — called exclusively by the verification recompute logic. */
+	public void applyRecomputedVerificationStatus(NannyVerificationStatus status) {
+		this.overallVerificationStatus = status;
+	}
+
+	// @JdbcTypeCode(JSON) is required, not just columnDefinition — without it Hibernate binds this
+	// String as VARCHAR, and Postgres rejects a VARCHAR value against a jsonb column with no
+	// implicit cast ("column meta_data is of type jsonb but expression is of type character
+	// varying"), even when the value is null. Found via NannyVerificationRecomputeTest — the first
+	// real JPA write path for this entity; every prior manual test inserted nanny rows via raw SQL.
+	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "meta_data", columnDefinition = "jsonb")
 	private String metaData;
 

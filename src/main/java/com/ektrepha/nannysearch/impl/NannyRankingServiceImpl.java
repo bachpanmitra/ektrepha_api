@@ -42,7 +42,7 @@ public class NannyRankingServiceImpl implements NannyRankingService {
 			ranked.add(new RankedCandidate(candidates.get(i), totals[i]));
 		}
 		ranked.sort(Comparator.<RankedCandidate>comparingDouble(RankedCandidate::totalScore).reversed()
-				.thenComparingDouble(rc -> rc.candidate().distanceKm()));
+				.thenComparingDouble(rc -> rc.candidate().distanceM()));
 		return ranked;
 	}
 
