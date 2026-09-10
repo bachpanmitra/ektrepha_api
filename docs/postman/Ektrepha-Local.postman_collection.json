@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Ektrepha API (local)",
-    "description": "All endpoints against a locally running Ektrepha API (dev profile, http://localhost:8080). Covers Google/Phone/Email signup+login, register, refresh/logout, OTP-based forgot/reset password, and RBAC. Run top-to-bottom within a folder — later requests depend on variables set by earlier ones (accessToken, refreshToken, signupSessionId, testEmail/testPhone).",
+    "description": "All endpoints against a locally running Ektrepha API (dev profile, http://localhost:8080). Covers Google/Phone/Email signup+login, register, refresh/logout, OTP-based forgot/reset password, RBAC, nanny search + language/skill catalogs, and post-booking reviews. Run top-to-bottom within a folder — later requests depend on variables set by earlier ones (accessToken, refreshToken, signupSessionId, testEmail/testPhone).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -348,6 +348,217 @@
           },
           "event": [
             { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403 (wrong role, not unauthenticated)', () => pm.response.to.have.status(403));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanny Profile",
+      "description": "No endpoint exists yet to create a Nanny profile row (separate, unstarted work) — a registered NANNY-role user only has a `users` row. So the valid-shape request below 404s unless you've manually inserted a `nanny` row for the logged-in user via psql.",
+      "item": [
+        {
+          "name": "Set Service Area, no token (expect 401)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, as PARENT (expect 403)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
+            "description": "{{accessToken}} in this collection comes from a PARENT signup/login above — this is deliberately the wrong role."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403', () => pm.response.to.have.status(403));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, invalid lat (expect 400)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 999,\n  \"lng\": 77.5946\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Set Service Area, valid shape, radius omitted (expect 200 or 404)",
+          "request": {
+            "method": "PUT",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
+            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
+            "description": "radiusKm omitted — should default to 10 (matching the schema default) if a nanny profile row exists for this user. Re-running this a second time updates the same row rather than creating a second one."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 404 (404 if no nanny profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanny Search",
+      "description": "No endpoint exists yet to create a Parent/Nanny profile row (that's separate, unstarted work) — a registered user only has a `users` row. So the search/review requests below that need a Parent profile will 404 with 'No parent profile found for this account' unless you've manually inserted parent/nanny/nanny_service_area rows for the logged-in user via psql. The 401/400-before-lookup and catalog-listing requests work end-to-end with no manual setup.",
+      "item": [
+        {
+          "name": "Languages (no token, expect 401)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/languages", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "languages"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Languages",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/languages", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "languages"] },
+            "description": "Any authenticated role can list this — it's just the search form's filter catalog. Seeded by changeset 007 (Hindi/English/Kannada/Tamil)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Includes seeded languages', () => {",
+                  "    const names = pm.response.json().map(l => l.name);",
+                  "    pm.expect(names).to.include('English');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Skills",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/skills", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "skills"] },
+            "description": "Seeded by changeset 007 (Infant care/Special needs/First aid/Cooking/Homework help)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Includes seeded skills', () => {",
+                  "    const names = pm.response.json().map(s => s.name);",
+                  "    pm.expect(names).to.include('Infant care');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search, no token (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"radiusKm\": 10,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Search, invalid radius (expect 400)",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"radiusKm\": 7,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}" },
+            "description": "7 is not one of the allowed radii (app.search.allowed-radii-km: 2,5,10,20)."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Search, valid shape (expect 404 — no Parent profile row for this test user)",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"radiusKm\": 10,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1,\n  \"minYearsExperience\": 1,\n  \"languageIds\": [1],\n  \"skillIds\": [1]\n}"
+            },
+            "description": "Well-formed request — 404 here just proves it got past every validation step and reached the parent lookup. Insert a parent/nanny/nanny_service_area row for this user via psql to actually get ranked results back."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 404 (404 if no parent profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Submit Review, no token (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
+            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Submit Review, invalid rating (expect 400)",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
+            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 6\n}" },
+            "description": "Rating must be 1-5 — this fails bean validation before any booking lookup happens."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Submit Review, valid shape (expect 400 — no eligible booking for this test user)",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
+            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5,\n  \"comment\": \"Great!\"\n}" },
+            "description": "Well-formed request — 404 means this user has no Parent profile row yet, 400 means the profile exists but booking 1 isn't an eligible (COMPLETED, owned) booking. Insert a parent + COMPLETED booking row via psql, then re-run for a real 201."
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201, 400, or 404', () => pm.expect([201, 400, 404]).to.include(pm.response.code));"] } }
           ]
         }
       ]

@@ -21,3 +21,10 @@ app:
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}
     seed-admin: ${STARTUP_SEED_ADMIN:false}
+  search:
+    allowed-radii-km: ${SEARCH_ALLOWED_RADII_KM:2,5,10,20}
+    default-page-size: ${SEARCH_DEFAULT_PAGE_SIZE:20}
+    candidate-fetch-limit: ${SEARCH_CANDIDATE_FETCH_LIMIT:500}
+  verification:
+    # Daily at 3am by default — audit frequency is an ops tuning knob, not a code change.
+    audit-cron: ${VERIFICATION_AUDIT_CRON:0 0 3 * * *}

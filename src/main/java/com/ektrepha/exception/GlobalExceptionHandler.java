@@ -32,12 +32,23 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
 	}
 
+	@ExceptionHandler(ForbiddenChildAccessException.class)
+	public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenChildAccessException ex, HttpServletRequest request) {
+		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+	}
+
+	@ExceptionHandler(DuplicateReviewException.class)
+	public ResponseEntity<ErrorResponse> handleDuplicateReview(DuplicateReviewException ex, HttpServletRequest request) {
+		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
+	}
+
 	@ExceptionHandler({ InvalidCredentialsException.class, InvalidTokenException.class })
 	public ResponseEntity<ErrorResponse> handleUnauthorized(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidOtpException.class, IllegalArgumentException.class })
+	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidOtpException.class, IllegalArgumentException.class,
+			InvalidSearchParametersException.class, ParentAddressNotFoundException.class, BookingNotEligibleForReviewException.class })
 	public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
 	}

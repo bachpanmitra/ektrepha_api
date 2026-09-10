@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Sample endpoint only, demonstrating role-gated access for the booking
- * domain. No Booking entity/service exists yet.
+ * Sample endpoint only, demonstrating role-gated access for the booking domain. A real
+ * {@code Booking} entity now exists (see {@code com.ektrepha.model.Booking}, migration 006,
+ * read by nanny search's availability check and reviews) but full booking creation/management is
+ * separate, unstarted work — this stays a placeholder.
  */
 @RestController
 @RequestMapping("/api/v1/bookings")
