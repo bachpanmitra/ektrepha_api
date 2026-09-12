@@ -2,7 +2,7 @@ package com.ektrepha.auth.dto.response;
 
 import com.ektrepha.model.UserType;
 
-public record PhoneSignupVerifyResponse(
+public record PhoneSignupResponse(
 		Long userId,
 		String phoneNumber,
 		UserType role,

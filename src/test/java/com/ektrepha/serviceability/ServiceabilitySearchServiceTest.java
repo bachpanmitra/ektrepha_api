@@ -22,6 +22,7 @@ import com.ektrepha.repository.ServiceabilityPincodeRepository;
 import com.ektrepha.repository.ServiceabilityServiceTypeRepository;
 import com.ektrepha.repository.ZoneAreaRepository;
 import com.ektrepha.repository.ZoneServicePricingRepository;
+import com.ektrepha.serviceability.dto.response.LocalityOptionResponse;
 import com.ektrepha.serviceability.dto.response.ServiceTypeAvailability;
 import com.ektrepha.serviceability.dto.response.ServiceabilityMatrixResponse;
 import com.ektrepha.serviceability.service.ServiceabilitySearchService;
@@ -119,6 +120,34 @@ class ServiceabilitySearchServiceTest {
 		ServiceabilityMatrixResponse response = searchService.search(null, null, null, null, "searchcity", "SEARCHSTATE");
 		assertThat(response.matchType()).isEqualTo("CITY_STATE");
 		assertThat(response.zones()).hasSize(1);
+	}
+
+	@Test
+	void searchLocalities_prefixMatchRanksAboveMidStringMatch() {
+		ZoneArea prefixMatch = zoneAreaRepository.save(ZoneArea.builder().name("Search Zone Alpha").city("SearchCity").state("SearchState").active(true).build());
+		ZoneArea midStringMatch = zoneAreaRepository.save(ZoneArea.builder().name("Another Search Zone").city("SearchCity").state("SearchState").active(true).build());
+
+		java.util.List<LocalityOptionResponse> results = searchService.searchLocalities("Search Zone", 10);
+
+		assertThat(results).extracting(LocalityOptionResponse::zoneAreaId)
+				.containsSubsequence(prefixMatch.getId(), midStringMatch.getId());
+	}
+
+	@Test
+	void searchLocalities_flagsLiveVsNotPlanned() {
+		ZoneArea liveZone = zoneAreaRepository.save(ZoneArea.builder().name("Locality Live Test " + System.nanoTime()).city("SearchCity").state("SearchState").active(true).build());
+		rolloutRepository.save(ServiceabilityServiceType.builder().zoneArea(liveZone).serviceType(childcare).status(ServiceabilityStatus.LIVE).build());
+
+		java.util.List<LocalityOptionResponse> results = searchService.searchLocalities("Locality Live Test", 10);
+
+		assertThat(results).hasSize(1);
+		assertThat(results.get(0).live()).isTrue();
+	}
+
+	@Test
+	void searchLocalities_blankQuery_returnsEmptyRatherThanEverything() {
+		assertThat(searchService.searchLocalities("", 10)).isEmpty();
+		assertThat(searchService.searchLocalities(null, 10)).isEmpty();
 	}
 
 	@Test

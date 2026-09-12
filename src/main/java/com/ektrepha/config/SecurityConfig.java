@@ -48,6 +48,8 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/health", "/api/version", "/actuator/**", "/error", "/api/v1/auth/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/search").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/live-zones").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/localities").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/serviceability/waitlist").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/pricing/calculate").permitAll()
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

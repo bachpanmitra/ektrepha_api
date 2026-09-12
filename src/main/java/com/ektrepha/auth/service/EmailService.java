@@ -2,7 +2,7 @@ package com.ektrepha.auth.service;
 
 import com.ektrepha.model.OtpPurpose;
 
-/** Stub-backed today (see {@link EmailServiceImpl}) — swap the impl for a real provider (e.g. SES) before launch. */
+/** Backed by Brevo (see {@link EmailServiceImpl}). */
 public interface EmailService {
 
 	void sendOtpEmail(String email, String otp, OtpPurpose purpose);

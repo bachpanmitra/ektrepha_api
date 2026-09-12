@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,9 @@ import com.ektrepha.model.ZoneServicePricing;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.ServiceabilityServiceTypeRepository;
 import com.ektrepha.repository.ZoneServicePricingRepository;
+import com.ektrepha.repository.ZoneAreaRepository;
+import com.ektrepha.serviceability.dto.response.LiveZoneResponse;
+import com.ektrepha.serviceability.dto.response.LocalityOptionResponse;
 import com.ektrepha.serviceability.dto.response.ServiceTypeAvailability;
 import com.ektrepha.serviceability.dto.response.ServiceabilityMatrixResponse;
 import com.ektrepha.serviceability.dto.response.ZoneMatrixEntry;
@@ -40,6 +44,7 @@ public class ServiceabilitySearchServiceImpl implements ServiceabilitySearchServ
 	private final ServiceTypeRepository serviceTypeRepository;
 	private final ServiceabilityServiceTypeRepository rolloutRepository;
 	private final ZoneServicePricingRepository pricingRepository;
+	private final ZoneAreaRepository zoneAreaRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -54,6 +59,39 @@ public class ServiceabilitySearchServiceImpl implements ServiceabilitySearchServ
 				.toList();
 
 		return new ServiceabilityMatrixResponse(strategy.matchType(), entries);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<LiveZoneResponse> listLiveZones() {
+		return zoneAreaRepository.findAllWithLiveService().stream()
+				.map(zone -> {
+					List<String> liveCodes = rolloutRepository.findAllByZoneAreaId(zone.getId()).stream()
+							.filter(row -> row.getStatus() == ServiceabilityStatus.LIVE)
+							.map(row -> row.getServiceType().getCode())
+							.sorted()
+							.toList();
+					return new LiveZoneResponse(zone.getId(), zone.getName(), zone.getCity(), zone.getState(), liveCodes);
+				})
+				.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<LocalityOptionResponse> searchLocalities(String query, int limit) {
+		if (query == null || query.isBlank()) {
+			return List.of();
+		}
+		int boundedLimit = Math.max(1, Math.min(limit, 25));
+		List<ZoneArea> matches = zoneAreaRepository.searchByNameFuzzy(query.trim(), PageRequest.of(0, boundedLimit));
+		return matches.stream()
+				.map(zone -> new LocalityOptionResponse(zone.getId(), zone.getName(), zone.getCity(), zone.getState(), hasLiveService(zone)))
+				.toList();
+	}
+
+	private boolean hasLiveService(ZoneArea zone) {
+		return rolloutRepository.findAllByZoneAreaId(zone.getId()).stream()
+				.anyMatch(row -> row.getStatus() == ServiceabilityStatus.LIVE);
 	}
 
 	private ZoneMatrixEntry toEntry(ZoneMatch match, List<ServiceType> activeServiceTypes) {

@@ -12,6 +12,5 @@ public record RegisterResponse(
 		boolean phoneVerified,
 		String accessToken,
 		String refreshToken,
-		boolean verificationEmailSent,
-		boolean otpSentToPhone) {
+		boolean verificationEmailSent) {
 }

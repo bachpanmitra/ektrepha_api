@@ -16,7 +16,6 @@ import com.ektrepha.repository.OtpRepository;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.auth.service.EmailService;
 import com.ektrepha.auth.service.OtpService;
-import com.ektrepha.auth.service.SmsService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,29 +30,24 @@ public class OtpServiceImpl implements OtpService {
 	private final OtpRepository otpRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final EmailService emailService;
-	private final SmsService smsService;
 	private final AppProperties appProperties;
 
 	@Override
 	@Transactional
-	public Otp generateAndSend(String phoneOrEmail, OtpPurpose purpose, User user, boolean deliverByEmail) {
+	public Otp generateAndSend(String email, OtpPurpose purpose, User user) {
 		String code = generateCode();
 
 		Otp otp = Otp.builder()
 				.user(user)
-				.phoneOrEmail(phoneOrEmail)
+				.phoneOrEmail(email)
 				.otp(passwordEncoder.encode(code))
 				.purpose(purpose)
 				.expiresAt(Instant.now().plus(Duration.ofMinutes(appProperties.otp().ttlMinutes())))
 				.build();
 		otp = otpRepository.save(otp);
 
-		if (deliverByEmail) {
-			emailService.sendOtpEmail(phoneOrEmail, code, purpose);
-		} else {
-			smsService.sendOtpSms(phoneOrEmail, code, purpose);
-		}
-		log.debug("Generated OTP id={} for identifier={}, purpose={}, expiresAt={}", otp.getId(), phoneOrEmail, purpose, otp.getExpiresAt());
+		emailService.sendOtpEmail(email, code, purpose);
+		log.debug("Generated OTP id={} for identifier={}, purpose={}, expiresAt={}", otp.getId(), email, purpose, otp.getExpiresAt());
 
 		return otp;
 	}

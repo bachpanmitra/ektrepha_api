@@ -26,6 +26,19 @@ app:
       # (see app.startup.check-s3 below), so these just need to be non-blank.
       bucket: ${S3_BUCKET:ektrepha-dev-local}
       region: ${S3_REGION:ap-south-1}
+  # Placeholder values — OTP/notification emails will fail against the real Brevo
+  # API without a real key, but the app still starts (dev otherwise just logs the
+  # 401 from Brevo, same visibility as the old log-only stub had).
+  email:
+    brevo:
+      api-key: ${BREVO_API_KEY:dev-placeholder-brevo-api-key}
+      sender-email: ${BREVO_SENDER_EMAIL:no-reply@ektrepha.local}
+      sender-name: ${BREVO_SENDER_NAME:Ektrepha}
+  # Placeholder path — phone signup/reset will fail until this points to a real
+  # Firebase service account JSON key, but the app still starts (the verifier
+  # logs a warning and initializes lazily rather than crashing on boot).
+  firebase:
+    service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:secrets/firebase-service-account.json}
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}
     seed-admin: ${STARTUP_SEED_ADMIN:true}

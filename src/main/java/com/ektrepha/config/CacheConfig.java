@@ -17,7 +17,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
  * ~1M/day) but only change when an admin edits them.
  * <p>
  * In-process Caffeine, not Redis - this app runs as a single instance today (see
- * {@code LoginAttemptServiceImpl}, {@code PendingPhoneSignupStoreImpl}); the redis service in
+ * {@code LoginAttemptServiceImpl}); the redis service in
  * docker-compose isn't wired into the app yet. If this ever runs behind multiple instances, these
  * caches (or an eviction broadcast) would need to move to Redis so a write on one instance
  * invalidates the others.

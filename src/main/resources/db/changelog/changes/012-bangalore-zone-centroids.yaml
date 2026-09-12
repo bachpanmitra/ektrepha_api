@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 12
+      author: bachpanmitra
+      description: Backfill centroid_lat/centroid_lng for the 104 locality zones from a real per-post-office geocoding dataset, so coordinate-based search matches them
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/012-bangalore-zone-centroids.sql
+            relativeToChangelogFile: false

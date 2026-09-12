@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,10 +23,9 @@ import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupInitiateRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupInitiateResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupVerifyRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupVerifyResponse;
+import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
+import com.ektrepha.auth.dto.request.PhoneSignupRequest;
+import com.ektrepha.auth.dto.response.PhoneSignupResponse;
 import com.ektrepha.auth.dto.request.RefreshRequest;
 import com.ektrepha.auth.dto.request.RegisterRequest;
 import com.ektrepha.auth.dto.response.RegisterResponse;
@@ -38,7 +36,6 @@ import com.ektrepha.auth.service.AuthService;
 import com.ektrepha.auth.service.EmailService;
 import com.ektrepha.auth.service.LoginAttemptService;
 import com.ektrepha.auth.service.OtpService;
-import com.ektrepha.auth.service.PendingPhoneSignupStore;
 import com.ektrepha.exception.DuplicateAccountException;
 import com.ektrepha.exception.InvalidCredentialsException;
 import com.ektrepha.exception.InvalidOtpException;
@@ -52,6 +49,8 @@ import com.ektrepha.model.UserSource;
 import com.ektrepha.model.UserType;
 import com.ektrepha.repository.RefreshTokenRepository;
 import com.ektrepha.repository.UserRepository;
+import com.ektrepha.auth.security.FirebaseTokenVerifierService;
+import com.ektrepha.auth.security.FirebaseTokenVerifierService.FirebaseIdentity;
 import com.ektrepha.auth.security.GoogleIdTokenVerifierService;
 import com.ektrepha.auth.security.GoogleIdTokenVerifierService.GoogleIdentity;
 import com.ektrepha.auth.security.JwtService;
@@ -71,12 +70,12 @@ public class AuthServiceImpl implements AuthService {
 	private final UserRepository userRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final OtpService otpService;
-	private final PendingPhoneSignupStore pendingPhoneSignupStore;
 	private final LoginAttemptService loginAttemptService;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
 	private final EmailService emailService;
 	private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
+	private final FirebaseTokenVerifierService firebaseTokenVerifierService;
 	private final AppProperties appProperties;
 
 	// ---------------------------------------------------------------- Google
@@ -145,54 +144,27 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	@Transactional
-	public PhoneSignupInitiateResponse initiatePhoneSignup(PhoneSignupInitiateRequest request) {
+	public PhoneSignupResponse signupPhone(PhoneSignupRequest request) {
 		rejectAdminSelfRegistration(request.role());
-		if (userRepository.existsByPhone(request.phoneNumber())) {
-			log.warn("Phone signup initiate rejected: phone {} already registered", request.phoneNumber());
-			throw DuplicateAccountException.phone(request.phoneNumber());
-		}
+		FirebaseIdentity identity = firebaseTokenVerifierService.verify(request.firebaseIdToken());
 
-		String passwordHash = passwordEncoder.encode(request.password());
-		long ttlMinutes = appProperties.otp().ttlMinutes();
-		Instant expiresAt = Instant.now().plus(Duration.ofMinutes(ttlMinutes));
-
-		UUID sessionId = pendingPhoneSignupStore.put(request.phoneNumber(), passwordHash, request.role(), expiresAt);
-		otpService.generateAndSend(request.phoneNumber(), OtpPurpose.SIGNUP, null, false);
-		log.info("Phone signup initiated: phone={}, sessionId={}", request.phoneNumber(), sessionId);
-
-		return new PhoneSignupInitiateResponse(request.phoneNumber(), Duration.ofMinutes(ttlMinutes).toSeconds(), sessionId);
-	}
-
-	@Override
-	@Transactional
-	public PhoneSignupVerifyResponse verifyPhoneSignup(PhoneSignupVerifyRequest request) {
-		PendingPhoneSignupStore.PendingPhoneSignup pending = pendingPhoneSignupStore.get(request.signupSessionId());
-		if (pending == null) {
-			log.warn("Phone signup verify failed: session {} expired or unknown", request.signupSessionId());
-			throw new InvalidOtpException("Signup session has expired or does not exist. Please start over.");
-		}
-
-		otpService.verify(pending.phoneNumber(), request.otp(), OtpPurpose.SIGNUP);
-
-		if (userRepository.existsByPhone(pending.phoneNumber())) {
-			pendingPhoneSignupStore.remove(request.signupSessionId());
-			log.warn("Phone signup verify rejected: phone {} already registered (race with another signup)", pending.phoneNumber());
-			throw DuplicateAccountException.phone(pending.phoneNumber());
+		if (userRepository.existsByPhone(identity.phoneNumber())) {
+			log.warn("Phone signup rejected: phone {} already registered", identity.phoneNumber());
+			throw DuplicateAccountException.phone(identity.phoneNumber());
 		}
 
 		User user = User.builder()
-				.phone(pending.phoneNumber())
-				.password(pending.passwordHash())
+				.phone(identity.phoneNumber())
+				.password(passwordEncoder.encode(request.password()))
 				.userSource(UserSource.PHONE)
-				.userType(pending.role())
+				.userType(request.role())
 				.phoneVerified(true)
 				.build();
 		user = userRepository.save(user);
-		pendingPhoneSignupStore.remove(request.signupSessionId());
 		log.info("Phone signup completed: userId={}, phone={}, role={}", user.getId(), user.getPhone(), user.getUserType());
 
 		AuthTokens tokens = issueTokens(user);
-		return new PhoneSignupVerifyResponse(user.getId(), user.getPhone(), user.getUserType(), tokens.accessToken(), tokens.refreshToken());
+		return new PhoneSignupResponse(user.getId(), user.getPhone(), user.getUserType(), tokens.accessToken(), tokens.refreshToken());
 	}
 
 	@Override
@@ -292,12 +264,11 @@ public class AuthServiceImpl implements AuthService {
 		user = userRepository.save(user);
 
 		emailService.sendVerificationEmail(user.getEmail());
-		otpService.generateAndSend(user.getPhone(), OtpPurpose.SIGNUP, user, false);
 		log.info("Register completed: userId={}, email={}, phone={}, role={}", user.getId(), user.getEmail(), user.getPhone(), user.getUserType());
 
 		AuthTokens tokens = issueTokens(user);
 		return new RegisterResponse(user.getId(), user.getEmail(), user.getName(), user.getPhone(), user.getUserType(),
-				user.isEmailVerified(), user.isPhoneVerified(), tokens.accessToken(), tokens.refreshToken(), true, true);
+				user.isEmailVerified(), user.isPhoneVerified(), tokens.accessToken(), tokens.refreshToken(), true);
 	}
 
 	// ------------------------------------------------------- Session lifecycle
@@ -340,30 +311,23 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest request) {
-		boolean hasEmail = request.email() != null && !request.email().isBlank();
-		boolean hasPhone = request.phoneNumber() != null && !request.phoneNumber().isBlank();
-		if (!hasEmail && !hasPhone) {
-			throw new IllegalArgumentException("Either email or phoneNumber must be provided");
-		}
-
-		String identifier = hasEmail ? request.email() : request.phoneNumber();
-		Optional<User> user = hasEmail ? userRepository.findByEmail(identifier) : userRepository.findByPhone(identifier);
+		Optional<User> user = userRepository.findByEmail(request.email());
 		// Always the same response regardless of whether the account exists, so this can't be used to enumerate accounts.
 		// The account-not-found case is still logged server-side for debugging.
 		if (user.isPresent()) {
-			otpService.generateAndSend(identifier, OtpPurpose.RESET_PASSWORD, user.get(), hasEmail);
+			otpService.generateAndSend(request.email(), OtpPurpose.RESET_PASSWORD, user.get());
 			log.info("Forgot-password OTP sent for userId={}", user.get().getId());
 		} else {
-			log.debug("Forgot-password requested for unknown identifier={} (no OTP sent, generic response returned)", identifier);
+			log.debug("Forgot-password requested for unknown email={} (no OTP sent, generic response returned)", request.email());
 		}
 
-		return new ForgotPasswordResponse("If this account exists, an OTP has been sent.", identifier);
+		return new ForgotPasswordResponse("If this account exists, an OTP has been sent.", request.email());
 	}
 
 	@Override
 	@Transactional
 	public ResetPasswordResponse resetPassword(ResetPasswordRequest request) {
-		Otp otp = otpService.verify(request.phoneOrEmail(), request.otp(), OtpPurpose.RESET_PASSWORD);
+		Otp otp = otpService.verify(request.email(), request.otp(), OtpPurpose.RESET_PASSWORD);
 		User user = otp.getUser();
 		if (user == null) {
 			log.warn("Reset-password failed: OTP {} has no associated user", otp.getId());
@@ -375,6 +339,26 @@ public class AuthServiceImpl implements AuthService {
 
 		refreshTokenRepository.revokeAllActiveByUser(user);
 		log.info("Password reset for userId={}; all existing refresh tokens revoked", user.getId());
+
+		return new ResetPasswordResponse("Password updated successfully. Please log in again.", user.getId());
+	}
+
+	@Override
+	@Transactional
+	public ResetPasswordResponse resetPasswordPhone(PhoneResetPasswordRequest request) {
+		FirebaseIdentity identity = firebaseTokenVerifierService.verify(request.firebaseIdToken());
+		User user = userRepository.findByPhone(identity.phoneNumber())
+				.orElseThrow(() -> {
+					log.warn("Phone reset-password failed: no account for phone={}", identity.phoneNumber());
+					return new UserNotFoundException("No account found for this phone number.");
+				});
+
+		user.setPassword(passwordEncoder.encode(request.newPassword()));
+		user.setPhoneVerified(true);
+		userRepository.save(user);
+
+		refreshTokenRepository.revokeAllActiveByUser(user);
+		log.info("Phone password reset for userId={}; all existing refresh tokens revoked", user.getId());
 
 		return new ResetPasswordResponse("Password updated successfully. Please log in again.", user.getId());
 	}

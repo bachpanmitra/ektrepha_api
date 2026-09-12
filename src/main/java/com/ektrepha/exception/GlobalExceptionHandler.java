@@ -53,8 +53,9 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidOtpException.class, IllegalArgumentException.class,
-			InvalidSearchParametersException.class, ParentAddressNotFoundException.class, BookingNotEligibleForReviewException.class })
+	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidFirebaseTokenException.class, InvalidOtpException.class,
+			IllegalArgumentException.class, InvalidSearchParametersException.class, ParentAddressNotFoundException.class,
+			BookingNotEligibleForReviewException.class })
 	public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
 	}

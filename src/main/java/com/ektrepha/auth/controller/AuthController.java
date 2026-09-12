@@ -20,10 +20,9 @@ import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupInitiateRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupInitiateResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupVerifyRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupVerifyResponse;
+import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
+import com.ektrepha.auth.dto.request.PhoneSignupRequest;
+import com.ektrepha.auth.dto.response.PhoneSignupResponse;
 import com.ektrepha.auth.dto.request.RefreshRequest;
 import com.ektrepha.auth.dto.request.RegisterRequest;
 import com.ektrepha.auth.dto.response.RegisterResponse;
@@ -49,14 +48,9 @@ public class AuthController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(authService.signupGoogle(request));
 	}
 
-	@PostMapping("/signup/phone/initiate")
-	public ResponseEntity<PhoneSignupInitiateResponse> initiatePhoneSignup(@Valid @RequestBody PhoneSignupInitiateRequest request) {
-		return ResponseEntity.ok(authService.initiatePhoneSignup(request));
-	}
-
-	@PostMapping("/signup/phone/verify")
-	public ResponseEntity<PhoneSignupVerifyResponse> verifyPhoneSignup(@Valid @RequestBody PhoneSignupVerifyRequest request) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(authService.verifyPhoneSignup(request));
+	@PostMapping("/signup/phone")
+	public ResponseEntity<PhoneSignupResponse> signupPhone(@Valid @RequestBody PhoneSignupRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(authService.signupPhone(request));
 	}
 
 	@PostMapping("/signup/email")
@@ -101,13 +95,18 @@ public class AuthController {
 	// -------------------------------------------------------------- Password
 
 	@PostMapping("/password/forgot")
-	public ResponseEntity<ForgotPasswordResponse> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+	public ResponseEntity<ForgotPasswordResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
 		return ResponseEntity.ok(authService.forgotPassword(request));
 	}
 
 	@PostMapping("/password/reset")
 	public ResponseEntity<ResetPasswordResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
 		return ResponseEntity.ok(authService.resetPassword(request));
+	}
+
+	@PostMapping("/password/reset/phone")
+	public ResponseEntity<ResetPasswordResponse> resetPasswordPhone(@Valid @RequestBody PhoneResetPasswordRequest request) {
+		return ResponseEntity.ok(authService.resetPasswordPhone(request));
 	}
 
 }

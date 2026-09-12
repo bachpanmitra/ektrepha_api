@@ -25,7 +25,9 @@ public record AppProperties(
 		@Valid @NotNull Startup startup,
 		@Valid @NotNull Search search,
 		@Valid @NotNull Pricing pricing,
-		@Valid @NotNull Serviceability serviceability) {
+		@Valid @NotNull Serviceability serviceability,
+		@Valid @NotNull Email email,
+		@Valid @NotNull Firebase firebase) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -74,5 +76,18 @@ public record AppProperties(
 
 	public record Serviceability(
 			@NotNull @Positive Double maxZoneMatchKm) {
+	}
+
+	public record Email(@Valid @NotNull Brevo brevo) {
+
+		public record Brevo(
+				@NotBlank(message = "app.email.brevo.api-key must be set — the Brevo transactional API key") String apiKey,
+				@NotBlank(message = "app.email.brevo.sender-email must be set — the verified Brevo sender address") String senderEmail,
+				@NotBlank(message = "app.email.brevo.sender-name must be set") String senderName) {
+		}
+	}
+
+	public record Firebase(
+			@NotBlank(message = "app.firebase.service-account-path must be set — path to the Firebase service account JSON key") String serviceAccountPath) {
 	}
 }

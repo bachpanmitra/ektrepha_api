@@ -4,11 +4,10 @@ import com.ektrepha.model.Otp;
 import com.ektrepha.model.OtpPurpose;
 import com.ektrepha.model.User;
 
-/** Generates, delivers (via {@link EmailService}/{@link SmsService}), and verifies OTPs. See {@link OtpServiceImpl}. */
+/** Generates, delivers (via {@link EmailService}), and verifies OTPs. See {@link OtpServiceImpl}. */
 public interface OtpService {
 
-	/** user may be null — the phone-signup flow generates an OTP before any user row exists. */
-	Otp generateAndSend(String phoneOrEmail, OtpPurpose purpose, User user, boolean deliverByEmail);
+	Otp generateAndSend(String email, OtpPurpose purpose, User user);
 
 	Otp verify(String phoneOrEmail, String code, OtpPurpose purpose);
 

@@ -21,6 +21,13 @@ app:
     s3:
       bucket: ${S3_BUCKET}
       region: ${S3_REGION}
+  email:
+    brevo:
+      api-key: ${BREVO_API_KEY}
+      sender-email: ${BREVO_SENDER_EMAIL}
+      sender-name: ${BREVO_SENDER_NAME}
+  firebase:
+    service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH}
   startup:
     check-s3: ${STARTUP_CHECK_S3:true}
     seed-admin: ${STARTUP_SEED_ADMIN:false}

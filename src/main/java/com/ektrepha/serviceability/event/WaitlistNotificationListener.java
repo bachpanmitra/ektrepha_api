@@ -18,10 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Reacts to a zone x service-type going LIVE by draining its waitlist. Stub-backed today (logs the
- * dispatch and stamps notified_at) — same pattern as {@code EmailServiceImpl}/{@code SmsServiceImpl}
- * being stub-backed until a real provider is wired in. Deliberately not reusing those two services:
- * they're OTP-purpose-bound (see {@code EmailService}/{@code SmsService}), not general-purpose
- * notification senders, and bending them to a second purpose would be the wrong seam to extend.
+ * dispatch and stamps notified_at) rather than sending a real notification. Deliberately not reusing
+ * {@code EmailService}: it's OTP/account-purpose-bound, not a general-purpose notification sender,
+ * and bending it to a second purpose would be the wrong seam to extend.
  */
 @Slf4j
 @Component

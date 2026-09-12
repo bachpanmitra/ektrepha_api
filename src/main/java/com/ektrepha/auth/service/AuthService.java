@@ -13,10 +13,9 @@ import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupInitiateRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupInitiateResponse;
-import com.ektrepha.auth.dto.request.PhoneSignupVerifyRequest;
-import com.ektrepha.auth.dto.response.PhoneSignupVerifyResponse;
+import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
+import com.ektrepha.auth.dto.request.PhoneSignupRequest;
+import com.ektrepha.auth.dto.response.PhoneSignupResponse;
 import com.ektrepha.auth.dto.request.RefreshRequest;
 import com.ektrepha.auth.dto.request.RegisterRequest;
 import com.ektrepha.auth.dto.response.RegisterResponse;
@@ -31,9 +30,7 @@ public interface AuthService {
 
 	GoogleLoginResponse loginGoogle(GoogleLoginRequest request);
 
-	PhoneSignupInitiateResponse initiatePhoneSignup(PhoneSignupInitiateRequest request);
-
-	PhoneSignupVerifyResponse verifyPhoneSignup(PhoneSignupVerifyRequest request);
+	PhoneSignupResponse signupPhone(PhoneSignupRequest request);
 
 	PhoneLoginResponse loginPhone(PhoneLoginRequest request);
 
@@ -50,5 +47,7 @@ public interface AuthService {
 	ForgotPasswordResponse forgotPassword(ForgotPasswordRequest request);
 
 	ResetPasswordResponse resetPassword(ResetPasswordRequest request);
+
+	ResetPasswordResponse resetPasswordPhone(PhoneResetPasswordRequest request);
 
 }
