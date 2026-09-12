@@ -13,3 +13,9 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/006-nanny-marketplace-schema.yaml
   - include:
       file: classpath:db/changelog/changes/007-nanny-catalog-seed-data.yaml
+  - include:
+      file: classpath:db/changelog/changes/008-serviceability-pricing-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/009-bangalore-pincode-seed.yaml
+  - include:
+      file: classpath:db/changelog/changes/010-bangalore-childcare-reference-pricing.yaml

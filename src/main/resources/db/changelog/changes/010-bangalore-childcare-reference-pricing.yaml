@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 10
+      author: bachpanmitra
+      description: Reference childcare pricing (real Bangalore market rates) and LIVE rollout for the 4 zones seeded in changeset 9
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/010-bangalore-childcare-reference-pricing.sql
+            relativeToChangelogFile: false

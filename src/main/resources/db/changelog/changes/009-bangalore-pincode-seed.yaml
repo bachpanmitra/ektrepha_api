@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 9
+      author: bachpanmitra
+      description: Real Bangalore serviceability reference data - zones (India Post divisions) and pincode-to-zone mapping, derived from the India Post pincode directory
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/009-bangalore-pincode-seed.sql
+            relativeToChangelogFile: false

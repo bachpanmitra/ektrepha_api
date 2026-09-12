@@ -1,5 +1,6 @@
 package com.ektrepha.config.properties;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -22,7 +23,9 @@ public record AppProperties(
 		@Valid @NotNull Google google,
 		@Valid @NotNull Aws aws,
 		@Valid @NotNull Startup startup,
-		@Valid @NotNull Search search) {
+		@Valid @NotNull Search search,
+		@Valid @NotNull Pricing pricing,
+		@Valid @NotNull Serviceability serviceability) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -63,5 +66,13 @@ public record AppProperties(
 			@NotNull @NotEmpty List<Integer> allowedRadiiKm,
 			@NotNull @Positive Integer defaultPageSize,
 			@NotNull @Positive Integer candidateFetchLimit) {
+	}
+
+	public record Pricing(
+			@NotNull @Positive BigDecimal combinedMultiplierCap) {
+	}
+
+	public record Serviceability(
+			@NotNull @Positive Double maxZoneMatchKm) {
 	}
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 8
+      author: bachpanmitra
+      description: Serviceability & pricing engine schema (zones, zone-service pricing, pricing rules, pincode/service-type availability, geocode cache, waitlist, caregiver zone mapping, dynamic pricing, demand snapshots, holiday calendar)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/008-serviceability-pricing-schema.sql
+            relativeToChangelogFile: false

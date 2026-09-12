@@ -1,0 +1,183 @@
+{
+  "info": {
+    "name": "Ektrepha API",
+    "description": "Auth, bookings (RBAC demo), and admin (RBAC demo) endpoints for the Ektrepha nanny/childcare booking API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "otp", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health / Version",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          }
+        },
+        {
+          "name": "Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/version", "host": ["{{baseUrl}}"], "path": ["api", "version"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"parent1@example.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"Priya Parent\",\n  \"phoneNumber\": \"9999999999\",\n  \"role\": \"PARENT\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register"] },
+            "description": "role: PARENT or NANNY — ADMIN is blocked here on purpose"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"parent1@example.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "email"] },
+            "description": "Response: { userId, email, role, accessToken, refreshToken }. Test script auto-saves tokens to collection variables. (Live API also has /login/phone and /login/google.)"
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "refresh"] },
+            "description": "Rotates both tokens; old refreshToken becomes invalid."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "logout"] },
+            "description": "Revokes the refresh token."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"parent1@example.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/forgot", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "forgot"] },
+            "description": "Stub emailer just logs the OTP — grep app log for \"OTP for {{email}} (purpose=PASSWORD_RESET)\". Response is { message, otpSentTo }."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneOrEmail\": \"parent1@example.com\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPassword456!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/reset", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "reset"] },
+            "description": "Set the otp collection variable from the log line printed by Forgot Password. phoneOrEmail must match the identifier the OTP was requested for."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookings (RBAC demo)",
+      "item": [
+        {
+          "name": "Create Booking (no token -> 401)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+          }
+        },
+        {
+          "name": "Create Booking (PARENT token -> 201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (RBAC demo only)",
+      "item": [
+        {
+          "name": "Admin path with PARENT token (-> 403)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/admin/anything", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "anything"] }
+          }
+        }
+      ]
+    }
+  ]
+}

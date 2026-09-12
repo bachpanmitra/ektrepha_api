@@ -47,6 +47,9 @@ public class SecurityConfig {
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/health", "/api/version", "/actuator/**", "/error", "/api/v1/auth/**").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/search").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/serviceability/waitlist").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/pricing/calculate").permitAll()
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/nanny-verification/**").hasAnyRole("NANNY", "ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/v1/bookings/**").hasRole("PARENT")

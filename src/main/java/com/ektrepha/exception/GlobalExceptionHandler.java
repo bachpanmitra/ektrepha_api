@@ -37,9 +37,15 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler(DuplicateReviewException.class)
-	public ResponseEntity<ErrorResponse> handleDuplicateReview(DuplicateReviewException ex, HttpServletRequest request) {
+	@ExceptionHandler({ DuplicateReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class })
+	public ResponseEntity<ErrorResponse> handleDuplicateReview(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
+	}
+
+	@ExceptionHandler({ NotServiceableException.class, ZoneNotFoundException.class, ZonePricingNotFoundException.class,
+			ZonePricingRuleNotFoundException.class, PincodeNotFoundException.class, ServiceTypeNotFoundException.class })
+	public ResponseEntity<ErrorResponse> handleServiceabilityNotFound(RuntimeException ex, HttpServletRequest request) {
+		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}
 
 	@ExceptionHandler({ InvalidCredentialsException.class, InvalidTokenException.class })
