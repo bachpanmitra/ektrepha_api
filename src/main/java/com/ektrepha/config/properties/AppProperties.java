@@ -20,6 +20,7 @@ public record AppProperties(
 		@Valid @NotNull Jwt jwt,
 		@Valid @NotNull Otp otp,
 		@Valid @NotNull LoginLockout loginLockout,
+		@Valid @NotNull RateLimit rateLimit,
 		@Valid @NotNull Google google,
 		@Valid @NotNull Aws aws,
 		@Valid @NotNull Startup startup,
@@ -43,6 +44,13 @@ public record AppProperties(
 	public record LoginLockout(
 			@NotNull @Positive Integer maxFailures,
 			@NotNull @Positive Long lockoutMinutes) {
+	}
+
+	/** Per-client-IP token bucket. See {@code RateLimiterServiceImpl}. */
+	public record RateLimit(
+			@DefaultValue("true") boolean enabled,
+			@NotNull @Positive Integer capacity,
+			@NotNull @Positive Long windowSeconds) {
 	}
 
 	public record Google(
