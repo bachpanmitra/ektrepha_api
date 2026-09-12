@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 11
+      author: bachpanmitra
+      description: Replace coarse division zones with one zone per real named locality (Whitefield, Mahadevapura, Marathahalli, Koramangala, ...), rolling branch offices up to their parent delivery office
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/011-bangalore-locality-zones.sql
+            relativeToChangelogFile: false

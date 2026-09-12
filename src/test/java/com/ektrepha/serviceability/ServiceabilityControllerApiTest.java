@@ -64,6 +64,13 @@ class ServiceabilityControllerApiTest {
 	}
 
 	@Test
+	void searchLocalities_isPublic() throws Exception {
+		mockMvc.perform(get("/api/v1/serviceability/localities").param("query", "Api Test Zone"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].name", is(zone.getName())));
+	}
+
+	@Test
 	void search_isPublic() throws Exception {
 		mockMvc.perform(get("/api/v1/serviceability/search").param("city", "ApiCity").param("state", "ApiState"))
 				.andExpect(status().isOk())
