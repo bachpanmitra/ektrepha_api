@@ -17,6 +17,12 @@ app:
   login-lockout:
     max-failures: ${LOGIN_LOCKOUT_MAX_FAILURES:5}
     lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}
+  # Coarse, per-client-IP token bucket applied to every request (see RateLimitFilter).
+  # Default: burst of 60 requests, refilled continuously back to 60 over a minute.
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    capacity: ${RATE_LIMIT_CAPACITY:60}
+    window-seconds: ${RATE_LIMIT_WINDOW_SECONDS:60}
   # Safe, do-nothing defaults for any profile that doesn't override them below.
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}

@@ -30,13 +30,16 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final TraceIdFilter traceIdFilter;
+	private final RateLimitFilter rateLimitFilter;
 
 	@Value("${app.cors.allowed-origins}")
 	private String allowedOriginsCsv;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, TraceIdFilter traceIdFilter) {
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, TraceIdFilter traceIdFilter,
+			RateLimitFilter rateLimitFilter) {
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
 		this.traceIdFilter = traceIdFilter;
+		this.rateLimitFilter = rateLimitFilter;
 	}
 
 	@Bean
@@ -64,7 +67,10 @@ public class SecurityConfig {
 				// JwtAuthenticationFilter must be registered (and get an order assigned)
 				// before it can be used as the anchor for placing traceIdFilter ahead of it.
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-				.addFilterBefore(traceIdFilter, JwtAuthenticationFilter.class);
+				.addFilterBefore(traceIdFilter, JwtAuthenticationFilter.class)
+				// Rate limiting runs first so a throttled request is rejected before any
+				// tracing/auth work is done on it.
+				.addFilterBefore(rateLimitFilter, TraceIdFilter.class);
 		return http.build();
 	}
 
