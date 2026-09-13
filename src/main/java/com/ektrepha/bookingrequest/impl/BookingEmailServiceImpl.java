@@ -47,8 +47,10 @@ public class BookingEmailServiceImpl extends AbstractEmailSender implements Book
 						bookingRequest.getEndTime().format(TIME_FORMAT),
 						bookingRequest.getQuotedTotal() != null ? "₹" + bookingRequest.getQuotedTotal() : "to be confirmed");
 
-		send(toEmail, "Your Ektrepha booking request is confirmed", html);
-		log.info("Sent booking confirmation email to {} for booking request {}", toEmail, bookingRequest.getId());
+		boolean sent = send(toEmail, "Your Ektrepha booking request is confirmed", html);
+		if (sent) {
+			log.info("Sent booking confirmation email to {} for booking request {}", toEmail, bookingRequest.getId());
+		}
 	}
 
 }

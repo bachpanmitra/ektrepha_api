@@ -36,17 +36,20 @@ public abstract class AbstractEmailSender {
 	/**
 	 * Best-effort send — a Brevo failure (e.g. no real API key in dev) shouldn't fail the
 	 * operation that triggered it (signup, waitlist join, booking, etc.), so failures are logged
-	 * and swallowed rather than thrown.
+	 * and swallowed rather than thrown. Returns whether the send actually succeeded, so callers
+	 * don't log a false "sent" message on top of the warning logged here.
 	 */
-	protected void send(String toEmail, String subject, String htmlContent) {
+	protected boolean send(String toEmail, String subject, String htmlContent) {
 		try {
 			brevoClient.post()
 					.uri("/smtp/email")
 					.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, htmlContent))
 					.retrieve()
 					.toBodilessEntity();
+			return true;
 		} catch (RestClientException e) {
 			log.warn("Failed to send email to {} via Brevo: {}", toEmail, e.getMessage());
+			return false;
 		}
 	}
 
