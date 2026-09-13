@@ -1,37 +1,23 @@
 package com.ektrepha.auth.impl;
 
-import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import com.ektrepha.model.OtpPurpose;
 import com.ektrepha.auth.service.EmailService;
 import com.ektrepha.config.properties.AppProperties;
+import com.ektrepha.email.AbstractEmailSender;
 
 import lombok.extern.slf4j.Slf4j;
 
-/** Sends transactional email via Brevo (https://api.brevo.com/v3/smtp/email). */
+/** Sends auth-related transactional email via Brevo (see {@link AbstractEmailSender}). */
 @Slf4j
 @Service
-public class EmailServiceImpl implements EmailService {
-
-	private final RestClient brevoClient;
-	private final String senderEmail;
-	private final String senderName;
+public class EmailServiceImpl extends AbstractEmailSender implements EmailService {
 
 	public EmailServiceImpl(AppProperties appProperties) {
-		AppProperties.Email.Brevo brevo = appProperties.email().brevo();
-		this.senderEmail = brevo.senderEmail();
-		this.senderName = brevo.senderName();
-		this.brevoClient = RestClient.builder()
-				.baseUrl("https://api.brevo.com/v3")
-				.defaultHeader("api-key", brevo.apiKey())
-				.defaultHeader("Content-Type", "application/json")
-				.defaultHeader("Accept", "application/json")
-				.build();
+		super(appProperties);
 	}
 
 	@Override
@@ -65,29 +51,6 @@ public class EmailServiceImpl implements EmailService {
 		send(email, "Verify your Ektrepha email",
 				"<p>Verify your email address: <a href=\"%s\">%s</a></p>".formatted(link, link));
 		log.info("Sent verification email to {}", email);
-	}
-
-	private void send(String toEmail, String subject, String htmlContent) {
-		try {
-			brevoClient.post()
-					.uri("/smtp/email")
-					.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, htmlContent))
-					.retrieve()
-					.toBodilessEntity();
-		} catch (RestClientException e) {
-			// Notification email is best-effort — a Brevo failure (e.g. no real API key in dev)
-			// shouldn't fail the operation that triggered it (signup, waitlist join, etc.).
-			log.warn("Failed to send email to {} via Brevo: {}", toEmail, e.getMessage());
-		}
-	}
-
-	private record BrevoSender(String name, String email) {
-	}
-
-	private record BrevoRecipient(String email) {
-	}
-
-	private record BrevoEmailRequest(BrevoSender sender, List<BrevoRecipient> to, String subject, String htmlContent) {
 	}
 
 }

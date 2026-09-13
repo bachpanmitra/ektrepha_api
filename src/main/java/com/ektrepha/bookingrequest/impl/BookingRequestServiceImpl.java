@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.bookingrequest.dto.request.BookingRequestCreateRequest;
 import com.ektrepha.bookingrequest.dto.response.BookingRequestResponse;
+import com.ektrepha.bookingrequest.service.BookingEmailService;
 import com.ektrepha.bookingrequest.service.BookingRequestService;
 import com.ektrepha.exception.ServiceTypeNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
@@ -24,6 +25,7 @@ public class BookingRequestServiceImpl implements BookingRequestService {
 	private final BookingRequestRepository bookingRequestRepository;
 	private final UserRepository userRepository;
 	private final ServiceTypeRepository serviceTypeRepository;
+	private final BookingEmailService bookingEmailService;
 
 	@Override
 	@Transactional
@@ -43,6 +45,8 @@ public class BookingRequestServiceImpl implements BookingRequestService {
 				.quotedTotal(request.quotedTotal())
 				.build();
 		BookingRequest saved = bookingRequestRepository.save(bookingRequest);
+
+		bookingEmailService.sendBookingConfirmationEmail(saved, serviceType);
 
 		return new BookingRequestResponse(saved.getId(), "Your booking request has been received — we'll be in touch to confirm.");
 	}
