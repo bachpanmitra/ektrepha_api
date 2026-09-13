@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 15
+      author: ektrepha
+      description: Add placeholder serviceability zones for Gurugram, Patna, and Noida (one zone per city, childcare live)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/015-gurgaon-patna-noida-placeholder-zones.sql
+            relativeToChangelogFile: false

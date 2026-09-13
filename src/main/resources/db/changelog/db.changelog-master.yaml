@@ -27,3 +27,7 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/013-waitlist-signups-schema.yaml
   - include:
       file: classpath:db/changelog/changes/014-booking-requests-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/015-gurgaon-patna-noida-placeholder-zones.yaml
+  - include:
+      file: classpath:db/changelog/changes/016-housekeeping-service-type.yaml

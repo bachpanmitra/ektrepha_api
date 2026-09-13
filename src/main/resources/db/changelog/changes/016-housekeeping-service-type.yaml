@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 16
+      author: ektrepha
+      description: Add "housekeeping" to service_types so it appears (as not-yet-launched) in serviceability search results
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/016-housekeeping-service-type.sql
+            relativeToChangelogFile: false
