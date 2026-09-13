@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 14
+      author: ektrepha
+      description: Add booking_requests (lightweight booking-interest capture from the price-quote flow)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/014-booking-requests-schema.sql
+            relativeToChangelogFile: false

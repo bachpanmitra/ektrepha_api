@@ -23,3 +23,7 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/011-bangalore-locality-zones.yaml
   - include:
       file: classpath:db/changelog/changes/012-bangalore-zone-centroids.yaml
+  - include:
+      file: classpath:db/changelog/changes/013-waitlist-signups-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/014-booking-requests-schema.yaml

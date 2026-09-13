@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import com.ektrepha.model.OtpPurpose;
 import com.ektrepha.auth.service.EmailService;
@@ -51,6 +52,14 @@ public class EmailServiceImpl implements EmailService {
 	}
 
 	@Override
+	public void sendPasswordResetEmail(String email, String resetLink) {
+		send(email, "Set your Ektrepha password",
+				"<p>You're on the Ektrepha waitlist. Set a password to finish creating your account: <a href=\"%s\">%s</a></p>"
+						.formatted(resetLink, resetLink));
+		log.info("Sent password reset email to {}", email);
+	}
+
+	@Override
 	public void sendVerificationEmail(String email) {
 		String link = "https://app.ektrepha.com/verify-email?token=" + UUID.randomUUID();
 		send(email, "Verify your Ektrepha email",
@@ -59,11 +68,17 @@ public class EmailServiceImpl implements EmailService {
 	}
 
 	private void send(String toEmail, String subject, String htmlContent) {
-		brevoClient.post()
-				.uri("/smtp/email")
-				.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, htmlContent))
-				.retrieve()
-				.toBodilessEntity();
+		try {
+			brevoClient.post()
+					.uri("/smtp/email")
+					.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, htmlContent))
+					.retrieve()
+					.toBodilessEntity();
+		} catch (RestClientException e) {
+			// Notification email is best-effort — a Brevo failure (e.g. no real API key in dev)
+			// shouldn't fail the operation that triggered it (signup, waitlist join, etc.).
+			log.warn("Failed to send email to {} via Brevo: {}", toEmail, e.getMessage());
+		}
 	}
 
 	private record BrevoSender(String name, String email) {
