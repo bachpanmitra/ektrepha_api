@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 13
+      author: bachpanmitra
+      description: Add waitlist_signups (landing-page notify-me popup) and recreate password_reset_tokens (dropped in changeset 4, needed for the waitlist "set your password" email link)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/013-waitlist-signups-schema.sql
+            relativeToChangelogFile: false
