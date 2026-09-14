@@ -46,3 +46,13 @@ app:
     # A coordinate search matching a zone further than this is treated as not serviceable,
     # rather than silently returning whatever the geographically nearest (but distant) zone is.
     max-zone-match-km: ${SERVICEABILITY_MAX_ZONE_MATCH_KM:50}
+  geocoding:
+    nominatim:
+      base-url: ${NOMINATIM_BASE_URL:https://nominatim.openstreetmap.org}
+      # Nominatim's usage policy requires a real identifying User-Agent — override per environment.
+      user-agent: ${NOMINATIM_USER_AGENT:Ektrepha/1.0 (no-reply@ektrepha.local)}
+      # Public-instance usage policy caps requests at 1/sec; geocode_cache means most queries never reach here twice.
+      min-interval-millis: ${NOMINATIM_MIN_INTERVAL_MILLIS:1000}
+      # Restrict free-text search to India — every zone this app serves is Indian, so an unrestricted
+      # global search can match an ambiguous short query (e.g. "AECS") to an unrelated place abroad.
+      country-codes: ${NOMINATIM_COUNTRY_CODES:in}

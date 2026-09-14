@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 17
+      author: ektrepha
+      description: Add frequency, children_count, child_age_years, care_notes to booking_requests
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/017-booking-requests-additional-fields.sql
+            relativeToChangelogFile: false

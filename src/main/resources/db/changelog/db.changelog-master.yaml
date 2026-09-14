@@ -31,3 +31,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/015-gurgaon-patna-noida-placeholder-zones.yaml
   - include:
       file: classpath:db/changelog/changes/016-housekeeping-service-type.yaml
+  - include:
+      file: classpath:db/changelog/changes/017-booking-requests-additional-fields.yaml
