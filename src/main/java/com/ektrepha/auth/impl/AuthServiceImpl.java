@@ -15,6 +15,7 @@ import com.ektrepha.auth.dto.response.EmailLoginResponse;
 import com.ektrepha.auth.dto.request.EmailSignupRequest;
 import com.ektrepha.auth.dto.response.EmailSignupResponse;
 import com.ektrepha.auth.dto.request.ForgotPasswordRequest;
+import com.ektrepha.auth.dto.request.ForgotPasswordPhoneRequest;
 import com.ektrepha.auth.dto.response.ForgotPasswordResponse;
 import com.ektrepha.auth.dto.request.GoogleLoginRequest;
 import com.ektrepha.auth.dto.response.GoogleLoginResponse;
@@ -311,17 +312,28 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest request) {
-		Optional<User> user = userRepository.findByEmail(request.email());
-		// Always the same response regardless of whether the account exists, so this can't be used to enumerate accounts.
-		// The account-not-found case is still logged server-side for debugging.
-		if (user.isPresent()) {
-			otpService.generateAndSend(request.email(), OtpPurpose.RESET_PASSWORD, user.get());
-			log.info("Forgot-password OTP sent for userId={}", user.get().getId());
-		} else {
-			log.debug("Forgot-password requested for unknown email={} (no OTP sent, generic response returned)", request.email());
-		}
+		User user = userRepository.findByEmail(request.email())
+				.orElseThrow(() -> {
+					log.warn("Forgot-password failed: no account for email={}", request.email());
+					return new UserNotFoundException("No account found with this email.");
+				});
 
-		return new ForgotPasswordResponse("If this account exists, an OTP has been sent.", request.email());
+		otpService.generateAndSend(request.email(), OtpPurpose.RESET_PASSWORD, user);
+		log.info("Forgot-password OTP sent for userId={}", user.getId());
+
+		return new ForgotPasswordResponse("An OTP has been sent to your email.", request.email());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public ForgotPasswordResponse forgotPasswordPhone(ForgotPasswordPhoneRequest request) {
+		userRepository.findByPhone(request.phoneNumber())
+				.orElseThrow(() -> {
+					log.warn("Forgot-password failed: no account for phone={}", request.phoneNumber());
+					return new UserNotFoundException("No account found with this phone number.");
+				});
+		// The account exists, but there's no SMS provider wired up yet to actually deliver an OTP.
+		throw new IllegalArgumentException("Password reset via phone isn't supported yet. Please use your email instead.");
 	}
 
 	@Override

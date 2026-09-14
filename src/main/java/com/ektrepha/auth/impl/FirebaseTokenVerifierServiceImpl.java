@@ -31,6 +31,19 @@ public class FirebaseTokenVerifierServiceImpl implements FirebaseTokenVerifierSe
 	private FirebaseApp firebaseApp;
 
 	public FirebaseTokenVerifierServiceImpl(AppProperties appProperties) {
+		// FirebaseApp.initializeApp registers a process-wide singleton by name that outlives a
+		// single Spring context — a devtools hot-restart re-runs this constructor in the same
+		// JVM and would otherwise crash the whole app on "FirebaseApp name [DEFAULT] already
+		// exists!", so reuse the existing instance instead of re-initializing.
+		FirebaseApp existing = FirebaseApp.getApps().stream()
+				.filter(app -> app.getName().equals(FirebaseApp.DEFAULT_APP_NAME))
+				.findFirst()
+				.orElse(null);
+		if (existing != null) {
+			this.firebaseApp = existing;
+			return;
+		}
+
 		String path = appProperties.firebase().serviceAccountPath();
 		try (FileInputStream serviceAccount = new FileInputStream(path)) {
 			FirebaseOptions options = FirebaseOptions.builder()
