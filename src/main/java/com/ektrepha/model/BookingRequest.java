@@ -61,6 +61,18 @@ public class BookingRequest {
 	@Column(name = "quoted_total", precision = 10, scale = 2)
 	private BigDecimal quotedTotal;
 
+	@Column(name = "frequency", nullable = false)
+	private BookingFrequency frequency;
+
+	@Column(name = "children_count", nullable = false)
+	private short childrenCount;
+
+	@Column(name = "child_age_years")
+	private Short childAgeYears;
+
+	@Column(name = "care_notes")
+	private String careNotes;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 

@@ -28,7 +28,8 @@ public record AppProperties(
 		@Valid @NotNull Pricing pricing,
 		@Valid @NotNull Serviceability serviceability,
 		@Valid @NotNull Email email,
-		@Valid @NotNull Firebase firebase) {
+		@Valid @NotNull Firebase firebase,
+		@Valid @NotNull Geocoding geocoding) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -97,5 +98,19 @@ public record AppProperties(
 
 	public record Firebase(
 			@NotBlank(message = "app.firebase.service-account-path must be set — path to the Firebase service account JSON key") String serviceAccountPath) {
+	}
+
+	public record Geocoding(@Valid @NotNull Nominatim nominatim) {
+
+		/** OpenStreetMap's free public Nominatim API — no API key, but usage-policy limits apply (see NominatimGeocodingProvider). */
+		public record Nominatim(
+				@NotBlank String baseUrl,
+				@NotBlank(message = "app.geocoding.nominatim.user-agent must identify this app per Nominatim's usage policy") String userAgent,
+				@NotNull @Positive Long minIntervalMillis,
+				// Nominatim's countrycodes filter (comma-separated ISO 3166-1 alpha-2, e.g. "in") — every
+				// zone this app serves is in India, so unrestricted global search lets an ambiguous
+				// short query (e.g. "AECS") match an unrelated place on the other side of the world.
+				@NotBlank String countryCodes) {
+		}
 	}
 }

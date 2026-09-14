@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import com.ektrepha.bookingrequest.service.BookingEmailService;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.email.AbstractEmailSender;
+import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingRequest;
 import com.ektrepha.model.ServiceType;
 
@@ -32,25 +33,46 @@ public class BookingEmailServiceImpl extends AbstractEmailSender implements Book
 			return;
 		}
 
+		String childAgeLine = bookingRequest.getChildAgeYears() != null
+				? "<p>Child's age: <strong>%d years</strong></p>".formatted(bookingRequest.getChildAgeYears())
+				: "";
+		String careNotesLine = StringUtils.hasText(bookingRequest.getCareNotes())
+				? "<p>Care notes: <strong>%s</strong></p>".formatted(bookingRequest.getCareNotes())
+				: "";
+
 		String html = """
 				<p>Hi %s,</p>
-				<p>We've received your booking request for <strong>%s</strong> on <strong>%s</strong>,
+				<p>We've received your booking request for <strong>%s</strong> (%s) on <strong>%s</strong>,
 				from <strong>%s</strong> to <strong>%s</strong>.</p>
+				<p>Children: <strong>%d</strong></p>
+				%s
+				%s
 				<p>Quoted total: <strong>%s</strong></p>
 				<p>We'll be in touch shortly to confirm.</p>
 				"""
 				.formatted(
 						bookingRequest.getUser().getName(),
 						serviceType.getName(),
+						frequencyLabel(bookingRequest.getFrequency()),
 						bookingRequest.getBookingDate().format(DATE_FORMAT),
 						bookingRequest.getStartTime().format(TIME_FORMAT),
 						bookingRequest.getEndTime().format(TIME_FORMAT),
+						bookingRequest.getChildrenCount(),
+						childAgeLine,
+						careNotesLine,
 						bookingRequest.getQuotedTotal() != null ? "₹" + bookingRequest.getQuotedTotal() : "to be confirmed");
 
 		boolean sent = send(toEmail, "Your Ektrepha booking request is confirmed", html);
 		if (sent) {
 			log.info("Sent booking confirmation email to {} for booking request {}", toEmail, bookingRequest.getId());
 		}
+	}
+
+	private static String frequencyLabel(BookingFrequency frequency) {
+		return switch (frequency) {
+			case ONE_TIME -> "one-time";
+			case REPEAT_WEEKLY -> "weekly, repeating";
+		};
 	}
 
 }

@@ -46,8 +46,10 @@ public class ServiceabilitySearchServiceImpl implements ServiceabilitySearchServ
 	private final ZoneServicePricingRepository pricingRepository;
 	private final ZoneAreaRepository zoneAreaRepository;
 
+	// Not readOnly: a QUERY match on a cache miss writes the resolved coordinates to geocode_cache
+	// (see QueryLookupStrategy) — Postgres rejects writes inside a read-only transaction.
 	@Override
-	@Transactional(readOnly = true)
+	@Transactional
 	public ServiceabilityMatrixResponse search(String pincode, String query, Double lat, Double lng, String city, String state) {
 		SearchCriteria criteria = new SearchCriteria(pincode, query, lat, lng, city, state);
 		ServiceabilityLookupStrategy strategy = strategyFactory.resolve(criteria);

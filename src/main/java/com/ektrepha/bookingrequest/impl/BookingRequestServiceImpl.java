@@ -43,6 +43,10 @@ public class BookingRequestServiceImpl implements BookingRequestService {
 				.startTime(request.startTime())
 				.endTime(request.endTime())
 				.quotedTotal(request.quotedTotal())
+				.frequency(request.frequency())
+				.childrenCount(request.childrenCount().shortValue())
+				.childAgeYears(request.childAgeYears() == null ? null : request.childAgeYears().shortValue())
+				.careNotes(request.careNotes())
 				.build();
 		BookingRequest saved = bookingRequestRepository.save(bookingRequest);
 
