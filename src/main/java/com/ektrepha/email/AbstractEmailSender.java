@@ -43,7 +43,7 @@ public abstract class AbstractEmailSender {
 		try {
 			brevoClient.post()
 					.uri("/smtp/email")
-					.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, htmlContent))
+					.body(new BrevoEmailRequest(new BrevoSender(senderName, senderEmail), List.of(new BrevoRecipient(toEmail)), subject, wrapInTemplate(htmlContent)))
 					.retrieve()
 					.toBodilessEntity();
 			return true;
@@ -51,6 +51,40 @@ public abstract class AbstractEmailSender {
 			log.warn("Failed to send email to {} via Brevo: {}", toEmail, e.getMessage());
 			return false;
 		}
+	}
+
+	/** Wraps a service's inner HTML fragment in the shared Ektrepha branded email shell. */
+	private static String wrapInTemplate(String bodyHtml) {
+		return """
+				<!DOCTYPE html>
+				<html>
+				  <body style="margin:0;padding:0;background-color:#F1EAD9;font-family:Helvetica,Arial,sans-serif;">
+				    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background-color:#F1EAD9;padding:32px 16px;">
+				      <tr>
+				        <td align="center">
+				          <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;">
+				            <tr>
+				              <td style="background-color:#15453D;padding:24px 32px;">
+				                <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:0.3px;">Ektrepha</span>
+				              </td>
+				            </tr>
+				            <tr>
+				              <td style="padding:32px;color:#1B332D;font-size:15px;line-height:1.6;">
+				                %s
+				              </td>
+				            </tr>
+				            <tr>
+				              <td style="padding:20px 32px;border-top:1px solid #DCD3C4;color:#8a8378;font-size:12px;line-height:1.5;">
+				                You're receiving this because of activity on your Ektrepha account. If this wasn't you, you can safely ignore this email.
+				              </td>
+				            </tr>
+				          </table>
+				        </td>
+				      </tr>
+				    </table>
+				  </body>
+				</html>
+				""".formatted(bodyHtml);
 	}
 
 	private record BrevoSender(String name, String email) {

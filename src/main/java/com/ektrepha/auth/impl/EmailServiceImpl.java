@@ -22,9 +22,14 @@ public class EmailServiceImpl extends AbstractEmailSender implements EmailServic
 
 	@Override
 	public void sendOtpEmail(String email, String otp, OtpPurpose purpose) {
-		boolean sent = send(email, "Your Ektrepha verification code",
-				"<p>Your one-time code is <strong>%s</strong>. It expires shortly — don't share it with anyone.</p>"
-						.formatted(otp));
+		String html = """
+				<p>Hi there,</p>
+				<p>Use the code below to continue. It expires shortly — don't share it with anyone.</p>
+				<div style="margin:28px 0;text-align:center;">
+				  <span style="display:inline-block;background-color:#F1EAD9;color:#15453D;font-size:32px;font-weight:800;letter-spacing:8px;padding:16px 28px;border-radius:12px;">%s</span>
+				</div>
+				""".formatted(otp);
+		boolean sent = send(email, "Your Ektrepha verification code", html);
 		if (sent) {
 			log.info("Sent OTP email to {} (purpose={})", email, purpose);
 		}
