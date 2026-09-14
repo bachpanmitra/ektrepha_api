@@ -10,7 +10,7 @@ class RateLimiterServiceImplTest {
 
 	private RateLimiterService newLimiter(int capacity, long windowSeconds) {
 		AppProperties.RateLimit rateLimit = new AppProperties.RateLimit(true, capacity, windowSeconds);
-		AppProperties appProperties = new AppProperties(null, null, null, rateLimit, null, null, null, null, null, null, null, null);
+		AppProperties appProperties = new AppProperties(null, null, null, rateLimit, null, null, null, null, null, null, null, null, null);
 		return new RateLimiterServiceImpl(appProperties);
 	}
 
