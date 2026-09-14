@@ -171,13 +171,14 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public PhoneLoginResponse loginPhone(PhoneLoginRequest request) {
-		String lockKey = SecurityConstants.LOGIN_LOCK_KEY_PHONE_PREFIX + request.phoneNumber();
+		String phoneNumber = normalizePhone(request.phoneNumber());
+		String lockKey = SecurityConstants.LOGIN_LOCK_KEY_PHONE_PREFIX + phoneNumber;
 		loginAttemptService.assertNotLocked(lockKey);
 
-		User user = userRepository.findByPhone(request.phoneNumber()).orElse(null);
+		User user = userRepository.findByPhone(phoneNumber).orElse(null);
 		if (user == null || user.getPassword() == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
 			loginAttemptService.recordFailure(lockKey);
-			log.warn("Phone login failed: invalid credentials for {}", request.phoneNumber());
+			log.warn("Phone login failed: invalid credentials for {}", phoneNumber);
 			throw new InvalidCredentialsException();
 		}
 		if (!user.isActive()) {
@@ -327,9 +328,10 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional(readOnly = true)
 	public ForgotPasswordResponse forgotPasswordPhone(ForgotPasswordPhoneRequest request) {
-		userRepository.findByPhone(request.phoneNumber())
+		String phoneNumber = normalizePhone(request.phoneNumber());
+		userRepository.findByPhone(phoneNumber)
 				.orElseThrow(() -> {
-					log.warn("Forgot-password failed: no account for phone={}", request.phoneNumber());
+					log.warn("Forgot-password failed: no account for phone={}", phoneNumber);
 					return new UserNotFoundException("No account found with this phone number.");
 				});
 		// The account exists, but there's no SMS provider wired up yet to actually deliver an OTP.
@@ -383,6 +385,16 @@ public class AuthServiceImpl implements AuthService {
 			log.warn("Blocked attempt to self-register with role=ADMIN");
 			throw new IllegalArgumentException("ADMIN accounts cannot be self-registered");
 		}
+	}
+
+	/** Coerces a bare 10-digit Indian number to E.164 ({@code +91XXXXXXXXXX}) to match how phones are stored (see signupPhone/Firebase). Anything else is passed through unchanged so lookups still fail naturally instead of throwing here. */
+	private String normalizePhone(String phoneNumber) {
+		String trimmed = phoneNumber.trim();
+		if (trimmed.startsWith("+")) {
+			return trimmed;
+		}
+		String digits = trimmed.replaceAll("\\D", "");
+		return digits.length() == 10 ? "+91" + digits : trimmed;
 	}
 
 	private record AuthTokens(String accessToken, String refreshToken) {
