@@ -12,6 +12,7 @@ import com.ektrepha.auth.dto.response.EmailLoginResponse;
 import com.ektrepha.auth.dto.request.EmailSignupRequest;
 import com.ektrepha.auth.dto.response.EmailSignupResponse;
 import com.ektrepha.auth.dto.request.ForgotPasswordRequest;
+import com.ektrepha.auth.dto.request.ForgotPasswordPhoneRequest;
 import com.ektrepha.auth.dto.response.ForgotPasswordResponse;
 import com.ektrepha.auth.dto.request.GoogleLoginRequest;
 import com.ektrepha.auth.dto.response.GoogleLoginResponse;
@@ -97,6 +98,11 @@ public class AuthController {
 	@PostMapping("/password/forgot")
 	public ResponseEntity<ForgotPasswordResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
 		return ResponseEntity.ok(authService.forgotPassword(request));
+	}
+
+	@PostMapping("/password/forgot/phone")
+	public ResponseEntity<ForgotPasswordResponse> forgotPasswordPhone(@Valid @RequestBody ForgotPasswordPhoneRequest request) {
+		return ResponseEntity.ok(authService.forgotPasswordPhone(request));
 	}
 
 	@PostMapping("/password/reset")

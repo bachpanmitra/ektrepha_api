@@ -5,6 +5,7 @@ import com.ektrepha.auth.dto.response.EmailLoginResponse;
 import com.ektrepha.auth.dto.request.EmailSignupRequest;
 import com.ektrepha.auth.dto.response.EmailSignupResponse;
 import com.ektrepha.auth.dto.request.ForgotPasswordRequest;
+import com.ektrepha.auth.dto.request.ForgotPasswordPhoneRequest;
 import com.ektrepha.auth.dto.response.ForgotPasswordResponse;
 import com.ektrepha.auth.dto.request.GoogleLoginRequest;
 import com.ektrepha.auth.dto.response.GoogleLoginResponse;
@@ -45,6 +46,8 @@ public interface AuthService {
 	MessageResponse logout(RefreshRequest request);
 
 	ForgotPasswordResponse forgotPassword(ForgotPasswordRequest request);
+
+	ForgotPasswordResponse forgotPasswordPhone(ForgotPasswordPhoneRequest request);
 
 	ResetPasswordResponse resetPassword(ResetPasswordRequest request);
 
