@@ -4,6 +4,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class OtpServiceImpl implements OtpService {
 	private final PasswordEncoder passwordEncoder;
 	private final EmailService emailService;
 	private final AppProperties appProperties;
+	private final Environment environment;
 
 	@Override
 	@Transactional
@@ -48,6 +50,9 @@ public class OtpServiceImpl implements OtpService {
 
 		emailService.sendOtpEmail(email, code, purpose);
 		log.debug("Generated OTP id={} for identifier={}, purpose={}, expiresAt={}", otp.getId(), email, purpose, otp.getExpiresAt());
+		if (environment.matchesProfiles("dev")) {
+			log.info("[dev only] OTP code for identifier={}, purpose={}: {}", email, purpose, code);
+		}
 
 		return otp;
 	}
