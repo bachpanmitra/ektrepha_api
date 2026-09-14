@@ -58,7 +58,7 @@ public class OtpServiceImpl implements OtpService {
 		Otp otp = otpRepository.findMostRecentActive(phoneOrEmail, purpose)
 				.orElseThrow(() -> {
 					log.warn("OTP verify failed: no active OTP for identifier={}, purpose={}", phoneOrEmail, purpose);
-					return new InvalidOtpException("No active OTP found for " + phoneOrEmail);
+					return new InvalidOtpException("Invalid or expired code. Please request a new one.");
 				});
 
 		int maxAttempts = appProperties.otp().maxAttempts();
