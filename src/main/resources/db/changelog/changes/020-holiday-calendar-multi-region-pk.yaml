@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20
+      author: ektrepha
+      description: Replace holiday_calendar's holiday_date-only PK with a surrogate id + (holiday_date, region) unique constraint
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/020-holiday-calendar-multi-region-pk.sql
+            relativeToChangelogFile: false

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 23
+      author: ektrepha
+      description: Make parent.last_name nullable (single-name users)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/023-parent-last-name-nullable.sql
+            relativeToChangelogFile: false

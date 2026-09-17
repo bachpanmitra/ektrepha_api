@@ -66,7 +66,7 @@ public class PricingServiceImpl implements PricingService {
 		ZoneServicePricing pricing = pricingRepository.findByZoneAreaIdAndServiceTypeIdAndActiveTrue(request.zoneAreaId(), serviceType.getId())
 				.orElseThrow(() -> new NotServiceableException("No active pricing configured for this zone and service type"));
 
-		DayType dayType = dayTypeResolver.resolve(request.bookingDate());
+		DayType dayType = dayTypeResolver.resolve(request.bookingDate(), pricing.getZoneArea().getState());
 		ZonePricingRule rule = ruleRepository.findApplicableRules(pricing.getId(), dayType, request.startTime(), request.endTime())
 				.stream().findFirst().orElse(null);
 

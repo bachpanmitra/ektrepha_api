@@ -34,7 +34,7 @@ public class CaregiverZoneMapping {
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "caregiver_id", nullable = false)
+	@JoinColumn(name = "nanny_id", nullable = false)
 	private Nanny caregiver;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

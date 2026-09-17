@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 27
+      author: ektrepha
+      description: Add user_notification_preference and user_device tables (schema only, unwired)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/027-notification-prefs-and-devices.sql
+            relativeToChangelogFile: false

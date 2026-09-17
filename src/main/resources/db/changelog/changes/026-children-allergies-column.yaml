@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 26
+      author: ektrepha
+      description: Promote children.allergies to a real TEXT[] column
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/026-children-allergies-column.sql
+            relativeToChangelogFile: false

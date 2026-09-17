@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 18
+      author: ektrepha
+      description: Add booking.service_type_id (backfilled to childcare), relax booking.child_id to nullable
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/018-booking-service-type.sql
+            relativeToChangelogFile: false

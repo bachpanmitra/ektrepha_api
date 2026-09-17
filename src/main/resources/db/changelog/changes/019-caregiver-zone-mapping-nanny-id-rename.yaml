@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 19
+      author: ektrepha
+      description: Rename caregiver_zone_mapping.caregiver_id to nanny_id to match FK naming convention
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/019-caregiver-zone-mapping-nanny-id-rename.sql
+            relativeToChangelogFile: false

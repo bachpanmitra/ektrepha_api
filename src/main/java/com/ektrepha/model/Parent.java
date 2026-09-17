@@ -40,11 +40,16 @@ public class Parent {
 	@JoinColumn(name = "user_id", nullable = false, unique = true)
 	private User user;
 
-	@Column(name = "first_name", nullable = false, length = 100)
+	// Nullable (migration 029) — an auto-vivified stub row (created on a first child/address, before
+	// P1/P2 is ever completed) has no name yet.
+	@Column(name = "first_name", length = 100)
 	private String firstName;
 
-	@Column(name = "last_name", nullable = false, length = 100)
+	@Column(name = "last_name", length = 100)
 	private String lastName;
+
+	@Column(name = "profile_photo_s3_key", length = 500)
+	private String profilePhotoS3Key;
 
 	// @JdbcTypeCode(JSON) required — see Nanny.metaData for why columnDefinition alone isn't enough.
 	@JdbcTypeCode(SqlTypes.JSON)

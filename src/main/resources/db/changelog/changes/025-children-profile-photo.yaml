@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 25
+      author: ektrepha
+      description: Add children.profile_photo_s3_key
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/025-children-profile-photo.sql
+            relativeToChangelogFile: false

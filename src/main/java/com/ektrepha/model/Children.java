@@ -2,6 +2,7 @@ package com.ektrepha.model;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -46,6 +47,15 @@ public class Children {
 
 	@Column(name = "gender", length = 10)
 	private String gender;
+
+	@Column(name = "profile_photo_s3_key", length = 500)
+	private String profilePhotoS3Key;
+
+	/** Real, typed column (migration 026) — the one care-notes field with a physical-safety consequence, so it doesn't live in {@link #metaData}. */
+	@Builder.Default
+	@JdbcTypeCode(SqlTypes.ARRAY)
+	@Column(name = "allergies", columnDefinition = "text[]")
+	private List<String> allergies = List.of();
 
 	// @JdbcTypeCode(JSON) required — see Nanny.metaData for why columnDefinition alone isn't enough.
 	@JdbcTypeCode(SqlTypes.JSON)

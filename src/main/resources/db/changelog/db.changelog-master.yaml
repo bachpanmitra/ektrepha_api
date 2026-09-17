@@ -33,3 +33,27 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/016-housekeeping-service-type.yaml
   - include:
       file: classpath:db/changelog/changes/017-booking-requests-additional-fields.yaml
+  - include:
+      file: classpath:db/changelog/changes/018-booking-service-type.yaml
+  - include:
+      file: classpath:db/changelog/changes/019-caregiver-zone-mapping-nanny-id-rename.yaml
+  - include:
+      file: classpath:db/changelog/changes/020-holiday-calendar-multi-region-pk.yaml
+  - include:
+      file: classpath:db/changelog/changes/021-users-status-deactivated-code.yaml
+  - include:
+      file: classpath:db/changelog/changes/022-drop-unused-pgcrypto-extension.yaml
+  - include:
+      file: classpath:db/changelog/changes/023-parent-last-name-nullable.yaml
+  - include:
+      file: classpath:db/changelog/changes/024-parent-profile-photo.yaml
+  - include:
+      file: classpath:db/changelog/changes/025-children-profile-photo.yaml
+  - include:
+      file: classpath:db/changelog/changes/026-children-allergies-column.yaml
+  - include:
+      file: classpath:db/changelog/changes/027-notification-prefs-and-devices.yaml
+  - include:
+      file: classpath:db/changelog/changes/028-booking-address-id-index.yaml
+  - include:
+      file: classpath:db/changelog/changes/029-parent-first-name-nullable.yaml

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 29
+      author: ektrepha
+      description: Make parent.first_name nullable (auto-vivified stub rows before P1/P2 completion)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/029-parent-first-name-nullable.sql
+            relativeToChangelogFile: false

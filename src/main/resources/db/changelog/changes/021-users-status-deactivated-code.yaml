@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 21
+      author: ektrepha
+      description: Add users.status=2 DEACTIVATED code and migrate rows where is_active disagrees with status
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/021-users-status-deactivated-code.sql
+            relativeToChangelogFile: false
