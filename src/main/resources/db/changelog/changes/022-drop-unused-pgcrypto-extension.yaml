@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 22
+      author: ektrepha
+      description: Drop the unused pgcrypto extension
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/022-drop-unused-pgcrypto-extension.sql
+            relativeToChangelogFile: false

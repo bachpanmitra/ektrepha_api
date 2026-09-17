@@ -44,9 +44,14 @@ public class Booking {
 	@JoinColumn(name = "nanny_id", nullable = false)
 	private Nanny nanny;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "child_id", nullable = false)
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "child_id")
 	private Children child;
+
+	/** Which vertical this booking is for. child is only required when this is 'childcare' — enforced at the app layer, not the DB. */
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "service_type_id", nullable = false)
+	private ServiceType serviceType;
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "address_id")

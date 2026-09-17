@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 28
+      author: ektrepha
+      description: Index booking(address_id) for the address-delete guard lookup
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/028-booking-address-id-index.sql
+            relativeToChangelogFile: false

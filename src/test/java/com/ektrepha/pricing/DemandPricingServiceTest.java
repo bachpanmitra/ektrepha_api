@@ -132,14 +132,14 @@ class DemandPricingServiceTest {
 
 	private void createPendingBooking(Parent parent, Nanny nanny, Children child, Instant start, Instant end) {
 		bookingRepository.save(Booking.builder()
-				.parent(parent).nanny(nanny).child(child)
+				.parent(parent).nanny(nanny).child(child).serviceType(childcare)
 				.startTime(start).endTime(end).status(BookingStatus.PENDING).build());
 	}
 
 	private void createConfirmedBookingHappeningNow(Parent parent, Nanny nanny, Children child) {
 		Instant now = Instant.now();
 		bookingRepository.save(Booking.builder()
-				.parent(parent).nanny(nanny).child(child)
+				.parent(parent).nanny(nanny).child(child).serviceType(childcare)
 				.startTime(now.minus(1, ChronoUnit.HOURS)).endTime(now.plus(1, ChronoUnit.HOURS))
 				.status(BookingStatus.CONFIRMED).build());
 	}

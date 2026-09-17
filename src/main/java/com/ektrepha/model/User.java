@@ -65,6 +65,17 @@ public class User {
 	@Column(name = "user_type", nullable = false, length = 20)
 	private UserType userType;
 
+	// @Builder.Default matters here: every existing User.builder() call across the signup flows
+	// never sets this explicitly, and the column is NOT NULL — without a default, those inserts
+	// would break.
+	@Builder.Default
+	@Column(name = "status", nullable = false)
+	private UserStatus status = UserStatus.ACTIVE;
+
+	/** Set on soft-delete (A6) alongside {@link #status} — never a hard delete, booking/financial history must survive. */
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 

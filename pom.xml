@@ -216,6 +216,24 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!--
+						RateLimitFilter's per-IP token bucket (application.yml: app.rate-limit) is a
+						singleton bean shared across every @SpringBootTest class in one JVM (Spring
+						caches/reuses the context), all seen as the same 127.0.0.1 client. It's a
+						production/staging concern, not something an integration-test suite should be
+						subject to - without this, the suite's total MockMvc request volume can tip the
+						shared bucket over mid-run and later test classes start seeing real 429s that
+						have nothing to do with what they're actually testing.
+					-->
+					<environmentVariables>
+						<RATE_LIMIT_ENABLED>false</RATE_LIMIT_ENABLED>
+					</environmentVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 
