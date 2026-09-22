@@ -6,6 +6,12 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  # Default 1MB (per-file)/10MB (per-request) is too tight for a phone-camera photo — child
+  # profile photo upload is the first multipart endpoint that isn't a small admin CSV.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 app:
   jwt:

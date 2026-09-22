@@ -40,8 +40,10 @@ public class Booking {
 	@JoinColumn(name = "parent_id", nullable = false)
 	private Parent parent;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "nanny_id", nullable = false)
+	// Nullable only while status is AWAITING_PAYMENT/ASSIGNING_CAREGIVER (hourly-care pay-first
+	// flow) - every other flow still assigns a nanny up front and this is never null there.
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "nanny_id")
 	private Nanny nanny;
 
 	@ManyToOne(fetch = FetchType.LAZY)
@@ -73,8 +75,21 @@ public class Booking {
 	@Column(name = "cancellation_reason", length = 255)
 	private String cancellationReason;
 
+	/** Free-text notes from the hourly-care flow's "Care notes (optional)" field - not surfaced on any read DTO yet, stored for the assigned caregiver/ops. */
+	@Column(name = "care_notes", length = 500)
+	private String careNotes;
+
 	@Column(name = "total_amount", precision = 10, scale = 2)
 	private BigDecimal totalAmount;
+
+	/** ONE_TIME unless this booking is one occurrence of a recurring ("book every"/month-base) series. */
+	@Column(name = "frequency", nullable = false)
+	@Builder.Default
+	private BookingFrequency frequency = BookingFrequency.ONE_TIME;
+
+	/** Points at the series' anchor booking id (its own id, for the anchor row itself). NULL for ONE_TIME. */
+	@Column(name = "recurrence_group_id")
+	private Long recurrenceGroupId;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;

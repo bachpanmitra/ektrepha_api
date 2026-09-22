@@ -14,5 +14,7 @@ public record BookingCardResponse(
 		String serviceTypeCode,
 		BigDecimal totalAmount,
 		Long elapsedSeconds,
-		boolean reviewPending) {
+		boolean reviewPending,
+		// ONE_TIME/REPEAT_DAILY/REPEAT_WEEKLY/REPEAT_MONTHLY — lets the list badge a recurring occurrence.
+		String frequency) {
 }

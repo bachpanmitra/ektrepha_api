@@ -71,7 +71,9 @@ public class BookingEmailServiceImpl extends AbstractEmailSender implements Book
 	private static String frequencyLabel(BookingFrequency frequency) {
 		return switch (frequency) {
 			case ONE_TIME -> "one-time";
+			case REPEAT_DAILY -> "daily, repeating";
 			case REPEAT_WEEKLY -> "weekly, repeating";
+			case REPEAT_MONTHLY -> "monthly, repeating";
 		};
 	}
 

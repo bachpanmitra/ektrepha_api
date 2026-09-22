@@ -57,3 +57,7 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/028-booking-address-id-index.yaml
   - include:
       file: classpath:db/changelog/changes/029-parent-first-name-nullable.yaml
+  - include:
+      file: classpath:db/changelog/changes/030-booking-recurrence.yaml
+  - include:
+      file: classpath:db/changelog/changes/031-hourly-care-payment.yaml

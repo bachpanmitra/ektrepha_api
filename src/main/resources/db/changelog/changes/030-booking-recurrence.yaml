@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 30
+      author: ektrepha
+      description: Add booking.frequency and booking.recurrence_group_id for recurring (daily/weekly/monthly) bookings
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/030-booking-recurrence.sql
+            relativeToChangelogFile: false

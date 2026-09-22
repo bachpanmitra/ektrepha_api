@@ -102,7 +102,32 @@ public class BookingReadServiceImpl implements BookingReadService {
 				addressResponseMapper.toResponse(booking.getAddress()),
 				booking.getTotalAmount(),
 				elapsedSeconds(booking),
-				review);
+				review,
+				availableActions(booking),
+				booking.getFrequency().name(),
+				totalOccurrences(booking));
+	}
+
+	// null for a ONE_TIME booking (no series); otherwise how many bookings share its recurrence group.
+	private Integer totalOccurrences(Booking booking) {
+		if (booking.getRecurrenceGroupId() == null) {
+			return null;
+		}
+		return (int) bookingRepository.countByRecurrenceGroupId(booking.getRecurrenceGroupId());
+	}
+
+	// CANCEL: PENDING/CONFIRMED only — IN_PROGRESS is "end early", a different operation; COMPLETED/
+	// CANCELLED have nothing left to cancel. CONTACT: CONFIRMED/IN_PROGRESS only, matching the same
+	// gate GET /bookings/{id}/contact itself enforces.
+	private List<String> availableActions(Booking booking) {
+		List<String> actions = new java.util.ArrayList<>();
+		if (booking.getStatus() == BookingStatus.PENDING || booking.getStatus() == BookingStatus.CONFIRMED) {
+			actions.add("CANCEL");
+		}
+		if (booking.getStatus() == BookingStatus.CONFIRMED || booking.getStatus() == BookingStatus.IN_PROGRESS) {
+			actions.add("CONTACT");
+		}
+		return actions;
 	}
 
 	private Parent resolveParent(Long userId) {
@@ -175,7 +200,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 				booking.getServiceType().getCode(),
 				booking.getTotalAmount(),
 				elapsedSeconds(booking),
-				reviewPending);
+				reviewPending,
+				booking.getFrequency().name());
 	}
 
 	private NannySummary toNannySummary(Nanny nanny, Object[] aggregate) {
