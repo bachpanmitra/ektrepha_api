@@ -28,4 +28,23 @@ public interface CaregiverZoneMappingRepository extends JpaRepository<CaregiverZ
 			""")
 	int countAvailableNow(@Param("zoneAreaId") Long zoneAreaId, @Param("serviceTypeId") Long serviceTypeId, @Param("now") Instant now);
 
+	// Hourly-care flow's total zone/service capacity - see HourlyCareServiceImpl#checkCapacity.
+	int countByZoneAreaIdAndServiceTypeIdAndActiveTrue(Long zoneAreaId, Long serviceTypeId);
+
+	// Of the mapped caregivers, how many already have a nanny-assigned booking (any flow) that
+	// overlaps the requested window - counted per-caregiver (DISTINCT) since one caregiver with two
+	// overlapping bookings still only occupies one unit of capacity.
+	@Query("""
+			SELECT COUNT(DISTINCT czm.caregiver.id) FROM CaregiverZoneMapping czm
+			WHERE czm.zoneArea.id = :zoneAreaId AND czm.serviceType.id = :serviceTypeId AND czm.active = true
+			  AND EXISTS (
+			      SELECT 1 FROM Booking b
+			      WHERE b.nanny.id = czm.caregiver.id
+			        AND b.status IN (com.ektrepha.model.BookingStatus.PENDING, com.ektrepha.model.BookingStatus.CONFIRMED, com.ektrepha.model.BookingStatus.IN_PROGRESS)
+			        AND b.startTime < :windowEnd AND b.endTime > :windowStart
+			  )
+			""")
+	int countBusyMappedCaregiversOverlapping(@Param("zoneAreaId") Long zoneAreaId, @Param("serviceTypeId") Long serviceTypeId,
+			@Param("windowStart") Instant windowStart, @Param("windowEnd") Instant windowEnd);
+
 }

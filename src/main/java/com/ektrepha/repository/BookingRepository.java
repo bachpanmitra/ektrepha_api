@@ -18,6 +18,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	Optional<Booking> findByIdAndParentId(Long id, Long parentId);
 
+	// Nanny-side lifecycle actions (start/complete care) - scoped to the assigned caregiver, same
+	// ownership-check shape as findByIdAndParentId is for the parent side.
+	Optional<Booking> findByIdAndNannyId(Long id, Long nannyId);
+
 	// B1/H1 card list — one query, one status-set param, shared by both the "active" and "history"
 	// scopes (PRD "PRD API Design Spec" §3.4: same repository method, different status sets, so the
 	// two screens can never drift). JOIN FETCH avoids N+1 on every card's nanny/child/address.
@@ -50,6 +54,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	// A6 delete-account guard: the block message tells the parent how many bookings to resolve first.
 	long countByParentIdAndStatusIn(Long parentId, Collection<BookingStatus> statuses);
 
+	// B2 detail's "3 of 4" recurring-series display, and the write side's per-occurrence overlap
+	// checks all belong to the same series once its anchor booking id is known.
+	long countByRecurrenceGroupId(Long recurrenceGroupId);
+
 	// C1's "Last care: 12 Jan 2024" — batched across every child on the list rather than N+1 per card.
 	@Query("""
 			SELECT b.child.id, MAX(b.endTime) FROM Booking b
@@ -68,5 +76,19 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 			  AND b.status = com.ektrepha.model.BookingStatus.PENDING AND b.createdAt >= :since
 			""")
 	int countOpenRequestsForZoneService(@Param("zoneAreaId") Long zoneAreaId, @Param("serviceTypeId") Long serviceTypeId, @Param("since") Instant since);
+
+	// Hourly-care flow's own bookings not yet tied to a specific nanny (AWAITING_PAYMENT/
+	// ASSIGNING_CAREGIVER) - each one will consume exactly one mapped caregiver once assigned, so it
+	// counts against the same zone/service capacity as an already-assigned booking would. Joined via
+	// the address's pincode since these rows carry no zone_area_id of their own.
+	@Query("""
+			SELECT COUNT(b) FROM Booking b
+			JOIN ServiceabilityPincode sp ON sp.pincode = b.address.pincode
+			WHERE sp.zoneArea.id = :zoneAreaId AND b.serviceType.id = :serviceTypeId
+			  AND b.nanny IS NULL AND b.status IN :statuses
+			  AND b.startTime < :windowEnd AND b.endTime > :windowStart
+			""")
+	int countUnassignedReservationsOverlapping(@Param("zoneAreaId") Long zoneAreaId, @Param("serviceTypeId") Long serviceTypeId,
+			@Param("windowStart") Instant windowStart, @Param("windowEnd") Instant windowEnd, @Param("statuses") Collection<BookingStatus> statuses);
 
 }

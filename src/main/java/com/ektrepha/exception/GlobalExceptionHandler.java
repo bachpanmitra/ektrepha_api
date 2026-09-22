@@ -10,6 +10,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -33,13 +36,15 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler(ForbiddenChildAccessException.class)
-	public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenChildAccessException ex, HttpServletRequest request) {
+	@ExceptionHandler({ ForbiddenChildAccessException.class, BookingContactNotAvailableException.class })
+	public ResponseEntity<ErrorResponse> handleForbidden(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
 	}
 
 	@ExceptionHandler({ DuplicateReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class,
-			AddressInUseException.class, ChildInUseException.class, AccountHasActiveBookingsException.class })
+			AddressInUseException.class, ChildInUseException.class, AccountHasActiveBookingsException.class,
+			NannyUnavailableException.class, BookingNotCancellableException.class, CareUnavailableException.class,
+			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class })
 	public ResponseEntity<ErrorResponse> handleDuplicateReview(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
 	}
@@ -57,9 +62,16 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidFirebaseTokenException.class, InvalidOtpException.class,
 			IllegalArgumentException.class, InvalidSearchParametersException.class, ParentAddressNotFoundException.class,
-			BookingNotEligibleForReviewException.class, InvalidIdentifierException.class })
+			BookingNotEligibleForReviewException.class, InvalidIdentifierException.class, InvalidPhotoException.class })
 	public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+	}
+
+	// A photo upload past spring.servlet.multipart.max-file-size — caller error (pick a smaller
+	// file), not a server fault, so this must not fall through to the generic 500 handler below.
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+		return build(HttpStatus.BAD_REQUEST, "File is too large", request);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
@@ -72,6 +84,25 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(MissingServletRequestParameterException.class)
 	public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+	}
+
+	// A malformed path variable (e.g. GET /nannies/abc where {id} is declared Long) is caller
+	// error, not a server fault — without this handler it falls through to the generic 500 below.
+	// Same class of gap as MissingServletRequestParameterException above; found via the same kind
+	// of unseeded-placeholder-id Postman request that turned up that one.
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+		String message = "Invalid value for '" + ex.getName() + "': " + ex.getValue();
+		return build(HttpStatus.BAD_REQUEST, message, request);
+	}
+
+	// A path that matches no controller mapping at all — e.g. a trailing slash on a
+	// {id}-suffixed route (GET /nannies/ has an empty path variable, so it never reaches
+	// NannyProfileController and falls through to Spring's static-resource handler instead).
+	// That's a caller URL error, not a server fault; without this it hits the generic 500 below.
+	@ExceptionHandler(NoResourceFoundException.class)
+	public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
+		return build(HttpStatus.NOT_FOUND, "No endpoint found for " + request.getMethod() + " " + request.getRequestURI(), request);
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

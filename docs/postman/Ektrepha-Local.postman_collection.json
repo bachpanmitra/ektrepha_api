@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Ektrepha API (local)",
-    "description": "All endpoints against a locally running Ektrepha API (dev profile, http://localhost:8080). Covers Google/Phone/Email signup+login, register, refresh/logout, OTP-based forgot/reset password, RBAC, nanny search + language/skill catalogs, and post-booking reviews. Run top-to-bottom within a folder — later requests depend on variables set by earlier ones (accessToken, refreshToken, signupSessionId, testEmail/testPhone).",
+    "description": "All endpoints against a locally running Ektrepha API (dev profile, http://localhost:8080). Covers Google/Phone/Email signup+login, register, refresh/logout, OTP-based forgot/reset password, RBAC, nanny search + language/skill catalogs, and post-booking reviews. Run top-to-bottom within a folder \u2014 later requests depend on variables set by earlier ones (accessToken, refreshToken, signupSessionId, testEmail/testPhone).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -21,15 +21,42 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "testEmail", "value": "" },
-    { "key": "testPhone", "value": "" },
-    { "key": "testPassword", "value": "" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "signupSessionId", "value": "" },
-    { "key": "phoneSignupOtp", "value": "PASTE_FROM_SERVER_LOG" },
-    { "key": "resetOtp", "value": "PASTE_FROM_SERVER_LOG" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "testEmail",
+      "value": ""
+    },
+    {
+      "key": "testPhone",
+      "value": ""
+    },
+    {
+      "key": "testPassword",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "signupSessionId",
+      "value": ""
+    },
+    {
+      "key": "phoneSignupOtp",
+      "value": "PASTE_FROM_SERVER_LOG"
+    },
+    {
+      "key": "resetOtp",
+      "value": "PASTE_FROM_SERVER_LOG"
+    }
   ],
   "item": [
     {
@@ -39,7 +66,16 @@
           "name": "Health Check",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
           },
           "event": [
             {
@@ -58,10 +94,27 @@
           "name": "Version",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/api/version", "host": ["{{baseUrl}}"], "path": ["api", "version"] }
+            "url": {
+              "raw": "{{baseUrl}}/api/version",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "version"
+              ]
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
           ]
         }
       ]
@@ -73,22 +126,71 @@
           "name": "Signup - Google (expect 400, needs a real Google ID token)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/google", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "google"] },
-            "body": { "mode": "raw", "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\",\n  \"role\": \"PARENT\"\n}" },
-            "description": "This will always 400 with a fake idToken — replace the value with a real Google ID token (from Google Sign-In on a client) to actually exercise this endpoint."
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\",\n  \"role\": \"PARENT\"\n}"
+            },
+            "description": "This will always 400 with a fake idToken \u2014 replace the value with a real Google ID token (from Google Sign-In on a client) to actually exercise this endpoint."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Signup - Phone, Step 1 (initiate)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/phone/initiate", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "phone", "initiate"] },
-            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup/phone/initiate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup",
+                "phone",
+                "initiate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}"
+            }
           },
           "event": [
             {
@@ -104,20 +206,43 @@
           ]
         },
         {
-          "name": "Signup - Phone, Step 2 (verify — paste OTP from server log first)",
+          "name": "Signup - Phone, Step 2 (verify \u2014 paste OTP from server log first)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/phone/verify", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "phone", "verify"] },
-            "body": { "mode": "raw", "raw": "{\n  \"signupSessionId\": \"{{signupSessionId}}\",\n  \"otp\": \"{{phoneSignupOtp}}\"\n}" },
-            "description": "SmsService is a stub — it just logs the OTP. After running Step 1, grep the app log for 'OTP for <phone> (purpose=SIGNUP)', set the collection variable phoneSignupOtp to it, then run this."
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup/phone/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup",
+                "phone",
+                "verify"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signupSessionId\": \"{{signupSessionId}}\",\n  \"otp\": \"{{phoneSignupOtp}}\"\n}"
+            },
+            "description": "SmsService is a stub \u2014 it just logs the OTP. After running Step 1, grep the app log for 'OTP for <phone> (purpose=SIGNUP)', set the collection variable phoneSignupOtp to it, then run this."
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status is 200 or 201 (200/400 if phoneSignupOtp was never set)', () => pm.expect([200, 201, 400]).to.include(pm.response.code));"]
+                "exec": [
+                  "pm.test('Status is 200 or 201 (200/400 if phoneSignupOtp was never set)', () => pm.expect([200, 201, 400]).to.include(pm.response.code));"
+                ]
               }
             }
           ]
@@ -126,9 +251,29 @@
           "name": "Signup - Email",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "email"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup/email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup",
+                "email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}"
+            }
           },
           "event": [
             {
@@ -149,27 +294,79 @@
           "name": "Signup - Email, duplicate (expect 409)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/signup/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "signup", "email"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup/email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup",
+                "email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"role\": \"PARENT\"\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 409', () => pm.response.to.have.status(409));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
           ]
         },
         {
-          "name": "Register (full profile — email + phone + name)",
+          "name": "Register (full profile \u2014 email + phone + name)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"register+{{$timestamp}}@example.com\",\n  \"name\": \"Postman Register Test\",\n  \"password\": \"{{testPassword}}\",\n  \"phoneNumber\": \"+91901{{$timestamp}}\",\n  \"role\": \"NANNY\"\n}"
             }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201', () => pm.response.to.have.status(201));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
           ]
         }
       ]
@@ -181,46 +378,150 @@
           "name": "Login - Google (expect 400, needs a real Google ID token)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/google", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "google"] },
-            "body": { "mode": "raw", "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"not-a-real-google-id-token\"\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 (fake token)', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Login - Phone",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/phone", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "phone"] },
-            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login/phone",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login",
+                "phone"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{testPhone}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            },
             "description": "Only succeeds if the Phone Signup (Step 1 + 2) requests above were completed first for this phone number."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 401 (401 if phone signup was not completed)', () => pm.expect([200, 401]).to.include(pm.response.code));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 401 (401 if phone signup was not completed)', () => pm.expect([200, 401]).to.include(pm.response.code));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Login - Email, wrong password (expect 401)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "email"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"wrong-password\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login/email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login",
+                "email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"wrong-password\"\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Login - Email",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/login/email", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", "email"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login/email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login",
+                "email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            }
           },
           "event": [
             {
@@ -246,9 +547,28 @@
           "name": "Refresh Token",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "refresh"] },
-            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
           },
           "event": [
             {
@@ -269,12 +589,39 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "logout"] },
-            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
           ]
         }
       ]
@@ -286,29 +633,79 @@
           "name": "Forgot Password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/forgot", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "forgot"] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{testEmail}}\"\n}" }
-          },
-          "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200', () => pm.response.to.have.status(200));"] } }
-          ]
-        },
-        {
-          "name": "Reset Password (paste OTP from server log first)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/auth/password/reset", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "password", "reset"] },
-            "body": { "mode": "raw", "raw": "{\n  \"phoneOrEmail\": \"{{testEmail}}\",\n  \"otp\": \"{{resetOtp}}\",\n  \"newPassword\": \"NewPassword456!\"\n}" },
-            "description": "EmailService is a stub — it logs the OTP instead of emailing it. After running Forgot Password, grep the app log for 'OTP for <email> (purpose=RESET_PASSWORD)', set resetOtp, then run this."
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password/forgot",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password",
+                "forgot"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\"\n}"
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status is 200 or 400 (400 if resetOtp was never set)', () => pm.expect([200, 400]).to.include(pm.response.code));"]
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password (paste OTP from server log first)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password/reset",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password",
+                "reset"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneOrEmail\": \"{{testEmail}}\",\n  \"otp\": \"{{resetOtp}}\",\n  \"newPassword\": \"NewPassword456!\"\n}"
+            },
+            "description": "EmailService is a stub \u2014 it logs the OTP instead of emailing it. After running Forgot Password, grep the app log for 'OTP for <email> (purpose=RESET_PASSWORD)', set resetOtp, then run this."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 400 (400 if resetOtp was never set)', () => pm.expect([200, 400]).to.include(pm.response.code));"
+                ]
               }
             }
           ]
@@ -322,116 +719,361 @@
           "name": "Create Booking, no token (expect 401)",
           "request": {
             "method": "POST",
-            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
-          "name": "Create Booking, as PARENT (expect 201)",
+          "name": "Create Booking, as PARENT, no body (expect 400 - real endpoint now validates the request)",
           "request": {
             "method": "POST",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] }
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201', () => pm.response.to.have.status(201));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Admin Endpoint, as PARENT (expect 403)",
           "request": {
             "method": "GET",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "url": { "raw": "{{baseUrl}}/api/v1/admin/anything", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "anything"] }
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/anything",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "anything"
+              ]
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403 (wrong role, not unauthenticated)', () => pm.response.to.have.status(403));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403 (wrong role, not unauthenticated)', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
           ]
         }
       ]
     },
     {
       "name": "Nanny Profile",
-      "description": "No endpoint exists yet to create a Nanny profile row (separate, unstarted work) — a registered NANNY-role user only has a `users` row. So the valid-shape request below 404s unless you've manually inserted a `nanny` row for the logged-in user via psql.",
+      "description": "No endpoint exists yet to create a Nanny profile row (separate, unstarted work) \u2014 a registered NANNY-role user only has a `users` row. So the valid-shape request below 404s unless you've manually inserted a `nanny` row for the logged-in user via psql.",
       "item": [
         {
           "name": "Set Service Area, no token (expect 401)",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
-            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nannies/me/service-area",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nannies",
+                "me",
+                "service-area"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Set Service Area, as PARENT (expect 403)",
           "request": {
             "method": "PUT",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
-            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
-            "description": "{{accessToken}} in this collection comes from a PARENT signup/login above — this is deliberately the wrong role."
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nannies/me/service-area",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nannies",
+                "me",
+                "service-area"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
+            },
+            "description": "{{accessToken}} in this collection comes from a PARENT signup/login above \u2014 this is deliberately the wrong role."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 403', () => pm.response.to.have.status(403));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Set Service Area, invalid lat (expect 400)",
           "request": {
             "method": "PUT",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
-            "body": { "mode": "raw", "raw": "{\n  \"lat\": 999,\n  \"lng\": 77.5946\n}" }
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nannies/me/service-area",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nannies",
+                "me",
+                "service-area"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 999,\n  \"lng\": 77.5946\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Set Service Area, valid shape, radius omitted (expect 200 or 404)",
           "request": {
             "method": "PUT",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nannies/me/service-area", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nannies", "me", "service-area"] },
-            "body": { "mode": "raw", "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}" },
-            "description": "radiusKm omitted — should default to 10 (matching the schema default) if a nanny profile row exists for this user. Re-running this a second time updates the same row rather than creating a second one."
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nannies/me/service-area",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nannies",
+                "me",
+                "service-area"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
+            },
+            "description": "radiusKm omitted \u2014 should default to 10 (matching the schema default) if a nanny profile row exists for this user. Re-running this a second time updates the same row rather than creating a second one."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 404 (404 if no nanny profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 404 (404 if no nanny profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
           ]
         }
       ]
     },
     {
       "name": "Nanny Search",
-      "description": "No endpoint exists yet to create a Parent/Nanny profile row (that's separate, unstarted work) — a registered user only has a `users` row. So the search/review requests below that need a Parent profile will 404 with 'No parent profile found for this account' unless you've manually inserted parent/nanny/nanny_service_area rows for the logged-in user via psql. The 401/400-before-lookup and catalog-listing requests work end-to-end with no manual setup.",
+      "description": "No endpoint exists yet to create a Parent/Nanny profile row (that's separate, unstarted work) \u2014 a registered user only has a `users` row. So the search/review requests below that need a Parent profile will 404 with 'No parent profile found for this account' unless you've manually inserted parent/nanny/nanny_service_area rows for the logged-in user via psql. The 401/400-before-lookup and catalog-listing requests work end-to-end with no manual setup.",
       "item": [
         {
           "name": "Languages (no token, expect 401)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/languages", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "languages"] }
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search/languages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search",
+                "languages"
+              ]
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Languages",
           "request": {
             "method": "GET",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/languages", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "languages"] },
-            "description": "Any authenticated role can list this — it's just the search form's filter catalog. Seeded by changeset 007 (Hindi/English/Kannada/Tamil)."
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search/languages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search",
+                "languages"
+              ]
+            },
+            "description": "Any authenticated role can list this \u2014 it's just the search form's filter catalog. Seeded by changeset 007 (Hindi/English/Kannada/Tamil)."
           },
           "event": [
             {
@@ -453,8 +1095,27 @@
           "name": "Skills",
           "request": {
             "method": "GET",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search/skills", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search", "skills"] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search/skills",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search",
+                "skills"
+              ]
+            },
             "description": "Seeded by changeset 007 (Infant care/Special needs/First aid/Cooking/Homework help)."
           },
           "event": [
@@ -477,43 +1138,134 @@
           "name": "Search, no token (expect 401)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
-            "body": { "mode": "raw", "raw": "{\n  \"radiusKm\": 10,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"radiusKm\": 10,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Search, invalid radius (expect 400)",
           "request": {
             "method": "POST",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
-            "body": { "mode": "raw", "raw": "{\n  \"radiusKm\": 7,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"radiusKm\": 7,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1\n}"
+            },
             "description": "7 is not one of the allowed radii (app.search.allowed-radii-km: 2,5,10,20)."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
-          "name": "Search, valid shape (expect 404 — no Parent profile row for this test user)",
+          "name": "Search, valid shape (expect 404 \u2014 no Parent profile row for this test user)",
           "request": {
             "method": "POST",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/nanny-search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "nanny-search"] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nanny-search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nanny-search"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"radiusKm\": 10,\n  \"windowStart\": \"2026-09-10T10:00:00Z\",\n  \"windowEnd\": \"2026-09-10T12:00:00Z\",\n  \"childId\": 1,\n  \"minYearsExperience\": 1,\n  \"languageIds\": [1],\n  \"skillIds\": [1]\n}"
             },
-            "description": "Well-formed request — 404 here just proves it got past every validation step and reached the parent lookup. Insert a parent/nanny/nanny_service_area row for this user via psql to actually get ranked results back."
+            "description": "Well-formed request \u2014 404 here just proves it got past every validation step and reached the parent lookup. Insert a parent/nanny/nanny_service_area row for this user via psql to actually get ranked results back."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 200 or 404 (404 if no parent profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 404 (404 if no parent profile row exists yet)', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
           ]
         }
       ]
@@ -525,40 +1277,134 @@
           "name": "Submit Review, no token (expect 401)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
-            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5\n}" }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reviews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5\n}"
+            }
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 401', () => pm.response.to.have.status(401));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Submit Review, invalid rating (expect 400)",
           "request": {
             "method": "POST",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
-            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 6\n}" },
-            "description": "Rating must be 1-5 — this fails bean validation before any booking lookup happens."
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reviews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 6\n}"
+            },
+            "description": "Rating must be 1-5 \u2014 this fails bean validation before any booking lookup happens."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', () => pm.response.to.have.status(400));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
           ]
         },
         {
-          "name": "Submit Review, valid shape (expect 400 — no eligible booking for this test user)",
+          "name": "Submit Review, valid shape (expect 400 \u2014 no eligible booking for this test user)",
           "request": {
             "method": "POST",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/api/v1/reviews", "host": ["{{baseUrl}}"], "path": ["api", "v1", "reviews"] },
-            "body": { "mode": "raw", "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5,\n  \"comment\": \"Great!\"\n}" },
-            "description": "Well-formed request — 404 means this user has no Parent profile row yet, 400 means the profile exists but booking 1 isn't an eligible (COMPLETED, owned) booking. Insert a parent + COMPLETED booking row via psql, then re-run for a real 201."
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reviews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": 1,\n  \"rating\": 5,\n  \"comment\": \"Great!\"\n}"
+            },
+            "description": "Well-formed request \u2014 404 means this user has no Parent profile row yet, 400 means the profile exists but booking 1 isn't an eligible (COMPLETED, owned) booking. Insert a parent + COMPLETED booking row via psql, then re-run for a real 201."
           },
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201, 400, or 404', () => pm.expect([201, 400, 404]).to.include(pm.response.code));"] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201, 400, or 404', () => pm.expect([201, 400, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
           ]
         }
       ]

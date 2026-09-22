@@ -2,6 +2,7 @@ package com.ektrepha.booking.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 import com.ektrepha.parent.dto.response.AddressResponse;
 
@@ -22,5 +23,12 @@ public record BookingDetailResponse(
 		AddressResponse address,
 		BigDecimal totalAmount,
 		Long elapsedSeconds,
-		ReviewSummaryResponse review) {
+		ReviewSummaryResponse review,
+		// Server-computed, not derived client-side from status — PRD: "if the client derives that
+		// from a status string, the two apps drift." Values: "CANCEL", "CONTACT".
+		List<String> availableActions,
+		// ONE_TIME/REPEAT_DAILY/REPEAT_WEEKLY/REPEAT_MONTHLY.
+		String frequency,
+		// Total occurrences in this booking's recurring series, or null for a ONE_TIME booking.
+		Integer totalOccurrences) {
 }

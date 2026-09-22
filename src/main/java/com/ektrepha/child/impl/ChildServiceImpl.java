@@ -1,5 +1,6 @@
 package com.ektrepha.child.impl;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -7,9 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.child.dto.request.CareNotesUpdateRequest;
@@ -21,6 +24,7 @@ import com.ektrepha.child.dto.response.GuardianResponse;
 import com.ektrepha.child.service.ChildService;
 import com.ektrepha.exception.ChildInUseException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
+import com.ektrepha.exception.InvalidPhotoException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
@@ -33,6 +37,7 @@ import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.ChildrenRepository;
 import com.ektrepha.repository.ParentChildRepository;
 import com.ektrepha.repository.ParentRepository;
+import com.ektrepha.storage.S3PhotoUrlService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -48,11 +53,17 @@ public class ChildServiceImpl implements ChildService {
 	private static final Set<BookingStatus> NON_TERMINAL = EnumSet.of(
 			BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS);
 
+	// Whatever a phone camera or gallery picker actually hands us — HEIC is deliberately excluded
+	// since browsers/RN's <Image> can't render it without server-side transcoding, which doesn't
+	// exist here.
+	private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
+
 	private final ParentRepository parentRepository;
 	private final ParentResolver parentResolver;
 	private final ChildrenRepository childrenRepository;
 	private final ParentChildRepository parentChildRepository;
 	private final BookingRepository bookingRepository;
+	private final S3PhotoUrlService s3PhotoUrlService;
 	// No com.fasterxml.jackson.databind.ObjectMapper bean is registered in this app (Spring Boot's
 	// Jackson auto-configuration here wires the newer tools.jackson.* stack instead) — a plain
 	// local instance is enough for this internal JSONB blob, which has no date/naming-strategy needs.
@@ -147,6 +158,45 @@ public class ChildServiceImpl implements ChildService {
 	}
 
 	@Override
+	@Transactional
+	public ChildDetailResponse uploadPhoto(Long userId, Long childId, MultipartFile file) {
+		Parent parent = resolveParent(userId);
+		ParentChild link = resolveOwnedLink(parent.getId(), childId);
+
+		if (file == null || file.isEmpty()) {
+			throw new InvalidPhotoException("No photo was uploaded");
+		}
+		String contentType = file.getContentType();
+		if (contentType == null || !ALLOWED_PHOTO_CONTENT_TYPES.contains(contentType)) {
+			throw new InvalidPhotoException("Photo must be a JPEG, PNG, or WEBP image");
+		}
+
+		Children child = link.getChild();
+		// A fresh key per upload (never reused) — the old object, if any, is simply orphaned rather
+		// than overwritten, since a presigned URL already handed to a client for the old key must
+		// keep resolving for the rest of its TTL.
+		String key = "children/%d/%s%s".formatted(child.getId(), UUID.randomUUID(), extensionFor(contentType));
+		try {
+			s3PhotoUrlService.upload(key, file.getBytes(), contentType);
+		} catch (IOException e) {
+			throw new InvalidPhotoException("Could not read the uploaded photo");
+		}
+
+		child.setProfilePhotoS3Key(key);
+		childrenRepository.save(child);
+
+		return toDetail(link);
+	}
+
+	private String extensionFor(String contentType) {
+		return switch (contentType) {
+			case "image/png" -> ".png";
+			case "image/webp" -> ".webp";
+			default -> ".jpg";
+		};
+	}
+
+	@Override
 	@Transactional(readOnly = true)
 	public List<GuardianResponse> guardians(Long userId, Long childId) {
 		Parent parent = resolveParent(userId);
@@ -199,7 +249,7 @@ public class ChildServiceImpl implements ChildService {
 				child.getId(),
 				child.getFirstName(),
 				child.getLastName(),
-				child.getProfilePhotoS3Key(),
+				s3PhotoUrlService.presign(child.getProfilePhotoS3Key()),
 				child.getDob(),
 				AgeDisplay.of(child.getDob(), LocalDate.now()),
 				child.getAllergies(),
@@ -213,7 +263,7 @@ public class ChildServiceImpl implements ChildService {
 				child.getId(),
 				child.getFirstName(),
 				child.getLastName(),
-				child.getProfilePhotoS3Key(),
+				s3PhotoUrlService.presign(child.getProfilePhotoS3Key()),
 				child.getDob(),
 				AgeDisplay.of(child.getDob(), LocalDate.now()),
 				child.getGender(),

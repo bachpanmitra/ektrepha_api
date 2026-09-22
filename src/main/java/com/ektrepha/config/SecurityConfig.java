@@ -50,6 +50,7 @@ public class SecurityConfig {
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/health", "/api/version", "/actuator/**", "/error", "/api/v1/auth/**").permitAll()
+						.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/search").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/live-zones").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/localities").permitAll()
@@ -62,6 +63,9 @@ public class SecurityConfig {
 						.requestMatchers("/api/v1/parents/me/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/bookings/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/bookings/**").hasRole("PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/hourly-care/**").hasRole("PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/hourly-care/**").hasRole("PARENT")
+						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/**").hasRole("NANNY")
 						.requestMatchers(HttpMethod.GET, "/api/v1/nanny-search/languages", "/api/v1/nanny-search/skills").authenticated()
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-search").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/reviews").hasRole("PARENT")

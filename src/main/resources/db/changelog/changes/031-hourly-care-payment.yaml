@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 31
+      author: ektrepha
+      description: Hourly-care pay-first flow - nullable booking.nanny_id, booking.care_notes, and the payment_transaction table
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/031-hourly-care-payment.sql
+            relativeToChangelogFile: false

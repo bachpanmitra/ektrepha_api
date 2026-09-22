@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.ektrepha.child.dto.request.CareNotesUpdateRequest;
 import com.ektrepha.child.dto.request.ChildUpsertRequest;
@@ -62,6 +64,13 @@ public class ChildController {
 	public ResponseEntity<ChildDetailResponse> updateCareNotes(Authentication authentication, @PathVariable Long id,
 			@RequestBody CareNotesUpdateRequest request) {
 		return ResponseEntity.ok(childService.updateCareNotes(userId(authentication), id, request));
+	}
+
+	@PostMapping("/{id}/photo")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<ChildDetailResponse> uploadPhoto(Authentication authentication, @PathVariable Long id,
+			@RequestParam("file") MultipartFile file) {
+		return ResponseEntity.ok(childService.uploadPhoto(userId(authentication), id, file));
 	}
 
 	@GetMapping("/{id}/guardians")
