@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 32
+      author: ektrepha
+      description: Seed Indiranagar zone / pincode 560038 childcare serviceability + pricing when not already present (fresh/CI databases)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/032-indiranagar-zone-seed.sql
+            relativeToChangelogFile: false
