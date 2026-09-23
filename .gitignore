@@ -39,6 +39,3 @@ bin/
 .env
 .env.*
 secrets/
-
-### Local dev logs (contain OTP codes in dev — never commit) ###
-logs/
