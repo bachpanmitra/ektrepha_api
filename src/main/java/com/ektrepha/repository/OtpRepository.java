@@ -5,11 +5,14 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.ektrepha.model.Otp;
 import com.ektrepha.model.OtpPurpose;
+
+import jakarta.persistence.LockModeType;
 
 public interface OtpRepository extends JpaRepository<Otp, Long> {
 
@@ -22,5 +25,16 @@ public interface OtpRepository extends JpaRepository<Otp, Long> {
 		List<Otp> results = findActiveByIdentifierAndPurpose(identifier, purpose, Pageable.ofSize(1));
 		return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
 	}
+
+	Optional<Otp> findByChallengeId(String challengeId);
+
+	/**
+	 * Row-locked lookup for the mobile OTP verify path — two concurrent verify calls for the same
+	 * challenge must serialize so the second one always sees {@code used=true} from the first
+	 * rather than racing it, which is what makes challenge consumption replay-proof.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select o from Otp o where o.challengeId = :challengeId")
+	Optional<Otp> findByChallengeIdForUpdate(@Param("challengeId") String challengeId);
 
 }

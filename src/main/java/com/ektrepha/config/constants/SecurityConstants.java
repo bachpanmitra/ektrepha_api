@@ -26,4 +26,8 @@ public final class SecurityConstants {
 	public static final String LOGIN_LOCK_KEY_PHONE_PREFIX = "phone:";
 	public static final String LOGIN_LOCK_KEY_EMAIL_PREFIX = "email:";
 
+	// --- Mobile OTP request rate-limit keys (see MobileOtpServiceImpl, RateLimiterService) ---
+	public static final String MOBILE_OTP_REQUEST_RATE_LIMIT_PHONE_PREFIX = "mobile-otp-request:phone:";
+	public static final String MOBILE_OTP_REQUEST_RATE_LIMIT_IP_PREFIX = "mobile-otp-request:ip:";
+
 }

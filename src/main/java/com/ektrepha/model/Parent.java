@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -50,6 +51,12 @@ public class Parent {
 
 	@Column(name = "profile_photo_s3_key", length = 500)
 	private String profilePhotoS3Key;
+
+	// Migration 034 - the address a returning parent's post-login "care location" resolves to,
+	// distinct from is_primary (see CareLocationServiceImpl). NULL until ever explicitly confirmed.
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "last_selected_address_id")
+	private ParentAddress lastSelectedAddress;
 
 	// @JdbcTypeCode(JSON) required — see Nanny.metaData for why columnDefinition alone isn't enough.
 	@JdbcTypeCode(SqlTypes.JSON)

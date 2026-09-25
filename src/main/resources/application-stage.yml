@@ -28,6 +28,25 @@ app:
       sender-name: ${BREVO_SENDER_NAME}
   firebase:
     service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH}
+  sms:
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY}
+      template-id: ${MSG91_TEMPLATE_ID}
+      otp-variable-name: ${MSG91_OTP_VARIABLE_NAME:OTP}
+      sender-id: ${MSG91_SENDER_ID:}
+  # Stage allows the fixed-OTP bypass (off by default) for QA/CI numbers that must never hit real
+  # SMS — set MOBILE_OTP_FIXED_ENABLED=true and allowlist only known test numbers if needed.
+  mobile-otp:
+    fixed-otp:
+      enabled: ${MOBILE_OTP_FIXED_ENABLED:false}
+      code: ${MOBILE_OTP_FIXED_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:}
+    # Off by default here too — flip on to smoke-test the reviewer-account bypass before it matters
+    # in prod (same config shape, same MobileOtpFixedCodeGuard validation/logging).
+    review-account:
+      enabled: ${MOBILE_OTP_REVIEW_ACCOUNT_ENABLED:false}
+      code: ${MOBILE_OTP_REVIEW_ACCOUNT_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_REVIEW_ACCOUNT_ALLOWED_NUMBERS:}
   startup:
     check-s3: ${STARTUP_CHECK_S3:true}
     seed-admin: ${STARTUP_SEED_ADMIN:false}

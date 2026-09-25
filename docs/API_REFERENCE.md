@@ -14,7 +14,7 @@ Run `openapi-typescript http://localhost:8080/v3/api-docs -o src/api/schema.ts` 
 
 - Local dev: `http://localhost:8080`
 - Every endpoint except `/api/v1/auth/**`, `/api/health`, `/api/version` requires `Authorization: Bearer <accessToken>`.
-- Get a token: `POST /api/v1/auth/signup/email` or `POST /api/v1/auth/login/email` (also `/phone`, `/google` variants — see Swagger UI, auth wasn't built in this workstream).
+- Get a token: `POST /api/v1/auth/signup/email` or `POST /api/v1/auth/login/email` (also `/phone`, `/google`, and mobile-OTP variants below — see Swagger UI for full request/response shapes, auth wasn't built in this workstream).
 - Access tokens are short-lived (15 min default). Refresh via `POST /api/v1/auth/refresh` with the `refreshToken`.
 
 ## Error shape (every 4xx/5xx)
@@ -30,6 +30,20 @@ Run `openapi-typescript http://localhost:8080/v3/api-docs -o src/api/schema.ts` 
 ```
 
 Always read `message` for the user-facing reason — never parse `error` (it's just the HTTP reason phrase).
+
+## Mobile OTP Login/Signup (`/api/v1/auth/mobile/otp`)
+
+Combined login-or-signup by mobile number — no separate signup step. **Unauthenticated** (like every other `/api/v1/auth/**` route).
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/mobile/otp/request` | `{mobileNumber}` (any format; normalized server-side to E.164) → 200 `{challengeId, expiresInSeconds, resendAfterSeconds, notice}`. Calling this again for the same number **is** the resend action — it invalidates the previous challenge and returns a new `challengeId`. Before `resendAfterSeconds` has elapsed since the last call, or if the per-number/per-IP rate limit is hit, this 429s instead — read `message` for which. `notice` is non-null (`"Test mode: SMS is not sent."`) only in dev/stage fixed-OTP test mode; treat it as free text to display verbatim when present, otherwise show nothing (a real SMS was sent) |
+| POST | `/mobile/otp/verify` | `{challengeId, otp}` → 200 `{accessToken, refreshToken, sessionExpiresAt, isNewUser, profileComplete, user: {id, mobileNumber, mobileVerified}}`. Wrong/expired/already-used/max-attempts-exceeded codes all 400 with a `message` explaining which — the client only needs to distinguish 400 (retry with a new code) from 429 (from the request step, wait) |
+
+Notes for the client:
+- `isNewUser: true` means an account was just auto-created (role `PARENT`, no name/email/password) — send it straight to Home, not an onboarding form; use `profileComplete` (same meaning as `parentProfileComplete` elsewhere) to decide whether to show the "complete your profile" nudge later, same as any other login method.
+- `sessionExpiresAt` is a hard server-enforced ceiling ~72h out (`app.mobile-otp.session-hours`) — `POST /auth/refresh` keeps working up to that instant but never extends it. Store it and stop silently retrying `/refresh` once passed; treat it like any other "session expired, please log in again" case.
+- Never prefill or hint at any OTP value in the UI, even in dev — the dev fixed-code bypass is a backend-only allowlist (specific test numbers), not something the app should know about or special-case.
 
 ## What's NOT built yet — don't wire up screens for these
 
@@ -49,7 +63,7 @@ Always read `message` for the user-facing reason — never parse `error` (it's j
 | PUT | `/api/v1/users/me` | Update `name` only. Email/phone go through the change+verify flow below — this endpoint 400s if you send them |
 | POST | `/api/v1/users/me/email/change` | `{newEmail}` → 202, sends an OTP to the **new** address. Response includes `retryAfterSeconds` — use it for the resend cooldown countdown, don't hardcode 30s |
 | POST | `/api/v1/users/me/email/verify` | `{newEmail, otp}` → 200, applies the change. Old email stays active until this succeeds |
-| POST | `/api/v1/users/me/phone/change` | `{firebaseIdToken}` — **one step, not two**. The client completes Firebase phone-auth for the new number first (this app has no backend SMS OTP), then posts the resulting ID token here |
+| POST | `/api/v1/users/me/phone/change` | `{firebaseIdToken}` — **one step, not two**. The client completes Firebase phone-auth for the new number first, then posts the resulting ID token here. (Unrelated to the mobile-OTP *login* flow below — this endpoint still uses Firebase, not backend SMS, and is unaffected by that work.) |
 | GET | `/api/v1/users/me/login-methods` | `{googleConnected, googleEmail, phoneVerified, phone, emailVerified, email, passwordSet}` — use `passwordSet` to decide whether to show "Set a password" vs "Change password" |
 | POST | `/api/v1/users/me/password` | `{currentPassword?, newPassword}` — `currentPassword` required only if `passwordSet` was `true` |
 | DELETE | `/api/v1/users/me` | `{confirmation: "DELETE"}` (must be that exact string) → 204. 409s with a count ("Cancel or complete your 2 upcoming bookings first") if active bookings exist |

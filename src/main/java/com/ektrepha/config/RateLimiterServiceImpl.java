@@ -61,8 +61,12 @@ public class RateLimiterServiceImpl implements RateLimiterService {
 	@Override
 	public boolean tryConsume(String key) {
 		AppProperties.RateLimit config = appProperties.rateLimit();
-		double capacity = config.capacity();
-		double refillTokensPerNano = capacity / (config.windowSeconds() * 1_000_000_000.0);
+		return tryConsume(key, config.capacity(), config.windowSeconds());
+	}
+
+	@Override
+	public boolean tryConsume(String key, int capacity, long windowSeconds) {
+		double refillTokensPerNano = capacity / (windowSeconds * 1_000_000_000.0);
 
 		TokenBucket bucket = buckets.get(key, k -> new TokenBucket(capacity, System.nanoTime()));
 		return bucket.tryConsume(capacity, refillTokensPerNano);

@@ -29,7 +29,10 @@ public record AppProperties(
 		@Valid @NotNull Serviceability serviceability,
 		@Valid @NotNull Email email,
 		@Valid @NotNull Firebase firebase,
-		@Valid @NotNull Geocoding geocoding) {
+		@Valid @NotNull Geocoding geocoding,
+		@Valid @NotNull MobileOtp mobileOtp,
+		@Valid @NotNull Sms sms,
+		@Valid @NotNull OlaMaps olaMaps) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -111,6 +114,77 @@ public record AppProperties(
 				// zone this app serves is in India, so unrestricted global search lets an ambiguous
 				// short query (e.g. "AECS") match an unrelated place on the other side of the world.
 				@NotBlank String countryCodes) {
+		}
+	}
+
+	/** Mobile-number OTP login/auto-signup — see MobileOtpServiceImpl. Reuses app.otp.{ttl-minutes,max-attempts} for the challenge's own expiry/attempt-limit. */
+	public record MobileOtp(
+			@NotNull @Positive Integer resendCooldownSeconds,
+			@NotNull @Positive Integer requestLimitPerNumber,
+			@NotNull @Positive Long requestLimitWindowMinutes,
+			@NotNull @Positive Integer requestLimitPerIp,
+			@NotNull @Positive Long requestLimitPerIpWindowMinutes,
+			@NotNull @Positive Integer sessionHours,
+			@Valid @NotNull FixedOtp fixedOtp,
+			@Valid @NotNull ReviewAccount reviewAccount) {
+
+		/**
+		 * Dev/stage-only fixed-code bypass for allowlisted test numbers, so QA/CI never need a real
+		 * SMS provider. Shows the client a "test mode" notice instead of claiming an SMS was sent.
+		 * {@link com.ektrepha.startup.MobileOtpFixedCodeGuard} fails startup if this is ever enabled
+		 * while the active profile is prod — unlike {@link ReviewAccount}, this is never meant to run
+		 * there.
+		 */
+		public record FixedOtp(
+				@DefaultValue("false") boolean enabled,
+				String code,
+				List<String> allowedNumbers) {
+		}
+
+		/**
+		 * A narrow, prod-safe fixed-code bypass for a handful of explicitly allowlisted numbers —
+		 * e.g. an App Store/Play Store reviewer account that can't receive real SMS. Deliberately
+		 * separate from {@link FixedOtp}: this is allowed in prod (env-var controlled, off by
+		 * default), but {@link com.ektrepha.startup.MobileOtpFixedCodeGuard} still fails startup if
+		 * it's enabled with no code or an empty/oversized allowlist, and every boot with it active
+		 * logs a warning naming the exact numbers, in every profile including prod. Unlike
+		 * {@link FixedOtp}, the client sees no "test mode" notice — indistinguishable from a real
+		 * send, since a reviewer follows the same UI a real user would.
+		 */
+		public record ReviewAccount(
+				@DefaultValue("false") boolean enabled,
+				String code,
+				@Size(max = 3, message = "app.mobile-otp.review-account.allowed-numbers must stay small (max 3) — this bypass is for a handful of reviewer/test accounts, not general testing") List<String> allowedNumbers) {
+		}
+	}
+
+	public record Sms(@Valid @NotNull Msg91 msg91) {
+
+		/** MSG91 Flow API (https://control.msg91.com/api/v5/flow) — see AbstractSmsSender. */
+		public record Msg91(
+				@NotBlank(message = "app.sms.msg91.auth-key must be set — the MSG91 API auth key") String authKey,
+				@NotBlank(message = "app.sms.msg91.template-id must be set — the DLT-approved MSG91 flow template id for OTP messages") String templateId,
+				@NotBlank(message = "app.sms.msg91.otp-variable-name must be set — must match the template's variable name for the OTP value") String otpVariableName,
+				String senderId) {
+		}
+	}
+
+	/**
+	 * Ola Maps (https://maps.olakrutrim.com) — reverse-geocode/autocomplete/place-details behind
+	 * {@code com.ektrepha.location}. {@code apiKey} may be blank in dev/stage (see
+	 * {@code NoopOlaMapsClient}, which is registered instead of the real client when it is); every
+	 * other environment should set a real one. Each {@code dailyLimit} is a free-tier usage budget —
+	 * tune these to the account's actual current Ola Maps plan allowance, tracked separately per API
+	 * via {@code RateLimiterService} (see {@code LocationServiceImpl}).
+	 */
+	public record OlaMaps(
+			String apiKey,
+			@NotBlank String baseUrl,
+			@Valid @NotNull Budget reverseGeocode,
+			@Valid @NotNull Budget autocomplete,
+			@Valid @NotNull Budget placeDetails) {
+
+		public record Budget(@NotNull @Positive Integer dailyLimit) {
 		}
 	}
 }

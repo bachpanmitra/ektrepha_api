@@ -66,6 +66,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/hourly-care/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/hourly-care/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/**").hasRole("NANNY")
+						.requestMatchers(HttpMethod.POST, "/api/v1/locations/reverse-geocode").hasRole("PARENT")
+						.requestMatchers(HttpMethod.GET, "/api/v1/locations/autocomplete", "/api/v1/locations/place-details").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/nanny-search/languages", "/api/v1/nanny-search/skills").authenticated()
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-search").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/reviews").hasRole("PARENT")

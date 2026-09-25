@@ -12,6 +12,10 @@ import com.ektrepha.auth.dto.response.GoogleLoginResponse;
 import com.ektrepha.auth.dto.request.GoogleSignupRequest;
 import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
+import com.ektrepha.auth.dto.request.MobileOtpRequestRequest;
+import com.ektrepha.auth.dto.response.MobileOtpRequestResponse;
+import com.ektrepha.auth.dto.request.MobileOtpVerifyRequest;
+import com.ektrepha.auth.dto.response.MobileOtpVerifyResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
 import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
@@ -34,6 +38,12 @@ public interface AuthService {
 	PhoneSignupResponse signupPhone(PhoneSignupRequest request);
 
 	PhoneLoginResponse loginPhone(PhoneLoginRequest request);
+
+	/** Requests (or resends) an OTP challenge for the combined mobile login-or-signup flow. */
+	MobileOtpRequestResponse requestMobileOtp(MobileOtpRequestRequest request, String clientIp);
+
+	/** Verifies the OTP; logs in the existing user for that number or creates one (PARENT, phone-verified) and logs them in. */
+	MobileOtpVerifyResponse verifyMobileOtp(MobileOtpVerifyRequest request);
 
 	EmailSignupResponse signupEmail(EmailSignupRequest request);
 

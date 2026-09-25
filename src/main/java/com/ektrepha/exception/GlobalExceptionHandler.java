@@ -31,8 +31,8 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler(AccountLockedException.class)
-	public ResponseEntity<ErrorResponse> handleLocked(AccountLockedException ex, HttpServletRequest request) {
+	@ExceptionHandler({ AccountLockedException.class, OtpRequestThrottledException.class, LocationQuotaExceededException.class })
+	public ResponseEntity<ErrorResponse> handleLocked(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
 	}
 
@@ -72,6 +72,13 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(MaxUploadSizeExceededException.class)
 	public ResponseEntity<ErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, "File is too large", request);
+	}
+
+	// Ola Maps timed out/errored/returned something unparseable — a provider-side fault, not the
+	// caller's, so 503 rather than the 400/404/409 buckets above; never echoes the raw provider error.
+	@ExceptionHandler(LocationProviderUnavailableException.class)
+	public ResponseEntity<ErrorResponse> handleLocationProviderUnavailable(LocationProviderUnavailableException ex, HttpServletRequest request) {
+		return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)

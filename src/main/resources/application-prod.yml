@@ -28,6 +28,26 @@ app:
       sender-name: ${BREVO_SENDER_NAME}
   firebase:
     service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH}
+  sms:
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY}
+      template-id: ${MSG91_TEMPLATE_ID}
+      otp-variable-name: ${MSG91_OTP_VARIABLE_NAME:OTP}
+      sender-id: ${MSG91_SENDER_ID:}
+  mobile-otp:
+    # fixed-otp must never be enabled in prod — MobileOtpFixedCodeGuard fails startup if it ever is,
+    # on top of this hardcoded false (no MOBILE_OTP_FIXED_ENABLED env var can override it here).
+    fixed-otp:
+      enabled: false
+    # Prod-safe app-store/play-store reviewer account — a real SMS is never sent to this number, but
+    # otherwise behaves exactly like a normal challenge (same expiry, attempt limit, single-use).
+    # Turn off (MOBILE_OTP_REVIEW_ACCOUNT_ENABLED=false) once store review is done if it's no longer
+    # needed, or leave it on for the next review cycle — MobileOtpFixedCodeGuard logs a warning on
+    # every boot while it's active so it's never silently forgotten.
+    review-account:
+      enabled: ${MOBILE_OTP_REVIEW_ACCOUNT_ENABLED:true}
+      code: ${MOBILE_OTP_REVIEW_ACCOUNT_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_REVIEW_ACCOUNT_ALLOWED_NUMBERS:+919153766119}
   startup:
     check-s3: ${STARTUP_CHECK_S3:true}
     seed-admin: ${STARTUP_SEED_ADMIN:false}

@@ -20,6 +20,28 @@ app:
   otp:
     ttl-minutes: ${OTP_TTL_MINUTES:5}
     max-attempts: ${OTP_MAX_ATTEMPTS:5}
+  # Mobile-number OTP login/auto-signup (see MobileOtpServiceImpl). Reuses app.otp above for the
+  # challenge's own expiry/attempt-limit — these are the extra knobs specific to that flow.
+  mobile-otp:
+    resend-cooldown-seconds: ${MOBILE_OTP_RESEND_COOLDOWN_SECONDS:30}
+    request-limit-per-number: ${MOBILE_OTP_REQUEST_LIMIT_PER_NUMBER:5}
+    request-limit-window-minutes: ${MOBILE_OTP_REQUEST_LIMIT_WINDOW_MINUTES:60}
+    request-limit-per-ip: ${MOBILE_OTP_REQUEST_LIMIT_PER_IP:20}
+    request-limit-per-ip-window-minutes: ${MOBILE_OTP_REQUEST_LIMIT_PER_IP_WINDOW_MINUTES:60}
+    session-hours: ${MOBILE_OTP_SESSION_HOURS:72}
+    # Dev/stage-only bypass for allowlisted test numbers — safe, do-nothing default (disabled).
+    # MobileOtpFixedCodeGuard fails startup outright if this is ever true with the prod profile active.
+    fixed-otp:
+      enabled: ${MOBILE_OTP_FIXED_ENABLED:false}
+      code: ${MOBILE_OTP_FIXED_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:}
+    # A narrow, prod-safe bypass for a handful of explicitly allowlisted numbers (e.g. an App
+    # Store/Play Store reviewer account) — safe, do-nothing default here; enabled per-profile below
+    # where actually needed. Unlike fixed-otp, this one is allowed to be on in prod.
+    review-account:
+      enabled: ${MOBILE_OTP_REVIEW_ACCOUNT_ENABLED:false}
+      code: ${MOBILE_OTP_REVIEW_ACCOUNT_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_REVIEW_ACCOUNT_ALLOWED_NUMBERS:}
   login-lockout:
     max-failures: ${LOGIN_LOCKOUT_MAX_FAILURES:5}
     lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}
@@ -62,3 +84,18 @@ app:
       # Restrict free-text search to India — every zone this app serves is Indian, so an unrestricted
       # global search can match an ambiguous short query (e.g. "AECS") to an unrelated place abroad.
       country-codes: ${NOMINATIM_COUNTRY_CODES:in}
+  # Ola Maps (https://maps.olakrutrim.com) — reverse-geocode/autocomplete/place-details behind
+  # com.ektrepha.location, for post-login automatic care-location selection. api-key blank (the
+  # default) registers NoopOlaMapsClient instead of a real one — every request then cleanly
+  # returns "no suggestions" rather than failing, so the app still starts with no key configured.
+  # daily-limit values are free-tier usage budgets — tune to the account's actual current Ola Maps
+  # plan allowance; each is tracked independently via RateLimiterService (see LocationServiceImpl).
+  ola-maps:
+    api-key: ${OLA_MAPS_API_KEY:}
+    base-url: ${OLA_MAPS_BASE_URL:https://api.olamaps.io}
+    reverse-geocode:
+      daily-limit: ${OLA_MAPS_REVERSE_GEOCODE_DAILY_LIMIT:500}
+    autocomplete:
+      daily-limit: ${OLA_MAPS_AUTOCOMPLETE_DAILY_LIMIT:1000}
+    place-details:
+      daily-limit: ${OLA_MAPS_PLACE_DETAILS_DAILY_LIMIT:500}

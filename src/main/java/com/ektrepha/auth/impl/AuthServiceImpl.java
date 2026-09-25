@@ -6,9 +6,13 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ektrepha.auth.dto.request.EmailLoginRequest;
 import com.ektrepha.auth.dto.response.EmailLoginResponse;
@@ -22,6 +26,10 @@ import com.ektrepha.auth.dto.response.GoogleLoginResponse;
 import com.ektrepha.auth.dto.request.GoogleSignupRequest;
 import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
+import com.ektrepha.auth.dto.request.MobileOtpRequestRequest;
+import com.ektrepha.auth.dto.response.MobileOtpRequestResponse;
+import com.ektrepha.auth.dto.request.MobileOtpVerifyRequest;
+import com.ektrepha.auth.dto.response.MobileOtpVerifyResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
 import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
@@ -36,6 +44,7 @@ import com.ektrepha.auth.dto.response.TokenPairResponse;
 import com.ektrepha.auth.service.AuthService;
 import com.ektrepha.auth.service.EmailService;
 import com.ektrepha.auth.service.LoginAttemptService;
+import com.ektrepha.auth.service.MobileOtpService;
 import com.ektrepha.auth.service.OtpService;
 import com.ektrepha.exception.DuplicateAccountException;
 import com.ektrepha.exception.InvalidCredentialsException;
@@ -47,7 +56,9 @@ import com.ektrepha.model.OtpPurpose;
 import com.ektrepha.model.RefreshToken;
 import com.ektrepha.model.User;
 import com.ektrepha.model.UserSource;
+import com.ektrepha.model.UserStatus;
 import com.ektrepha.model.UserType;
+import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.RefreshTokenRepository;
 import com.ektrepha.repository.UserRepository;
 import com.ektrepha.auth.security.FirebaseTokenVerifierService;
@@ -69,8 +80,10 @@ public class AuthServiceImpl implements AuthService {
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 	private final UserRepository userRepository;
+	private final ParentRepository parentRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final OtpService otpService;
+	private final MobileOtpService mobileOtpService;
 	private final LoginAttemptService loginAttemptService;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
@@ -78,6 +91,7 @@ public class AuthServiceImpl implements AuthService {
 	private final GoogleIdTokenVerifierService googleIdTokenVerifierService;
 	private final FirebaseTokenVerifierService firebaseTokenVerifierService;
 	private final AppProperties appProperties;
+	private final PlatformTransactionManager transactionManager;
 
 	// ---------------------------------------------------------------- Google
 
@@ -139,6 +153,73 @@ public class AuthServiceImpl implements AuthService {
 		AuthTokens tokens = issueTokens(user);
 		return new GoogleLoginResponse(user.getId(), user.getEmail(), user.getName(), user.getUserType(),
 				tokens.accessToken(), tokens.refreshToken());
+	}
+
+	// -------------------------------------------------- Mobile OTP (login-or-signup)
+
+	@Override
+	public MobileOtpRequestResponse requestMobileOtp(MobileOtpRequestRequest request, String clientIp) {
+		MobileOtpService.OtpChallenge challenge = mobileOtpService.requestOtp(request.mobileNumber(), clientIp);
+		return new MobileOtpRequestResponse(challenge.challengeId(), challenge.expiresInSeconds(), challenge.resendAfterSeconds(), challenge.notice());
+	}
+
+	@Override
+	@Transactional
+	public MobileOtpVerifyResponse verifyMobileOtp(MobileOtpVerifyRequest request) {
+		String phoneNumber = mobileOtpService.verifyAndConsume(request.challengeId(), request.otp());
+
+		User user = userRepository.findByPhone(phoneNumber).orElse(null);
+		boolean isNewUser = user == null;
+		if (isNewUser) {
+			user = createMobileUser(phoneNumber);
+		} else {
+			if (!user.isActive() || user.getStatus() != UserStatus.ACTIVE) {
+				log.warn("Mobile OTP login blocked: userId={} is not active (status={})", user.getId(), user.getStatus());
+				throw new InvalidCredentialsException("This account can no longer be logged into.");
+			}
+			if (!user.isPhoneVerified()) {
+				user.setPhoneVerified(true);
+				user = userRepository.save(user);
+			}
+		}
+
+		boolean profileComplete = parentRepository.findByUserId(user.getId())
+				.map(p -> p.getFirstName() != null && !p.getFirstName().isBlank())
+				.orElse(false);
+
+		Instant sessionExpiresAt = Instant.now().plus(Duration.ofHours(appProperties.mobileOtp().sessionHours()));
+		AuthTokens tokens = issueTokens(user, sessionExpiresAt);
+		log.info("Mobile OTP {} succeeded: userId={}, isNewUser={}", isNewUser ? "signup" : "login", user.getId(), isNewUser);
+
+		return new MobileOtpVerifyResponse(tokens.accessToken(), tokens.refreshToken(), sessionExpiresAt, isNewUser, profileComplete,
+				new MobileOtpVerifyResponse.MobileUser(user.getId(), user.getPhone(), user.isPhoneVerified()));
+	}
+
+	/**
+	 * Creates a phone-verified PARENT account for a freshly-verified number, tolerating a
+	 * concurrent verify for the same number racing this one (the users.phone unique constraint is
+	 * the actual source of truth). The insert runs in its own REQUIRES_NEW transaction — a Postgres
+	 * constraint violation aborts the whole physical transaction it happened in, so the fallback
+	 * lookup below must run outside that (now-unusable) transaction, in the caller's still-healthy
+	 * one, rather than reusing it.
+	 */
+	private User createMobileUser(String phoneNumber) {
+		TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+		requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		try {
+			User created = requiresNew.execute(status -> userRepository.save(User.builder()
+					.phone(phoneNumber)
+					.userSource(UserSource.PHONE)
+					.userType(UserType.PARENT)
+					.phoneVerified(true)
+					.build()));
+			log.info("Mobile OTP signup: created new user, userId={}, phone={}", created.getId(), created.getPhone());
+			return created;
+		} catch (DataIntegrityViolationException e) {
+			log.info("Mobile OTP signup: concurrent signup detected for phone={}, using the winning row instead", phoneNumber);
+			return userRepository.findByPhone(phoneNumber)
+					.orElseThrow(() -> e);
+		}
 	}
 
 	// ----------------------------------------------------------------- Phone
@@ -284,16 +365,18 @@ public class AuthServiceImpl implements AuthService {
 					return new InvalidTokenException();
 				});
 
-		if (existing.isRevoked() || existing.getExpiresAt().isBefore(Instant.now())) {
-			log.warn("Refresh failed: token for userId={} is revoked or expired", existing.getUser().getId());
+		boolean sessionExpired = existing.getSessionExpiresAt() != null && existing.getSessionExpiresAt().isBefore(Instant.now());
+		if (existing.isRevoked() || existing.getExpiresAt().isBefore(Instant.now()) || sessionExpired) {
+			log.warn("Refresh failed: token for userId={} is revoked, expired, or its session ceiling has passed", existing.getUser().getId());
 			throw new InvalidTokenException();
 		}
 
 		existing.setRevoked(true);
 		refreshTokenRepository.save(existing);
 
+		// The session ceiling (if any) carries forward unchanged — rotation must never extend it.
 		log.debug("Refresh succeeded, rotating token for userId={}", existing.getUser().getId());
-		AuthTokens tokens = issueTokens(existing.getUser());
+		AuthTokens tokens = issueTokens(existing.getUser(), existing.getSessionExpiresAt());
 		return new TokenPairResponse(tokens.accessToken(), tokens.refreshToken());
 	}
 
@@ -401,6 +484,11 @@ public class AuthServiceImpl implements AuthService {
 	}
 
 	private AuthTokens issueTokens(User user) {
+		return issueTokens(user, null);
+	}
+
+	/** @param sessionExpiresAt hard session ceiling to stamp on the refresh token (null for flows that don't enforce one) — see RefreshToken#sessionExpiresAt and #refresh. */
+	private AuthTokens issueTokens(User user, Instant sessionExpiresAt) {
 		String accessToken = jwtService.generateAccessToken(user);
 		String refreshTokenValue = generateOpaqueToken();
 
@@ -408,6 +496,7 @@ public class AuthServiceImpl implements AuthService {
 				.user(user)
 				.token(refreshTokenValue)
 				.expiresAt(Instant.now().plus(Duration.ofDays(appProperties.jwt().refreshTokenTtlDays())))
+				.sessionExpiresAt(sessionExpiresAt)
 				.build();
 		refreshTokenRepository.save(refreshToken);
 

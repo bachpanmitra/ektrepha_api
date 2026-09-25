@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Ektrepha — Care Location Demo</title>
+<style>
+  :root { --teal: #0f766e; --teal-light: #e6f4f2; --ink: #0f2027; --muted: #6b7785; --border: #dfe4e8; --danger: #b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f6f8f9; color: var(--ink); margin: 0; padding: 24px; }
+  .app { max-width: 420px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; }
+  .header { background: var(--teal); color: white; padding: 16px 20px; font-weight: 700; font-size: 18px; }
+  .screen { padding: 20px; display: none; }
+  .screen.active { display: block; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  p.subtitle { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=tel] { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 16px; width: 100%; margin-top: 10px; }
+  button.primary { background: var(--teal); color: white; }
+  button.secondary { background: var(--teal-light); color: var(--teal); }
+  button.link { background: none; color: var(--teal); width: auto; padding: 4px 0; text-decoration: underline; margin-top: 4px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 10px; cursor: pointer; }
+  .card:hover { border-color: var(--teal); }
+  .card .title { font-weight: 600; font-size: 14px; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .status { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-top: 10px; }
+  .status.info { background: #eef6ff; color: #1e5fa8; }
+  .status.error { background: #fdecea; color: var(--danger); }
+  .status.ok { background: var(--teal-light); color: var(--teal); }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .pill.yes { background: var(--teal-light); color: var(--teal); }
+  .pill.no { background: #fdecea; color: var(--danger); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .small { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">Ektrepha</div>
+
+  <!-- Login -->
+  <div class="screen active" id="screen-login">
+    <h2>Sign in</h2>
+    <p class="subtitle">Uses the dev fixed-OTP bypass — no real SMS is sent.</p>
+    <label>Mobile number</label>
+    <input type="tel" id="mobileNumber" value="+919999999999" />
+    <button class="primary" id="btnRequestOtp">Send OTP</button>
+    <div id="otpSection" style="display:none">
+      <label>OTP</label>
+      <input type="text" id="otpCode" value="123456" />
+      <button class="primary" id="btnVerifyOtp">Verify</button>
+    </div>
+    <div id="loginStatus"></div>
+  </div>
+
+  <!-- Location (Where do you need care?) -->
+  <div class="screen" id="screen-location">
+    <h2>Where do you need care?</h2>
+    <p class="subtitle">Choose your location to find care available near you.</p>
+    <button class="primary" id="btnUseCurrentLocation">Use current location</button>
+    <button class="secondary" id="btnEnterManually">Enter address manually</button>
+    <div id="savedAddresses"></div>
+    <div id="locationStatus"></div>
+  </div>
+
+  <!-- Confirm Location -->
+  <div class="screen" id="screen-confirm">
+    <h2>Confirm your location</h2>
+    <p class="subtitle" id="detectedAddressLine">—</p>
+    <button class="link" id="btnChangeLocation">Change</button>
+
+    <label>Search for an address</label>
+    <input type="text" id="searchInput" placeholder="Start typing (3+ characters)…" />
+    <div id="searchResults"></div>
+
+    <label>Flat / house number</label>
+    <input type="text" id="flatNumber" placeholder="e.g. 3B, Tower 2" />
+    <label>Landmark (optional)</label>
+    <input type="text" id="landmark" />
+    <label>City</label>
+    <input type="text" id="city" />
+    <label>State</label>
+    <input type="text" id="state" />
+    <label>Pincode</label>
+    <input type="text" id="pincode" />
+
+    <button class="primary" id="btnConfirmLocation">Confirm care location</button>
+    <div id="confirmStatus"></div>
+  </div>
+
+  <!-- Home -->
+  <div class="screen" id="screen-home">
+    <h2>Home</h2>
+    <p class="subtitle" id="homeSourceLabel">—</p>
+    <div class="card" style="cursor:default">
+      <div class="title" id="homeAddressLine">—</div>
+      <div class="sub" id="homeAddressCity">—</div>
+      <div style="margin-top:8px" id="homeServiceablePill"></div>
+    </div>
+    <button class="secondary" id="btnChangeLocationFromHome">Change location</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:8080';
+let accessToken = null;
+let challengeId = null;
+let detected = { lat: null, lng: null, suggested: null };
+let searchGeneration = 0;
+let searchDebounceTimer = null;
+
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+}
+
+function statusBox(el, message, kind) {
+  el.innerHTML = message ? `<div class="status ${kind}">${message}</div>` : '';
+}
+
+async function api(path, options = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  const res = await fetch(API_BASE + path, Object.assign({}, options, { headers }));
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = new Error((body && body.message) || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+// ---------------------------------------------------------------- Login
+
+document.getElementById('btnRequestOtp').addEventListener('click', async () => {
+  const el = document.getElementById('loginStatus');
+  try {
+    const mobileNumber = document.getElementById('mobileNumber').value.trim();
+    const resp = await api('/api/v1/auth/mobile/otp/request', { method: 'POST', body: JSON.stringify({ mobileNumber }) });
+    challengeId = resp.challengeId;
+    document.getElementById('otpSection').style.display = 'block';
+    statusBox(el, resp.notice || 'OTP sent.', 'info');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
+  const el = document.getElementById('loginStatus');
+  try {
+    const otp = document.getElementById('otpCode').value.trim();
+    const resp = await api('/api/v1/auth/mobile/otp/verify', { method: 'POST', body: JSON.stringify({ challengeId, otp }) });
+    accessToken = resp.accessToken;
+    statusBox(el, `Signed in (${resp.isNewUser ? 'new' : 'returning'} user).`, 'ok');
+    await resolveCareLocation();
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Post-login resolve
+
+async function resolveCareLocation() {
+  const resp = await api('/api/v1/parents/me/care-location');
+  if (resp.hasAddress) {
+    showHome(resp.address, resp.source);
+  } else {
+    await loadSavedAddresses();
+    show('screen-location');
+  }
+}
+
+async function loadSavedAddresses() {
+  const container = document.getElementById('savedAddresses');
+  container.innerHTML = '';
+  try {
+    const addresses = await api('/api/v1/parents/me/addresses');
+    if (addresses.length) {
+      const heading = document.createElement('div');
+      heading.className = 'small';
+      heading.style.marginTop = '14px';
+      heading.textContent = 'Saved addresses';
+      container.appendChild(heading);
+    }
+    addresses.forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="title">${a.label} — ${a.addressLine1}</div><div class="sub">${a.city}, ${a.pincode}</div>`;
+      card.addEventListener('click', async () => {
+        await api(`/api/v1/parents/me/care-location/${a.id}`, { method: 'PUT' });
+        await resolveCareLocation();
+      });
+      container.appendChild(card);
+    });
+  } catch (e) {
+    statusBox(document.getElementById('locationStatus'), e.message, 'error');
+  }
+}
+
+// ---------------------------------------------------------------- Location screen
+
+document.getElementById('btnEnterManually').addEventListener('click', () => {
+  detected = { lat: null, lng: null, suggested: null };
+  document.getElementById('detectedAddressLine').textContent = 'Enter your address details below.';
+  clearConfirmFields();
+  show('screen-confirm');
+});
+
+document.getElementById('btnChangeLocation').addEventListener('click', () => show('screen-location'));
+document.getElementById('btnChangeLocationFromHome').addEventListener('click', () => show('screen-location'));
+
+document.getElementById('btnUseCurrentLocation').addEventListener('click', () => {
+  const el = document.getElementById('locationStatus');
+  if (!navigator.geolocation) {
+    statusBox(el, 'Geolocation is not supported by this browser — enter the address manually.', 'error');
+    return;
+  }
+  statusBox(el, 'Finding your location…', 'info');
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const resp = await api('/api/v1/locations/reverse-geocode', {
+          method: 'POST',
+          body: JSON.stringify({ latitude, longitude }),
+        });
+        detected = { lat: latitude, lng: longitude, suggested: resp.suggestedAddress };
+        fillConfirmFromSuggestion(resp.suggestedAddress, latitude, longitude);
+        statusBox(el, '', 'info');
+        show('screen-confirm');
+      } catch (e) {
+        // Quota exhausted (429) or provider unavailable (503) — fall back to manual entry either way.
+        statusBox(el, `${e.message} — you can still enter the address manually.`, 'error');
+        detected = { lat: latitude, lng: longitude, suggested: null };
+        fillConfirmFromSuggestion(null, latitude, longitude);
+        show('screen-confirm');
+      }
+    },
+    (error) => {
+      // Denied / timeout / position unavailable — never re-prompt automatically; offer manual entry.
+      const reasons = { 1: 'Location permission was denied.', 2: 'Location is unavailable right now.', 3: 'Finding your location timed out.' };
+      statusBox(el, `${reasons[error.code] || 'Could not get your location.'} Please enter the address manually, or check your device's location settings.`, 'error');
+    },
+    { timeout: 10000, enableHighAccuracy: false }
+  );
+});
+
+// ---------------------------------------------------------------- Confirm Location
+
+function clearConfirmFields() {
+  ['flatNumber', 'landmark', 'city', 'state', 'pincode'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  statusBox(document.getElementById('confirmStatus'), '', 'info');
+}
+
+function fillConfirmFromSuggestion(suggested, lat, lng) {
+  clearConfirmFields();
+  document.getElementById('detectedAddressLine').textContent = suggested?.formattedAddress || 'We could not detect an address for this location — please fill in the details.';
+  document.getElementById('flatNumber').value = suggested?.addressLine1 || '';
+  document.getElementById('city').value = suggested?.city || '';
+  document.getElementById('state').value = suggested?.state || '';
+  document.getElementById('pincode').value = suggested?.pincode || '';
+  detected.lat = lat;
+  detected.lng = lng;
+}
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const query = e.target.value;
+  clearTimeout(searchDebounceTimer);
+  const resultsEl = document.getElementById('searchResults');
+  if (query.trim().length < 3) {
+    resultsEl.innerHTML = '';
+    return;
+  }
+  // Debounce ~350ms; a generation counter discards a response that arrives after a newer
+  // keystroke already fired a fresher request (stale-response guard).
+  const myGeneration = ++searchGeneration;
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const params = new URLSearchParams({ query });
+      if (detected.lat != null) params.set('lat', detected.lat);
+      if (detected.lng != null) params.set('lng', detected.lng);
+      const resp = await api(`/api/v1/locations/autocomplete?${params.toString()}`);
+      if (myGeneration !== searchGeneration) return; // stale — a newer search has since been issued
+      resultsEl.innerHTML = '';
+      resp.suggestions.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<div class="title">${s.mainText || s.description}</div><div class="sub">${s.secondaryText || ''}</div>`;
+        card.addEventListener('click', async () => {
+          try {
+            const details = await api(`/api/v1/locations/place-details?placeId=${encodeURIComponent(s.placeId)}`);
+            document.getElementById('detectedAddressLine').textContent = details.formattedAddress || s.description;
+            document.getElementById('flatNumber').value = details.addressLine1 || '';
+            document.getElementById('city').value = details.city || '';
+            document.getElementById('state').value = details.state || '';
+            document.getElementById('pincode').value = details.pincode || '';
+            detected.lat = details.latitude ?? detected.lat;
+            detected.lng = details.longitude ?? detected.lng;
+            resultsEl.innerHTML = '';
+            document.getElementById('searchInput').value = '';
+          } catch (e2) {
+            statusBox(document.getElementById('confirmStatus'), e2.message, 'error');
+          }
+        });
+        resultsEl.appendChild(card);
+      });
+    } catch (e) {
+      if (myGeneration !== searchGeneration) return;
+      statusBox(document.getElementById('confirmStatus'), e.message, 'error');
+    }
+  }, 350);
+});
+
+document.getElementById('btnConfirmLocation').addEventListener('click', async () => {
+  const el = document.getElementById('confirmStatus');
+  const addressLine1 = document.getElementById('flatNumber').value.trim();
+  const city = document.getElementById('city').value.trim();
+  const state = document.getElementById('state').value.trim();
+  const pincode = document.getElementById('pincode').value.trim();
+  const landmark = document.getElementById('landmark').value.trim();
+
+  if (!addressLine1 || !city || !state || !/^\d{6}$/.test(pincode)) {
+    statusBox(el, 'Please fill in flat/house number, city, state, and a 6-digit pincode.', 'error');
+    return;
+  }
+
+  try {
+    const created = await api('/api/v1/parents/me/addresses', {
+      method: 'POST',
+      body: JSON.stringify({
+        label: 'HOME', addressLine1, landmark: landmark || null,
+        pincode, city, state,
+        lat: detected.lat, lng: detected.lng,
+        makePrimary: true,
+      }),
+    });
+    // The only place GPS-derived data ever becomes "the" address — only now, on explicit confirm.
+    await api(`/api/v1/parents/me/care-location/${created.id}`, { method: 'PUT' });
+    await resolveCareLocation();
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Home
+
+function showHome(address, source) {
+  document.getElementById('homeSourceLabel').textContent =
+    source === 'LAST_SELECTED' ? 'Restored your last care location.' : 'Using your default saved address.';
+  document.getElementById('homeAddressLine').textContent = `${address.label} — ${address.addressLine1}`;
+  document.getElementById('homeAddressCity').textContent = `${address.city}, ${address.state} ${address.pincode}`;
+  const pill = document.getElementById('homeServiceablePill');
+  pill.innerHTML = address.serviceable
+    ? '<span class="pill yes">Serviceable</span>'
+    : '<span class="pill no">Not yet serviceable — Ektrepha does not operate here yet</span>';
+  show('screen-home');
+}
+</script>
+</body>
+</html>

@@ -39,6 +39,20 @@ app:
   # logs a warning and initializes lazily rather than crashing on boot).
   firebase:
     service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:secrets/firebase-service-account.json}
+  # Placeholder values — mobile OTP SMS will fail against the real MSG91 API without a real key,
+  # but the app still starts. fixed-otp is enabled by default here (dev only) with one allowlisted
+  # test number, so mobile-login can be exercised end-to-end without any MSG91 credentials at all.
+  sms:
+    msg91:
+      auth-key: ${MSG91_AUTH_KEY:dev-placeholder-msg91-auth-key}
+      template-id: ${MSG91_TEMPLATE_ID:dev-placeholder-template-id}
+      otp-variable-name: ${MSG91_OTP_VARIABLE_NAME:OTP}
+      sender-id: ${MSG91_SENDER_ID:}
+  mobile-otp:
+    fixed-otp:
+      enabled: ${MOBILE_OTP_FIXED_ENABLED:true}
+      code: ${MOBILE_OTP_FIXED_CODE:123456}
+      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999}
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}
     seed-admin: ${STARTUP_SEED_ADMIN:true}

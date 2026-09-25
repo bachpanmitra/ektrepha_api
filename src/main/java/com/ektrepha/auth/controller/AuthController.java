@@ -19,6 +19,10 @@ import com.ektrepha.auth.dto.response.GoogleLoginResponse;
 import com.ektrepha.auth.dto.request.GoogleSignupRequest;
 import com.ektrepha.auth.dto.response.GoogleSignupResponse;
 import com.ektrepha.auth.dto.response.MessageResponse;
+import com.ektrepha.auth.dto.request.MobileOtpRequestRequest;
+import com.ektrepha.auth.dto.response.MobileOtpRequestResponse;
+import com.ektrepha.auth.dto.request.MobileOtpVerifyRequest;
+import com.ektrepha.auth.dto.response.MobileOtpVerifyResponse;
 import com.ektrepha.auth.dto.request.PhoneLoginRequest;
 import com.ektrepha.auth.dto.response.PhoneLoginResponse;
 import com.ektrepha.auth.dto.request.PhoneResetPasswordRequest;
@@ -32,6 +36,7 @@ import com.ektrepha.auth.dto.response.ResetPasswordResponse;
 import com.ektrepha.auth.dto.response.TokenPairResponse;
 import com.ektrepha.auth.service.AuthService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -62,6 +67,19 @@ public class AuthController {
 	@PostMapping("/register")
 	public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+	}
+
+	// -------------------------------------------------- Mobile OTP (login-or-signup)
+
+	@PostMapping("/mobile/otp/request")
+	public ResponseEntity<MobileOtpRequestResponse> requestMobileOtp(@Valid @RequestBody MobileOtpRequestRequest request,
+			HttpServletRequest httpRequest) {
+		return ResponseEntity.ok(authService.requestMobileOtp(request, resolveClientIp(httpRequest)));
+	}
+
+	@PostMapping("/mobile/otp/verify")
+	public ResponseEntity<MobileOtpVerifyResponse> verifyMobileOtp(@Valid @RequestBody MobileOtpVerifyRequest request) {
+		return ResponseEntity.ok(authService.verifyMobileOtp(request));
 	}
 
 	// ------------------------------------------------------------------ Login
@@ -113,6 +131,17 @@ public class AuthController {
 	@PostMapping("/password/reset/phone")
 	public ResponseEntity<ResetPasswordResponse> resetPasswordPhone(@Valid @RequestBody PhoneResetPasswordRequest request) {
 		return ResponseEntity.ok(authService.resetPasswordPhone(request));
+	}
+
+	// ----------------------------------------------------------------- Helpers
+
+	/** Same X-Forwarded-For-then-remote-address resolution as RateLimitFilter, for per-IP OTP-request throttling on top of that filter's coarse global limit. */
+	private String resolveClientIp(HttpServletRequest request) {
+		String forwardedFor = request.getHeader("X-Forwarded-For");
+		if (forwardedFor != null && !forwardedFor.isBlank()) {
+			return forwardedFor.split(",")[0].trim();
+		}
+		return request.getRemoteAddr();
 	}
 
 }

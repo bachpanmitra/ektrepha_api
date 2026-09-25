@@ -120,6 +120,11 @@ public class ParentAddressServiceImpl implements ParentAddressService {
 		}
 
 		boolean wasPrimary = address.isPrimary();
+		boolean wasLastSelected = parent.getLastSelectedAddress() != null && parent.getLastSelectedAddress().getId().equals(addressId);
+		if (wasLastSelected) {
+			parent.setLastSelectedAddress(null);
+			parentRepository.save(parent);
+		}
 		parentAddressRepository.delete(address);
 
 		if (wasPrimary) {

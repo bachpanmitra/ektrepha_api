@@ -1,3 +1,4 @@
+
 # Ektrepha — Email (Brevo) + Phone Auth (Firebase) Setup (Reference Doc)
 
 What's wired up for transactional email and phone-based signup/reset, how it got there, and the
@@ -7,6 +8,19 @@ Summary of what changed: email now sends for real via Brevo (was a stub). Phone-
 longer uses MSG91/SMS at all — it was replaced with Firebase Phone Auth, where the **client app**
 sends/verifies the OTP directly with Firebase, and this backend only verifies the resulting ID
 token. No SMS is sent or paid for by this backend.
+
+> **Update (migration 033, mobile-number OTP login/auto-signup):** MSG91 SMS is back, but
+> *only* for the new combined login-or-signup-by-phone-number flow
+> (`POST /api/v1/auth/mobile/otp/{request,verify}`) — a deliberate exception to everything below,
+> made because that feature needed the backend to own OTP generation/delivery itself (no mobile
+> client-SDK changes were in scope for that work). Firebase Phone Auth is untouched and still what
+> `/signup/phone` and `/password/reset/phone` use. See `com.ektrepha.sms.AbstractSmsSender`,
+> `SmsService`/`SmsServiceImpl` (mirrors `EmailServiceImpl`'s pattern against the MSG91 Flow API),
+> `MobileOtpService`/`MobileOtpServiceImpl`, and `app.sms.msg91.*` / `app.mobile-otp.*` config.
+> `docs/test-cases/mobile-otp-login.md` has the full test matrix for this flow. The "When to
+> revisit" note below about resurrecting `SmsService` from git history is now moot for that
+> specific purpose — a new one already exists, just scoped to this one flow rather than phone
+> signup generally.
 
 
 ## Email — Brevo
@@ -66,6 +80,65 @@ export BREVO_API_KEY=xkeysib-...          # Settings -> SMTP & API -> API Keys t
 export BREVO_SENDER_EMAIL=no-reply@ektrepha.com
 export BREVO_SENDER_NAME=ektrepha
 ```
+
+
+## Mobile OTP login — MSG91
+
+Real SMS delivery for `POST /api/v1/auth/mobile/otp/request` (the combined login-or-signup flow —
+see `docs/test-cases/mobile-otp-login.md`). Code: `AbstractSmsSender`
+(`src/main/java/com/ektrepha/sms/`), `SmsService`/`SmsServiceImpl`
+(`src/main/java/com/ektrepha/auth/{service,impl}/`) — same plain-`RestClient`, no-SDK pattern as
+`AbstractEmailSender`, posting to MSG91's Flow API (`https://control.msg91.com/api/v5/flow`).
+
+### One-time setup (not yet done against a real MSG91 account)
+
+1. Create an MSG91 account and complete DLT registration (India requires principal-entity +
+   template registration for transactional SMS — this cannot be skipped, carriers will silently
+   drop unregistered-template traffic).
+2. Register a Flow template with exactly one variable for the OTP code (name it anything — the
+   name must match `MSG91_OTP_VARIABLE_NAME` below) and a fixed sender ID.
+3. Note the auth key (Dashboard → API), the Flow's `template_id`, the variable name, and the
+   approved sender ID.
+
+### Config reference (`.env`, gitignored)
+
+```bash
+export MSG91_AUTH_KEY=...                 # Dashboard -> API
+export MSG91_TEMPLATE_ID=...              # the registered Flow template's id
+export MSG91_OTP_VARIABLE_NAME=OTP        # must match the template's variable name exactly
+export MSG91_SENDER_ID=...                # approved DLT sender id
+```
+
+`application-dev.yml` defaults these to placeholder values (a real send 401s/400s against them,
+caught and logged as a warning — same best-effort-swallow pattern as `AbstractEmailSender`, never
+fails the request). `app.mobile-otp.fixed-otp.enabled=true` in dev bypasses this entirely for one
+allowlisted test number (`+919999999999` by default) — see `app.mobile-otp.fixed-otp.*` in
+`application.yml`. **This bypass must never be enabled in prod** — `MobileOtpFixedCodeGuard` fails
+startup outright if it ever is.
+
+### Prod-safe reviewer/test account (`app.mobile-otp.review-account.*`)
+
+Separate from the dev-only bypass above, `app.mobile-otp.review-account.*` is a narrow fixed-code
+bypass that **is** allowed in prod — for a small, explicit allowlist (`MobileOtpFixedCodeGuard`
+enforces max 3 numbers) such as an App Store/Play Store reviewer account that can't receive real
+SMS during review. Everything else about the challenge behaves normally (expiry, attempt limit,
+single-use, rate limits) — only the SMS send is skipped, and unlike the dev bypass, the client sees
+no "test mode" notice, since a reviewer is meant to see the same UI a real user would.
+
+`application-prod.yml` enables this **by default** for `+919153766119` with code `123456` (override
+via `MOBILE_OTP_REVIEW_ACCOUNT_ENABLED`/`_CODE`/`_ALLOWED_NUMBERS`, or set
+`MOBILE_OTP_REVIEW_ACCOUNT_ENABLED=false` once a review cycle is done and it's no longer needed).
+Every boot with it active logs a warning naming the exact numbers — check for that log line if
+you're unsure whether this is currently on in a given environment.
+
+### Known limitations
+
+- Not yet exercised against a real MSG91 account/template — only the request/response contract and
+  the dev fixed-OTP path have been verified end-to-end. First real-number send should happen
+  through a real MSG91 sandbox/account before relying on this in stage/prod.
+- Per-number/per-IP request rate limiting (`app.mobile-otp.request-limit-*`) is in-memory
+  (Caffeine), same single-instance caveat as `RateLimiterServiceImpl`/`LoginAttemptServiceImpl` —
+  would need Redis to enforce one global limit across multiple app instances.
 
 
 ## Phone auth — Firebase (replaced MSG91)
@@ -208,9 +281,11 @@ that path just works without any `.env` changes.
 
 ## When to revisit this setup
 
-- If MSG91/SMS-based OTP is ever wanted again (e.g. as a fallback if Firebase Phone Auth proves
-  unreliable for a specific carrier) — `SmsService`/`SmsServiceImpl` were deleted, not deprecated;
-  would need to be rebuilt from the git history of this change if resurrected.
+- ~~If MSG91/SMS-based OTP is ever wanted again... would need to be rebuilt from git history~~ —
+  done, see the update note at the top of this doc. `SmsService`/`SmsServiceImpl` exist again,
+  scoped to the mobile-OTP-login flow specifically. If Firebase Phone Auth itself ever needs an
+  MSG91 fallback (a different concern — this backend still never sends SMS for `/signup/phone` or
+  `/password/reset/phone`), that would extend this same `SmsService`, not duplicate it.
 - If SMS volume grows enough that the Spark plan's 10/day cap matters — add a billing account to
   the `ektrepha` Firebase project (Blaze plan, pay-as-you-go, does not require it to actually cost
   money if usage stays within free-tier equivalents on Blaze).

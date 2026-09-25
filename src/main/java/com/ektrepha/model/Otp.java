@@ -49,6 +49,10 @@ public class Otp {
 	@Column(nullable = false, length = 20)
 	private OtpPurpose purpose;
 
+	/** Opaque id handed to mobile clients for the request/verify pair (see AuthController's mobile OTP endpoints). Null for OTPs issued through the email-only OtpService flow. */
+	@Column(name = "challenge_id", unique = true, length = 64)
+	private String challengeId;
+
 	@Builder.Default
 	@Column(name = "attempt_count", nullable = false)
 	private int attemptCount = 0;

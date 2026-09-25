@@ -83,13 +83,14 @@ The single identity table across all auth channels (Google / phone / email / gue
 | `user_id` | BIGINT FK → `users.id` ON DELETE CASCADE | nullable |
 | `phone_or_email` | VARCHAR(255) NOT NULL | the identifier the OTP was sent to |
 | `otp` | VARCHAR(255) NOT NULL | BCrypt hash, not plaintext |
-| `purpose` | VARCHAR(20) NOT NULL | e.g. `RESET_PASSWORD` |
+| `purpose` | VARCHAR(20) NOT NULL | e.g. `RESET_PASSWORD`, `LOGIN` (mobile OTP login/signup) |
+| `challenge_id` | VARCHAR(64) UNIQUE | added in 033 — opaque id handed to mobile clients for `/auth/mobile/otp/{request,verify}` instead of the raw phone number; null for the older email-only OTP rows |
 | `attempt_count` | INT NOT NULL DEFAULT 0 | |
 | `expires_at` | TIMESTAMP NOT NULL | |
 | `is_used` | BOOLEAN NOT NULL DEFAULT false | |
 | `created_at` | TIMESTAMP NOT NULL | |
 
-Indexes: `(phone_or_email, purpose)`, `(user_id)`.
+Indexes: `(phone_or_email, purpose)`, `(user_id)`. `challenge_id`'s UNIQUE constraint also indexes it; Postgres allows unlimited NULLs there so pre-033 rows are unaffected.
 
 ### `refresh_tokens`
 | Column | Type | Notes |
@@ -97,7 +98,8 @@ Indexes: `(phone_or_email, purpose)`, `(user_id)`.
 | `id` | BIGSERIAL PK | |
 | `user_id` | BIGINT NOT NULL FK → `users.id` ON DELETE CASCADE | |
 | `token` | VARCHAR(500) UNIQUE NOT NULL | opaque, base64url random bytes — not a JWT |
-| `expires_at` | TIMESTAMP NOT NULL | |
+| `expires_at` | TIMESTAMP NOT NULL | this token's own TTL (`app.jwt.refresh-token-ttl-days`, default 7d) |
+| `session_expires_at` | TIMESTAMP | added in 033 — a hard session ceiling (mobile OTP login: `app.mobile-otp.session-hours`, default 72h from login) copied forward unchanged on every rotation via `/auth/refresh`, so refreshing never extends it. Null for flows that don't enforce one (Google/email/phone-password login) |
 | `revoked` | BOOLEAN NOT NULL DEFAULT false | |
 | `created_at` | TIMESTAMP NOT NULL | |
 
@@ -235,5 +237,6 @@ Lightweight lead-capture from the price-quote flow — no nanny/child assignment
 - **020** — replaced `holiday_calendar`'s `holiday_date`-only PK with a surrogate `id` + `(holiday_date, region)` unique constraint, so per-state and national holidays can coexist on the same date now that the platform spans multiple states.
 - **021** — added `status=2 DEACTIVATED` to `users.status` and backfilled rows where `is_active=false` disagreed with `status=0`. `is_active` itself was intentionally left in place (still what auth reads) — dropping it is a separate future release, not bundled with this one.
 - **022** — dropped the `pgcrypto` extension after confirming (via a full-codebase grep) that nothing calls `gen_random_uuid()`/`crypt()`/`digest()`/`pgp_sym_encrypt()` — it had been dead weight since 005 replaced pgcrypto-backed UUIDs with BIGSERIAL.
+- **033** — added mobile-number OTP login/auto-signup (`otps.challenge_id`, `refresh_tokens.session_expires_at`). This reintroduces backend-generated, backend-sent SMS OTP (via MSG91) for this one flow specifically — see `docs/runbook-email-sms-auth-setup.md` for why phone auth had moved to Firebase Phone Auth instead, and why this flow couldn't reuse that (no mobile-app client-SDK changes were in scope).
 
 There's also a leftover, unused `src/main/resources/db/migration/V1__init.sql` from before the project switched from Flyway to Liquibase — not part of the active changelog.

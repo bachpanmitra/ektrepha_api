@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 33
+      author: ektrepha
+      description: Mobile OTP login/signup - otps.challenge_id and refresh_tokens.session_expires_at
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/033-mobile-otp-login.sql
+            relativeToChangelogFile: false

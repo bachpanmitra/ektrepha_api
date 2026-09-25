@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 34
+      author: ektrepha
+      description: Add parent.last_selected_address_id for post-login automatic care-location selection
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/034-care-location-selection.sql
+            relativeToChangelogFile: false
