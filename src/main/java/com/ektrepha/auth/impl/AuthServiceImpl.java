@@ -87,32 +87,9 @@ public class AuthServiceImpl implements AuthService {
 		rejectAdminSelfRegistration(request.role());
 		GoogleIdentity identity = googleIdTokenVerifierService.verify(request.idToken());
 
-		Optional<User> byGoogleId = userRepository.findByGoogleId(identity.googleId());
-		User user;
-		boolean isNewUser;
-
-		if (byGoogleId.isPresent()) {
-			// Signup is idempotent for a Google identity that already has an account.
-			user = byGoogleId.get();
-			isNewUser = false;
-			log.info("Google signup: existing account recognized, userId={}", user.getId());
-		} else {
-			if (identity.email() != null && userRepository.existsByEmail(identity.email())) {
-				log.warn("Google signup rejected: email {} already registered via another channel", identity.email());
-				throw DuplicateAccountException.email(identity.email());
-			}
-			user = User.builder()
-					.email(identity.email())
-					.name(identity.name())
-					.googleId(identity.googleId())
-					.userSource(UserSource.GOOGLE)
-					.userType(request.role())
-					.emailVerified(true)
-					.build();
-			user = userRepository.save(user);
-			isNewUser = true;
-			log.info("Google signup: created new user, userId={}, email={}, role={}", user.getId(), user.getEmail(), user.getUserType());
-		}
+		GoogleAccount account = resolveGoogleAccount(identity, request.role());
+		User user = account.user();
+		boolean isNewUser = account.isNewUser();
 
 		boolean passwordSetupEmailSent = false;
 		if (user.getEmail() != null && user.getPassword() == null) {
@@ -129,16 +106,74 @@ public class AuthServiceImpl implements AuthService {
 	@Transactional
 	public GoogleLoginResponse loginGoogle(GoogleLoginRequest request) {
 		GoogleIdentity identity = googleIdTokenVerifierService.verify(request.idToken());
-		User user = userRepository.findByGoogleId(identity.googleId())
-				.orElseThrow(() -> {
-					log.warn("Google login failed: no account for googleId={}", identity.googleId());
-					return new UserNotFoundException("No account found for this Google identity. Please sign up first.");
-				});
 
-		log.info("Google login succeeded: userId={}", user.getId());
+		// Login doubles as first-time signup: the login page has no role picker, so a brand-new
+		// Google user lands as a PARENT (the same audience the login page redirects to).
+		GoogleAccount account = resolveGoogleAccount(identity, UserType.PARENT);
+		User user = account.user();
+		if (account.isNewUser() && user.getEmail() != null) {
+			emailService.sendPasswordSetupEmail(user.getEmail());
+		}
+
+		log.info("Google login succeeded: userId={}, newUser={}", user.getId(), account.isNewUser());
 		AuthTokens tokens = issueTokens(user);
 		return new GoogleLoginResponse(user.getId(), user.getEmail(), user.getName(), user.getUserType(),
-				tokens.accessToken(), tokens.refreshToken());
+				tokens.accessToken(), tokens.refreshToken(), account.isNewUser());
+	}
+
+	private record GoogleAccount(User user, boolean isNewUser) {
+	}
+
+	/**
+	 * Finds the account for a verified Google identity, in order: by Google subject; else by email,
+	 * linking the Google identity onto the existing account (only when Google has verified that
+	 * email — otherwise anyone could claim an address they don't own); else creates a new user.
+	 */
+	private GoogleAccount resolveGoogleAccount(GoogleIdentity identity, UserType roleForNewUser) {
+		Optional<User> byGoogleId = userRepository.findByGoogleId(identity.googleId());
+		if (byGoogleId.isPresent()) {
+			User user = assertActive(byGoogleId.get());
+			log.info("Google auth: existing account recognized, userId={}", user.getId());
+			return new GoogleAccount(user, false);
+		}
+
+		if (identity.email() != null) {
+			Optional<User> byEmail = userRepository.findByEmail(identity.email());
+			if (byEmail.isPresent()) {
+				if (!identity.emailVerified()) {
+					log.warn("Google auth rejected: email {} registered but not verified by Google", identity.email());
+					throw DuplicateAccountException.email(identity.email());
+				}
+				User user = assertActive(byEmail.get());
+				user.setGoogleId(identity.googleId());
+				user.setEmailVerified(true);
+				if (user.getName() == null) {
+					user.setName(identity.name());
+				}
+				user = userRepository.save(user);
+				log.info("Google auth: linked Google identity to existing account, userId={}", user.getId());
+				return new GoogleAccount(user, false);
+			}
+		}
+
+		User user = userRepository.save(User.builder()
+				.email(identity.email())
+				.name(identity.name())
+				.googleId(identity.googleId())
+				.userSource(UserSource.GOOGLE)
+				.userType(roleForNewUser)
+				.emailVerified(identity.emailVerified())
+				.build());
+		log.info("Google auth: created new user, userId={}, email={}, role={}", user.getId(), user.getEmail(), user.getUserType());
+		return new GoogleAccount(user, true);
+	}
+
+	private User assertActive(User user) {
+		if (!user.isActive()) {
+			log.warn("Google auth failed: userId={} is inactive", user.getId());
+			throw new InvalidCredentialsException();
+		}
+		return user;
 	}
 
 	// ----------------------------------------------------------------- Phone
