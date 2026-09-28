@@ -25,9 +25,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	// B1/H1 card list — one query, one status-set param, shared by both the "active" and "history"
 	// scopes (PRD "PRD API Design Spec" §3.4: same repository method, different status sets, so the
 	// two screens can never drift). JOIN FETCH avoids N+1 on every card's nanny/child/address.
+	// nanny is LEFT JOIN, not inner - an hourly-care pay-first booking (AWAITING_PAYMENT/
+	// ASSIGNING_CAREGIVER, included in "active") has nanny=null until ops assigns one, and an inner
+	// join would silently drop it from every list/count.
 	@Query(value = """
 			SELECT b FROM Booking b
-			JOIN FETCH b.nanny JOIN FETCH b.serviceType
+			LEFT JOIN FETCH b.nanny JOIN FETCH b.serviceType
 			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.address
 			WHERE b.parent.id = :parentId AND b.status IN :statuses
 			""",
@@ -38,7 +41,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	// B2/H2 detail — same fetch-join shape as the list query, scoped to one booking + its owning parent.
 	@Query("""
 			SELECT b FROM Booking b
-			JOIN FETCH b.nanny JOIN FETCH b.serviceType
+			LEFT JOIN FETCH b.nanny JOIN FETCH b.serviceType
 			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.address
 			WHERE b.id = :id AND b.parent.id = :parentId
 			""")
@@ -57,6 +60,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	// B2 detail's "3 of 4" recurring-series display, and the write side's per-occurrence overlap
 	// checks all belong to the same series once its anchor booking id is known.
 	long countByRecurrenceGroupId(Long recurrenceGroupId);
+
+	// Monthly-care's "pay once for the whole series" - initiatePayment sums every occurrence's own
+	// amount into one charge, confirmPayment cascades the resulting status to every row here.
+	List<Booking> findAllByRecurrenceGroupId(Long recurrenceGroupId);
 
 	// C1's "Last care: 12 Jan 2024" — batched across every child on the list rather than N+1 per card.
 	@Query("""

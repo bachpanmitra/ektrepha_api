@@ -122,6 +122,38 @@ class BookingReadControllerApiTest {
 	}
 
 	@Test
+	void listActive_includesHourlyCarePayFirstBooking_withNoNannyAssignedYet() throws Exception {
+		// Regression: a hourly-care pay-first booking sits at AWAITING_PAYMENT/ASSIGNING_CAREGIVER
+		// with nanny=null until ops assigns one - it was previously invisible here, both because
+		// ACTIVE_STATUSES didn't include these statuses and because the repository's inner
+		// JOIN FETCH on nanny silently excluded any null-nanny row even once it did.
+		Parent parent = createParent();
+		Instant now = Instant.now();
+		Booking awaitingPayment = createBooking(parent, null, BookingStatus.AWAITING_PAYMENT, now.plusSeconds(86400), now.plusSeconds(86400 + 3600));
+		createBooking(parent, null, BookingStatus.ASSIGNING_CAREGIVER, now.plusSeconds(2 * 86400), now.plusSeconds(2 * 86400 + 3600));
+
+		mockMvc.perform(get("/api/v1/bookings").param("scope", "active")
+				.with(user(parent.getUser().getId().toString()).roles("PARENT")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements", is(2)))
+				.andExpect(jsonPath("$.items[0].id", is(awaitingPayment.getId().intValue())))
+				.andExpect(jsonPath("$.items[0].nanny", nullValue()));
+	}
+
+	@Test
+	void getDetail_hourlyCarePayFirstBooking_withNoNannyAssignedYet_returnsNullNannyNot500() throws Exception {
+		Parent parent = createParent();
+		Instant now = Instant.now();
+		Booking booking = createBooking(parent, null, BookingStatus.AWAITING_PAYMENT, now.plusSeconds(86400), now.plusSeconds(86400 + 3600));
+
+		mockMvc.perform(get("/api/v1/bookings/" + booking.getId())
+				.with(user(parent.getUser().getId().toString()).roles("PARENT")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status", is("AWAITING_PAYMENT")))
+				.andExpect(jsonPath("$.nanny", nullValue()));
+	}
+
+	@Test
 	void listActive_withNoParentRowAtAll_returnsEmptyPageNot500() throws Exception {
 		// Regression: originally 500'd for a user with no parent row.
 		User user = userRepository.save(User.builder()
@@ -152,6 +184,23 @@ class BookingReadControllerApiTest {
 		mockMvc.perform(get("/api/v1/bookings").param("scope", "bogus")
 				.with(user(parent.getUser().getId().toString()).roles("PARENT")))
 				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void listAll_returnsEveryStatus_sortedDescending() throws Exception {
+		Parent parent = createParent();
+		Nanny nanny = createNanny();
+		Instant now = Instant.now();
+		createBooking(parent, nanny, BookingStatus.CONFIRMED, now.plusSeconds(86400), now.plusSeconds(86400 + 3600));
+		createBooking(parent, nanny, BookingStatus.COMPLETED, now.minusSeconds(86400), now.minusSeconds(80000));
+		createBooking(parent, nanny, BookingStatus.CANCELLED, now.minusSeconds(2 * 86400), now.minusSeconds(2 * 86400 - 3600));
+		createBooking(parent, null, BookingStatus.AWAITING_PAYMENT, now.plusSeconds(3 * 86400), now.plusSeconds(3 * 86400 + 3600));
+
+		mockMvc.perform(get("/api/v1/bookings").param("scope", "all")
+				.with(user(parent.getUser().getId().toString()).roles("PARENT")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements", is(4)))
+				.andExpect(jsonPath("$.items[0].status", is("AWAITING_PAYMENT")));
 	}
 
 	// -------------------------------------------------------------- List — history

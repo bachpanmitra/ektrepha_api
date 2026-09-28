@@ -58,6 +58,13 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/pricing/calculate").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/users/identify").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/booking-requests").permitAll()
+						// Razorpay's own signature on the raw body is this endpoint's only auth -
+						// see RazorpayWebhookController.
+						.requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook/**").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/{id}/assign").permitAll()
+						// For local testing only, per explicit ask - approving a verification
+						// document normally belongs behind ADMIN.
+						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-verification/documents/{id}/approve").permitAll()
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/nanny-verification/**").hasAnyRole("NANNY", "ADMIN")
 						.requestMatchers("/api/v1/parents/me/**").hasRole("PARENT")

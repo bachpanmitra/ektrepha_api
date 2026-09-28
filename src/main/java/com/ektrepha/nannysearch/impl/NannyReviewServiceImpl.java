@@ -70,6 +70,12 @@ public class NannyReviewServiceImpl implements NannyReviewService {
 		if (booking.getStatus() != BookingStatus.COMPLETED) {
 			throw new BookingNotEligibleForReviewException("Booking must be COMPLETED before it can be reviewed");
 		}
+		// Belt-and-suspenders: every normal completion path (NannyBookingServiceImpl#completeBooking)
+		// requires a nanny already assigned, but Review.nanny is NOT NULL - fail cleanly here rather
+		// than a raw NPE/constraint-violation 500 if a booking ever reaches COMPLETED without one.
+		if (booking.getNanny() == null) {
+			throw new BookingNotEligibleForReviewException("This booking has no assigned caregiver to review");
+		}
 		if (reviewRepository.existsByBookingId(booking.getId())) {
 			throw new DuplicateReviewException("A review already exists for this booking");
 		}

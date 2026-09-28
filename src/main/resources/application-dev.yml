@@ -26,6 +26,10 @@ app:
       # (see app.startup.check-s3 below), so these just need to be non-blank.
       bucket: ${S3_BUCKET:ektrepha-dev-local}
       region: ${S3_REGION:ap-south-1}
+      # Most dev machines have no AWS credentials at all - real uploads (child photos, nanny
+      # verification docs) would 500 on SdkClientException otherwise. Off by default here; set
+      # S3_ENABLED=true once real credentials are exported into this environment.
+      enabled: ${S3_ENABLED:false}
   # Placeholder values — OTP/notification emails will fail against the real Brevo
   # API without a real key, but the app still starts (dev otherwise just logs the
   # 401 from Brevo, same visibility as the old log-only stub had).
@@ -53,6 +57,16 @@ app:
       enabled: ${MOBILE_OTP_FIXED_ENABLED:true}
       code: ${MOBILE_OTP_FIXED_CODE:123456}
       allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999}
+  # Real Razorpay TEST-mode credentials (see com.ektrepha.payment) — order creation and webhook
+  # signature verification were both verified end-to-end against these on 2026-09-26. Test-mode
+  # only, no real money moves, but still a real account credential — rotate in the Razorpay
+  # dashboard if this ever needs to be invalidated. webhook-secret stays blank: no webhook is
+  # actually registered in the Razorpay dashboard yet (blocked on account KYC), so there's no real
+  # secret to put here — set RAZORPAY_WEBHOOK_SECRET once one exists.
+  razorpay:
+    key-id: ${RAZORPAY_KEY_ID:rzp_test_TgbvOE6KmysOf2}
+    key-secret: ${RAZORPAY_KEY_SECRET:5KtIwAw6G2xhFlJbfhkwVBZO}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   startup:
     check-s3: ${STARTUP_CHECK_S3:false}
     seed-admin: ${STARTUP_SEED_ADMIN:true}

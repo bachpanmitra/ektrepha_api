@@ -32,7 +32,8 @@ public record AppProperties(
 		@Valid @NotNull Geocoding geocoding,
 		@Valid @NotNull MobileOtp mobileOtp,
 		@Valid @NotNull Sms sms,
-		@Valid @NotNull OlaMaps olaMaps) {
+		@Valid @NotNull OlaMaps olaMaps,
+		@Valid @NotNull Razorpay razorpay) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -65,7 +66,12 @@ public record AppProperties(
 
 		public record S3(
 				@NotBlank(message = "app.aws.s3.bucket must be set, even to a placeholder value if the S3 check is disabled") String bucket,
-				@NotBlank(message = "app.aws.s3.region must be set, even to a placeholder value if the S3 check is disabled") String region) {
+				@NotBlank(message = "app.aws.s3.region must be set, even to a placeholder value if the S3 check is disabled") String region,
+				// When false (no AWS credentials available, e.g. most dev machines), S3PhotoUrlService
+				// skips the real S3 call - the generated key is still stored as if the upload
+				// succeeded, so the rest of the flow (DB row, rollup recompute, etc.) is still
+				// testable without real object storage.
+				@DefaultValue("true") boolean enabled) {
 		}
 	}
 
@@ -182,9 +188,25 @@ public record AppProperties(
 			@NotBlank String baseUrl,
 			@Valid @NotNull Budget reverseGeocode,
 			@Valid @NotNull Budget autocomplete,
-			@Valid @NotNull Budget placeDetails) {
+			@Valid @NotNull Budget placeDetails,
+			@Valid @NotNull Budget geocode) {
 
 		public record Budget(@NotNull @Positive Integer dailyLimit) {
 		}
+	}
+
+	/**
+	 * Razorpay (https://razorpay.com) order creation + signature verification for the parent-app
+	 * pay-first flows (see {@code com.ektrepha.payment}). {@code keyId}/{@code keySecret} may be
+	 * blank (the dev/stage default, same convention as {@link OlaMaps#apiKey()}) — every payment
+	 * gateway call then short-circuits to a local stand-in instead of calling out, so the app stays
+	 * usable with no real Razorpay account configured. {@code webhookSecret} gates
+	 * {@code RazorpayWebhookController}; prod must set all three via env var to run real payments.
+	 */
+	public record Razorpay(
+			String keyId,
+			String keySecret,
+			String webhookSecret,
+			@NotBlank String baseUrl) {
 	}
 }

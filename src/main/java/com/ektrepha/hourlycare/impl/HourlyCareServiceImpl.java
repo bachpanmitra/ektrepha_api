@@ -1,13 +1,14 @@
 package com.ektrepha.hourlycare.impl;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,7 +19,6 @@ import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.exception.BookingNotAwaitingAssignmentException;
 import com.ektrepha.exception.BookingNotFoundException;
-import com.ektrepha.exception.CareUnavailableException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
 import com.ektrepha.exception.NannyNotFoundException;
 import com.ektrepha.exception.NannyUnavailableException;
@@ -30,12 +30,18 @@ import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.hourlycare.dto.request.AssignCaregiverRequest;
 import com.ektrepha.hourlycare.dto.request.AvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.HourlyCareBookingCreateRequest;
+import com.ektrepha.hourlycare.dto.request.MonthlyAvailabilityCheckRequest;
+import com.ektrepha.hourlycare.dto.request.MonthlyBookingCreateRequest;
+import com.ektrepha.hourlycare.dto.request.PaymentConfirmRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentInitiateRequest;
 import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingProgressStep;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.CaregiverAssignmentResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
+import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
+import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
+import com.ektrepha.hourlycare.dto.response.MonthlyPriceSummary;
 import com.ektrepha.hourlycare.dto.response.PaymentInitiateResponse;
 import com.ektrepha.hourlycare.service.HourlyCareService;
 import com.ektrepha.model.Booking;
@@ -51,6 +57,9 @@ import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.model.ServiceType;
 import com.ektrepha.parent.dto.response.AddressResponse;
 import com.ektrepha.parent.impl.AddressResponseMapper;
+import com.ektrepha.payment.dto.GatewayOrder;
+import com.ektrepha.payment.dto.GatewayPaymentStatus;
+import com.ektrepha.payment.service.PaymentGatewayService;
 import com.ektrepha.pricing.dto.request.PriceCalculationRequest;
 import com.ektrepha.pricing.dto.response.PriceQuoteResponse;
 import com.ektrepha.pricing.service.PricingService;
@@ -73,8 +82,9 @@ import lombok.extern.slf4j.Slf4j;
  * with {@code nanny = null} and status AWAITING_PAYMENT, move to ASSIGNING_CAREGIVER once payment
  * is confirmed, and only become CONFIRMED once ops assigns a real caregiver ({@link #assignCaregiver}).
  * <p>
- * No payment gateway is integrated yet - {@link #initiatePayment} just records the parent's chosen
- * method, and {@link #confirmPayment}/{@link #failPayment} stand in for a gateway webhook.
+ * {@link #initiatePayment} creates a real Razorpay order via {@link PaymentGatewayService};
+ * {@link #confirmPayment} verifies the client's Checkout result against it, and
+ * {@code RazorpayWebhookController} is the authoritative fallback for the same event server-to-server.
  */
 @Slf4j
 @Service
@@ -83,9 +93,6 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 	private static final ZoneId INDIA_ZONE = ZoneId.of("Asia/Kolkata");
 	private static final String CHILDCARE_CODE = "childcare";
-
-	// Hourly-care bookings sitting in one of these hold a capacity slot without a specific nanny yet.
-	private static final Set<BookingStatus> RESERVED_STATUSES = EnumSet.of(BookingStatus.AWAITING_PAYMENT, BookingStatus.ASSIGNING_CAREGIVER);
 
 	private final ParentRepository parentRepository;
 	private final BookingRepository bookingRepository;
@@ -96,6 +103,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private final ServiceabilityPincodeRepository serviceabilityPincodeRepository;
 	private final CaregiverZoneMappingRepository caregiverZoneMappingRepository;
 	private final PaymentTransactionRepository paymentTransactionRepository;
+	private final PaymentGatewayService paymentGatewayService;
 	private final PricingService pricingService;
 	private final AddressResponseMapper addressResponseMapper;
 
@@ -105,16 +113,26 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
 		resolveChild(parent, request.childId());
-		ServiceType serviceType = resolveServiceType();
+		resolveServiceType();
 		validateWindow(request.startTime(), request.endTime());
 
+		// No caregiver-capacity gate - ops handles caregiver assignment for every reservation
+		// manually, capacity or not (see createBooking).
 		Long zoneAreaId = resolveZoneAreaId(address);
-		if (!hasCapacity(zoneAreaId, serviceType.getId(), request.startTime(), request.endTime())) {
-			return new AvailabilityResponse(false, null, "No in-house caregiver is free for this date and time — please try a different slot");
-		}
-
 		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.startTime(), request.endTime());
 		return new AvailabilityResponse(true, quote, null);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PriceQuoteResponse getPrice(Long userId, AvailabilityCheckRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		resolveChild(parent, request.childId());
+//		validateWindow(request.startTime(), request.endTime());
+
+		Long zoneAreaId = resolveZoneAreaId(address);
+		return quotePrice(zoneAreaId, request.startTime(), request.endTime());
 	}
 
 	@Override
@@ -124,16 +142,11 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		ParentAddress address = resolveAddress(parent, request.addressId());
 		Children child = resolveChild(parent, request.childId());
 		ServiceType serviceType = resolveServiceType();
-		validateWindow(request.startTime(), request.endTime());
+//		validateWindow(request.startTime(), request.endTime());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		// Re-checked here (not just trusted from the earlier /availability call) to narrow the race
-		// window between the two screens - still not airtight without a DB-level capacity constraint,
-		// which nothing here enforces since no specific nanny is held yet (see migration 031's note).
-		if (!hasCapacity(zoneAreaId, serviceType.getId(), request.startTime(), request.endTime())) {
-			throw new CareUnavailableException("No in-house caregiver is free for this date and time — please try a different slot");
-		}
-
+		// No caregiver-capacity gate - the reservation always succeeds; ops assigns a caregiver
+		// afterward regardless of capacity (see assignCaregiver, HourlyCareAdminController).
 		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.startTime(), request.endTime());
 
 		Booking booking = Booking.builder()
@@ -150,6 +163,83 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		return toBookingResponse(booking);
 	}
 
+	// Monthly care: same "team assigns, pay first" shape as createBooking above, but reserves one
+	// Booking row per occurrence date (every selected weekday between startDate and endDate) instead
+	// of a single window, tied together by recurrenceGroupId exactly like BookingWriteServiceImpl's
+	// existing recurring-nanny series. initiatePayment/confirmPayment below already know how to
+	// charge/settle a whole such group once they see one, so nothing downstream needs to change.
+	@Override
+	@Transactional(readOnly = true)
+	public MonthlyAvailabilityResponse checkMonthlyAvailability(Long userId, MonthlyAvailabilityCheckRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		resolveChild(parent, request.childId());
+		resolveServiceType();
+		validateDailyWindow(request.dailyStartTime(), request.dailyEndTime());
+
+		List<LocalDate> dates = occurrenceDates(request.startDate(), request.endDate(), request.daysOfWeek());
+		if (dates.isEmpty()) {
+			return new MonthlyAvailabilityResponse(false, null, "None of the selected days fall within this date range");
+		}
+		if (dates.size() > MAX_MONTHLY_OCCURRENCES) {
+			return new MonthlyAvailabilityResponse(false, null, "This date range is too long — please choose a shorter period");
+		}
+
+		Long zoneAreaId = resolveZoneAreaId(address);
+		return new MonthlyAvailabilityResponse(true, quoteSeries(zoneAreaId, dates, request.dailyStartTime(), request.dailyEndTime()), null);
+	}
+
+	@Override
+	@Transactional
+	public MonthlyBookingResponse createMonthlyBooking(Long userId, MonthlyBookingCreateRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		Children child = resolveChild(parent, request.childId());
+		ServiceType serviceType = resolveServiceType();
+		validateDailyWindow(request.dailyStartTime(), request.dailyEndTime());
+
+		List<LocalDate> dates = occurrenceDates(request.startDate(), request.endDate(), request.daysOfWeek());
+		if (dates.isEmpty()) {
+			throw new IllegalArgumentException("None of the selected days fall within this date range");
+		}
+		if (dates.size() > MAX_MONTHLY_OCCURRENCES) {
+			throw new IllegalArgumentException("This date range is too long — please choose a shorter period");
+		}
+
+		Long zoneAreaId = resolveZoneAreaId(address);
+		Booking anchor = null;
+		Long recurrenceGroupId = null;
+		BigDecimal seriesTotal = BigDecimal.ZERO;
+		for (LocalDate date : dates) {
+			Instant start = date.atTime(request.dailyStartTime()).atZone(INDIA_ZONE).toInstant();
+			Instant end = date.atTime(request.dailyEndTime()).atZone(INDIA_ZONE).toInstant();
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, start, end);
+
+			Booking booking = Booking.builder()
+					.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
+					.startTime(start).endTime(end)
+					.status(BookingStatus.AWAITING_PAYMENT)
+					.totalAmount(quote.total())
+					.frequency(BookingFrequency.REPEAT_MONTHLY)
+					.recurrenceGroupId(recurrenceGroupId)
+					.careNotes(request.careNotes())
+					.build();
+			booking = bookingRepository.save(booking);
+			seriesTotal = seriesTotal.add(quote.total());
+
+			if (anchor == null) {
+				anchor = booking;
+				anchor.setRecurrenceGroupId(anchor.getId());
+				anchor = bookingRepository.save(anchor);
+				recurrenceGroupId = anchor.getId();
+			}
+		}
+
+		log.info("Monthly-care series reserved: anchorId={}, parentId={}, occurrences={}, amount={}",
+				anchor.getId(), parent.getId(), dates.size(), seriesTotal);
+		return new MonthlyBookingResponse(anchor.getId(), anchor.getStatus().name(), request.startDate(), request.endDate(), dates.size(), seriesTotal);
+	}
+
 	@Override
 	@Transactional
 	public PaymentInitiateResponse initiatePayment(Long userId, Long bookingId, PaymentInitiateRequest request) {
@@ -158,18 +248,29 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			throw new PaymentStateException("This booking is not awaiting payment");
 		}
 
+		// A monthly-care series charges once for every occurrence together — ONE_TIME hourly/daily
+		// care has no recurrenceGroupId and this is just booking.getTotalAmount(), unchanged.
+		BigDecimal amount = booking.getRecurrenceGroupId() == null
+				? booking.getTotalAmount()
+				: bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId()).stream()
+						.map(Booking::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
 		PaymentTransaction transaction = PaymentTransaction.builder()
-				.booking(booking).amount(booking.getTotalAmount()).method(request.method()).status(PaymentStatus.INITIATED)
+				.booking(booking).amount(amount).method(request.method()).status(PaymentStatus.INITIATED)
 				.build();
 		transaction = paymentTransactionRepository.save(transaction);
 
+		GatewayOrder order = paymentGatewayService.createOrder(transaction.getAmount(), "txn_" + transaction.getId());
+		transaction.setProviderReference(order.orderId());
+		transaction = paymentTransactionRepository.save(transaction);
+
 		return new PaymentInitiateResponse(transaction.getId(), booking.getId(), transaction.getAmount(),
-				transaction.getMethod().name(), transaction.getStatus().name());
+				transaction.getMethod().name(), transaction.getStatus().name(), order.orderId(), order.keyId());
 	}
 
 	@Override
 	@Transactional
-	public BookingStatusResponse confirmPayment(Long userId, Long paymentId) {
+	public BookingStatusResponse confirmPayment(Long userId, Long paymentId, PaymentConfirmRequest request) {
 		PaymentTransaction transaction = resolveOwnPayment(userId, paymentId);
 		if (transaction.getStatus() != PaymentStatus.INITIATED) {
 			throw new PaymentStateException("This payment is not awaiting confirmation");
@@ -179,11 +280,29 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			throw new PaymentStateException("This booking is not awaiting payment");
 		}
 
+		boolean verified = paymentGatewayService.verifyPaymentSignature(
+				transaction.getProviderReference(), request.razorpayPaymentId(), request.razorpaySignature());
+		if (!verified) {
+			transaction.setStatus(PaymentStatus.FAILED);
+			paymentTransactionRepository.save(transaction);
+			log.warn("Razorpay payment signature verification failed: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
+			throw new PaymentStateException("This payment could not be verified");
+		}
+
 		transaction.setStatus(PaymentStatus.SUCCESS);
+		transaction.setGatewayPaymentId(request.razorpayPaymentId());
 		paymentTransactionRepository.save(transaction);
 
-		booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
-		bookingRepository.save(booking);
+		// One payment settles the whole monthly-care series — every occurrence moves to
+		// ASSIGNING_CAREGIVER together, not just the anchor row the transaction is attached to.
+		if (booking.getRecurrenceGroupId() == null) {
+			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
+			bookingRepository.save(booking);
+		} else {
+			List<Booking> series = bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId());
+			series.forEach(b -> b.setStatus(BookingStatus.ASSIGNING_CAREGIVER));
+			bookingRepository.saveAll(series);
+		}
 
 		log.info("Hourly-care payment confirmed: bookingId={}, paymentId={}, amount={}", booking.getId(), transaction.getId(), transaction.getAmount());
 		return toStatusResponse(booking);
@@ -205,9 +324,45 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	}
 
 	@Override
-	@Transactional(readOnly = true)
+	@Transactional
 	public BookingStatusResponse status(Long userId, Long bookingId) {
-		return toStatusResponse(resolveOwnBooking(userId, bookingId));
+		Booking booking = resolveOwnBooking(userId, bookingId);
+		reconcileStalePayment(booking);
+		return toStatusResponse(booking);
+	}
+
+	// Self-heals a booking stuck at AWAITING_PAYMENT when the client's own confirm call never
+	// arrives - e.g. a UPI app-switch to Google Pay/PhonePe/Paytm/BHIM that never hands control back
+	// to the app - and no webhook is registered yet to catch it server-to-server (see
+	// RazorpayWebhookController's class comment). Checks directly with Razorpay for the outcome
+	// instead of leaving the booking stuck until a webhook eventually exists.
+	private void reconcileStalePayment(Booking booking) {
+		if (booking.getStatus() != BookingStatus.AWAITING_PAYMENT) {
+			return;
+		}
+		Optional<PaymentTransaction> pending = paymentTransactionRepository
+				.findFirstByBookingIdAndStatusOrderByIdDesc(booking.getId(), PaymentStatus.INITIATED);
+		if (pending.isEmpty()) {
+			return;
+		}
+		PaymentTransaction transaction = pending.get();
+		paymentGatewayService.findLatestPayment(transaction.getProviderReference())
+				.ifPresent(result -> applyReconciledResult(booking, transaction, result));
+	}
+
+	private void applyReconciledResult(Booking booking, PaymentTransaction transaction, GatewayPaymentStatus result) {
+		if (result.captured()) {
+			transaction.setStatus(PaymentStatus.SUCCESS);
+			transaction.setGatewayPaymentId(result.paymentId());
+			paymentTransactionRepository.save(transaction);
+			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
+			bookingRepository.save(booking);
+			log.info("Reconciled stuck hourly-care payment via Razorpay lookup: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
+		} else {
+			transaction.setStatus(PaymentStatus.FAILED);
+			paymentTransactionRepository.save(transaction);
+			log.info("Reconciled stuck hourly-care payment as failed via Razorpay lookup: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
+		}
 	}
 
 	@Override
@@ -228,7 +383,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		booking.setNanny(nanny);
 		booking.setStatus(BookingStatus.CONFIRMED);
 		try {
-			bookingRepository.save(booking);
+			// saveAndFlush, not save - a plain save() only schedules the UPDATE and defers it to
+			// transaction commit (after this method returns), so the exclusion-constraint violation
+			// would surface past this catch as an unhandled 500 instead of the intended 409 below.
+			bookingRepository.saveAndFlush(booking);
 		} catch (DataIntegrityViolationException e) {
 			// no_overlapping_bookings EXCLUDE constraint - the chosen caregiver already has a
 			// conflicting booking in this window, same race BookingWriteServiceImpl guards against.
@@ -251,7 +409,11 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.orElseThrow(() -> new ParentAddressNotFoundException("No such address for this parent"));
 	}
 
+	// null when the parent skipped child details in the Details screen — added later from My bookings.
 	private Children resolveChild(Parent parent, Long childId) {
+		if (childId == null) {
+			return null;
+		}
 		ParentChild link = parentChildRepository.findByIdParentIdAndIdChildId(parent.getId(), childId)
 				.orElseThrow(() -> new ForbiddenChildAccessException("childId does not belong to the requesting parent"));
 		return link.getChild();
@@ -274,22 +436,55 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.orElseThrow(() -> new NotServiceableException("This address is not in a serviceable zone"));
 	}
 
-	// total mapped caregivers in the zone/service, minus ones already busy (nanny-assigned booking
-	// overlapping the window) and ones already reserved by another hourly-care order awaiting
-	// payment/assignment in the same window - see BookingRepository#countUnassignedReservationsOverlapping.
-	private boolean hasCapacity(Long zoneAreaId, Long serviceTypeId, Instant startTime, Instant endTime) {
-		int total = caregiverZoneMappingRepository.countByZoneAreaIdAndServiceTypeIdAndActiveTrue(zoneAreaId, serviceTypeId);
-		int busy = caregiverZoneMappingRepository.countBusyMappedCaregiversOverlapping(zoneAreaId, serviceTypeId, startTime, endTime);
-		int reserved = bookingRepository.countUnassignedReservationsOverlapping(zoneAreaId, serviceTypeId, startTime, endTime, RESERVED_STATUSES);
-		return total - busy - reserved > 0;
-	}
-
 	private PriceQuoteResponse quotePrice(Long zoneAreaId, Instant startTime, Instant endTime) {
 		LocalDate bookingDate = LocalDate.ofInstant(startTime, INDIA_ZONE);
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
 		LocalTime endLocalTime = LocalTime.from(endTime.atZone(INDIA_ZONE));
 		// caregiverId=null - managed-model midpoint rate, since no nanny is picked yet.
 		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, CHILDCARE_CODE, bookingDate, startLocalTime, endLocalTime, null));
+	}
+
+	// A generous but real cap - at 7 days/week this is ~5.7 months, comfortably past the "one
+	// month" the Details screen's date range steers toward, without leaving it unbounded.
+	private static final int MAX_MONTHLY_OCCURRENCES = 40;
+
+	private void validateDailyWindow(LocalTime dailyStartTime, LocalTime dailyEndTime) {
+		if (!dailyEndTime.isAfter(dailyStartTime)) {
+			throw new IllegalArgumentException("dailyEndTime must be after dailyStartTime");
+		}
+	}
+
+	// Every date in [startDate, endDate] (inclusive both ends) whose weekday was selected - a plain
+	// day-by-day scan rather than a stored recurrence rule, matching how BookingWriteServiceImpl's
+	// own recurring series are just concrete rows up front (see its buildOccurrenceWindows comment).
+	private List<LocalDate> occurrenceDates(LocalDate startDate, LocalDate endDate, Set<DayOfWeek> daysOfWeek) {
+		if (endDate.isBefore(startDate)) {
+			throw new IllegalArgumentException("endDate must not be before startDate");
+		}
+		List<LocalDate> dates = new ArrayList<>();
+		for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+			if (daysOfWeek.contains(date.getDayOfWeek())) {
+				dates.add(date);
+			}
+		}
+		return dates;
+	}
+
+	private MonthlyPriceSummary quoteSeries(Long zoneAreaId, List<LocalDate> dates, LocalTime dailyStartTime, LocalTime dailyEndTime) {
+		BigDecimal subtotal = BigDecimal.ZERO;
+		BigDecimal platformFee = BigDecimal.ZERO;
+		BigDecimal total = BigDecimal.ZERO;
+		String currency = null;
+		for (LocalDate date : dates) {
+			Instant start = date.atTime(dailyStartTime).atZone(INDIA_ZONE).toInstant();
+			Instant end = date.atTime(dailyEndTime).atZone(INDIA_ZONE).toInstant();
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, start, end);
+			subtotal = subtotal.add(quote.subtotal());
+			platformFee = platformFee.add(quote.platformFee());
+			total = total.add(quote.total());
+			currency = quote.currency();
+		}
+		return new MonthlyPriceSummary(dates.size(), subtotal, platformFee, total, currency);
 	}
 
 	private Booking resolveOwnBooking(Long userId, Long bookingId) {

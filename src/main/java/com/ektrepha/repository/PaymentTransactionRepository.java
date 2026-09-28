@@ -14,4 +14,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 	// The active attempt to confirm/fail against - the most recent one still awaiting a gateway result.
 	Optional<PaymentTransaction> findFirstByBookingIdAndStatusOrderByIdDesc(Long bookingId, PaymentStatus status);
 
+	// RazorpayWebhookController resolves the transaction a webhook event is about by the Razorpay
+	// order id it was given at initiatePayment - see PaymentTransaction#providerReference.
+	Optional<PaymentTransaction> findByProviderReference(String providerReference);
+
 }

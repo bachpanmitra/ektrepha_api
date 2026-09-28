@@ -99,3 +99,14 @@ app:
       daily-limit: ${OLA_MAPS_AUTOCOMPLETE_DAILY_LIMIT:1000}
     place-details:
       daily-limit: ${OLA_MAPS_PLACE_DETAILS_DAILY_LIMIT:500}
+    geocode:
+      daily-limit: ${OLA_MAPS_GEOCODE_DAILY_LIMIT:500}
+  # Razorpay (see com.ektrepha.payment). key-id/key-secret/webhook-secret blank (the default) is a
+  # legitimate stand-in state, same convention as app.ola-maps.api-key above — every gateway call
+  # then short-circuits locally instead of calling out. Set all three real values via env var for
+  # any environment that needs to take a real payment.
+  razorpay:
+    key-id: ${RAZORPAY_KEY_ID:}
+    key-secret: ${RAZORPAY_KEY_SECRET:}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+    base-url: ${RAZORPAY_BASE_URL:https://api.razorpay.com/v1}

@@ -17,6 +17,8 @@ public interface OlaMapsClient {
 
 	Optional<PlaceDetailsResult> placeDetails(String placeId);
 
+	Optional<GeocodeResult> geocodeByPincode(String pincode);
+
 	record ReverseGeocodeResult(
 			String formattedAddress, String addressLine1, String city, String state, String pincode,
 			double lat, double lng) {
@@ -27,6 +29,11 @@ public interface OlaMapsClient {
 
 	record PlaceDetailsResult(
 			String placeId, String formattedAddress, String addressLine1, String city, String state, String pincode,
+			double lat, double lng) {
+	}
+
+	record GeocodeResult(
+			String formattedAddress, String addressLine1, String city, String state, String pincode,
 			double lat, double lng) {
 	}
 

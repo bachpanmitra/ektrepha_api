@@ -12,6 +12,7 @@ import com.ektrepha.exception.LocationQuotaExceededException;
 import com.ektrepha.location.dto.request.ReverseGeocodeRequest;
 import com.ektrepha.location.dto.response.AutocompleteResponse;
 import com.ektrepha.location.dto.response.AutocompleteSuggestion;
+import com.ektrepha.location.dto.response.PincodeGeocodeResponse;
 import com.ektrepha.location.dto.response.PlaceDetailsResponse;
 import com.ektrepha.location.dto.response.ReverseGeocodeResponse;
 import com.ektrepha.location.dto.response.SuggestedAddress;
@@ -26,10 +27,14 @@ import lombok.extern.slf4j.Slf4j;
  * Orchestrates the three Ola Maps-backed endpoints: minimum-input validation, the free-tier usage
  * budget (one {@link RateLimiterService} bucket per API, per FREE-TIER USAGE CONTROL — reusing the
  * same in-memory token-bucket mechanism {@code MobileOtpServiceImpl} already uses for OTP request
- * throttling, rather than standing up a new quota mechanism), a short-lived reverse-geocode cache
- * keyed on rounded coordinates (repeat opens of the same spot within the TTL never re-hit the
- * provider), and mapping to Ektrepha's own response shapes. Never logs precise coordinates or full
- * addresses — only counts/success-failure.
+ * throttling, rather than standing up a new quota mechanism), two caches (a short-lived
+ * reverse-geocode one keyed on rounded coordinates, and a long-lived pincode-geocode one — a
+ * pincode's town/city/state doesn't change day to day the way "what's nearest to these exact GPS
+ * coordinates" can, and India has on the order of ~20k pincodes total, so caching every one of them
+ * for a full day costs nothing and turns what would otherwise be a provider hit on every single
+ * keystroke-triggered lookup — including the same handful of pincodes repeatedly, e.g. during this
+ * feature's own testing — into a one-time fetch per pincode per day), and mapping to Ektrepha's own
+ * response shapes. Never logs precise coordinates or full addresses — only counts/success-failure.
  */
 @Slf4j
 @Service
@@ -42,11 +47,13 @@ public class LocationServiceImpl implements LocationService {
 	// ~4 decimal places of lat/lng ~= 11m — fine-grained enough that "same building" hits the
 	// cache, coarse enough that this never becomes a precise-location log/trace artifact.
 	private static final int COORDINATE_CACHE_PRECISION = 4;
+	private static final Duration PINCODE_GEOCODE_CACHE_TTL = Duration.ofDays(1);
 
 	private final OlaMapsClient olaMapsClient;
 	private final RateLimiterService rateLimiterService;
 	private final AppProperties appProperties;
 	private final Cache<String, ReverseGeocodeResponse> reverseGeocodeCache;
+	private final Cache<String, PincodeGeocodeResponse> pincodeGeocodeCache;
 
 	public LocationServiceImpl(OlaMapsClient olaMapsClient, RateLimiterService rateLimiterService, AppProperties appProperties) {
 		this.olaMapsClient = olaMapsClient;
@@ -55,6 +62,10 @@ public class LocationServiceImpl implements LocationService {
 		this.reverseGeocodeCache = Caffeine.newBuilder()
 				.maximumSize(10_000)
 				.expireAfterWrite(REVERSE_GEOCODE_CACHE_TTL)
+				.build();
+		this.pincodeGeocodeCache = Caffeine.newBuilder()
+				.maximumSize(25_000)
+				.expireAfterWrite(PINCODE_GEOCODE_CACHE_TTL)
 				.build();
 	}
 
@@ -105,6 +116,24 @@ public class LocationServiceImpl implements LocationService {
 						r.addressLine1(), r.city(), r.state(), r.pincode()))
 				.orElseGet(() -> new PlaceDetailsResponse(placeId, null, null, null, null, null, null, null));
 		log.info("Place details requested by user {}: {}", userId, response.formattedAddress() != null ? "found" : "no match");
+		return response;
+	}
+
+	@Override
+	public PincodeGeocodeResponse geocodeByPincode(Long userId, String pincode) {
+		PincodeGeocodeResponse cached = pincodeGeocodeCache.getIfPresent(pincode);
+		if (cached != null) {
+			return cached;
+		}
+
+		consumeQuota("geocode", userId, appProperties.olaMaps().geocode().dailyLimit());
+
+		PincodeGeocodeResponse response = olaMapsClient.geocodeByPincode(pincode)
+				.map(r -> new PincodeGeocodeResponse(r.formattedAddress(), r.addressLine1(), r.city(), r.state(), r.lat(), r.lng()))
+				.orElseGet(() -> new PincodeGeocodeResponse(null, null, null, null, null, null));
+
+		pincodeGeocodeCache.put(pincode, response);
+		log.info("Pincode geocode requested by user {}: {}", userId, response.city() != null ? "found" : "no match");
 		return response;
 	}
 

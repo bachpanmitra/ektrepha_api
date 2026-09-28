@@ -1,6 +1,9 @@
 package com.ektrepha.hourlycare;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,10 +20,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
+
+import com.ektrepha.payment.dto.GatewayOrder;
+import com.ektrepha.payment.service.PaymentGatewayService;
 
 import com.ektrepha.model.AddressLabel;
 import com.ektrepha.model.CaregiverZoneMapping;
@@ -88,6 +95,12 @@ class HourlyCareControllerApiTest {
 	private ZoneAreaRepository zoneAreaRepository;
 	@Autowired
 	private ZoneServicePricingRepository zoneServicePricingRepository;
+	// Mocked rather than relying on Razorpay being "unconfigured" via blank key-id/secret - dev's
+	// real fallback test-mode credentials (see application-dev.yml) are the active profile's
+	// default and would otherwise apply here too, making verifyPaymentSignature reject the fake
+	// signatures these tests post.
+	@MockitoBean
+	private PaymentGatewayService paymentGatewayService;
 
 	private MockMvc mockMvc;
 	private ServiceType childcare;
@@ -100,6 +113,9 @@ class HourlyCareControllerApiTest {
 				.apply(SecurityMockMvcConfigurers.springSecurity())
 				.build();
 		childcare = serviceTypeRepository.findByCode("childcare").orElseThrow();
+		when(paymentGatewayService.createOrder(any(), anyString()))
+				.thenAnswer(inv -> new GatewayOrder("order_test_" + System.nanoTime(), "rzp_test_mockkey", inv.getArgument(0), "INR"));
+		when(paymentGatewayService.verifyPaymentSignature(anyString(), anyString(), anyString())).thenReturn(true);
 
 		zone = zoneAreaRepository.save(ZoneArea.builder()
 				.name("Hourly Care Test Zone " + System.nanoTime())
@@ -174,7 +190,27 @@ class HourlyCareControllerApiTest {
 	}
 
 	@Test
-	void availability_withNoMappedCaregiver_isUnavailable() throws Exception {
+	void price_returnsQuote_withNoCapacityCheck() throws Exception {
+		Parent parent = createParent();
+		// Deliberately no mapped caregiver - neither /price nor /availability gate on capacity;
+		// ops assigns a caregiver after the fact regardless (see availability_withNoMappedCaregiver_stillReturnsQuote).
+		ParentAddress address = createAddress(parent);
+		Children child = createChild(parent);
+		Instant start = Instant.now().plusSeconds(7 * 86400);
+		Instant end = start.plusSeconds(4 * 3600);
+
+		mockMvc.perform(post("/api/v1/hourly-care/price").with(user(parent.getUser().getId().toString()).roles("PARENT"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total", org.hamcrest.Matchers.notNullValue()));
+	}
+
+	@Test
+	void availability_withNoMappedCaregiver_stillReturnsQuote() throws Exception {
+		// No capacity gate - ops assigns a caregiver after the fact regardless of whether one was
+		// mapped to the zone at booking time (see HourlyCareServiceImpl#checkAvailability).
 		Parent parent = createParent();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
@@ -186,8 +222,8 @@ class HourlyCareControllerApiTest {
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
 						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.available", is(false)))
-				.andExpect(jsonPath("$.priceQuote").doesNotExist());
+				.andExpect(jsonPath("$.available", is(true)))
+				.andExpect(jsonPath("$.priceQuote.total", org.hamcrest.Matchers.notNullValue()));
 	}
 
 	@Test
@@ -218,8 +254,10 @@ class HourlyCareControllerApiTest {
 				.andReturn().getResponse().getContentAsString();
 		long paymentId = ((Number) com.jayway.jsonpath.JsonPath.read(initiateResponse, "$.paymentId")).longValue();
 
-		// Confirm payment (stands in for a gateway webhook).
-		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth))
+		// Confirm payment - PaymentGatewayService is mocked to accept any signature (see the
+		// paymentGatewayService field above).
+		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"razorpayPaymentId\":\"pay_test123\",\"razorpaySignature\":\"sig_test123\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status", is("ASSIGNING_CAREGIVER")))
 				.andExpect(jsonPath("$.progress[0].state", is("COMPLETED")))
@@ -266,10 +304,13 @@ class HourlyCareControllerApiTest {
 				.andReturn().getResponse().getContentAsString();
 		long paymentId = ((Number) com.jayway.jsonpath.JsonPath.read(initiateResponse, "$.paymentId")).longValue();
 
-		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth))
+		String confirmBody = "{\"razorpayPaymentId\":\"pay_test123\",\"razorpaySignature\":\"sig_test123\"}";
+		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content(confirmBody))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth))
+		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content(confirmBody))
 				.andExpect(status().isConflict());
 	}
 

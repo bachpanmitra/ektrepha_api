@@ -34,6 +34,13 @@ app:
       template-id: ${MSG91_TEMPLATE_ID}
       otp-variable-name: ${MSG91_OTP_VARIABLE_NAME:OTP}
       sender-id: ${MSG91_SENDER_ID:}
+  # Required here (no default) unlike the base app.razorpay block's blank default - an unconfigured
+  # gateway in prod would silently blind-trust every payment confirmation and webhook signature
+  # (see RazorpayGatewayServiceImpl's "unconfigured" fallback), which is fine for dev but not prod.
+  razorpay:
+    key-id: ${RAZORPAY_KEY_ID}
+    key-secret: ${RAZORPAY_KEY_SECRET}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET}
   mobile-otp:
     # fixed-otp must never be enabled in prod — MobileOtpFixedCodeGuard fails startup if it ever is,
     # on top of this hardcoded false (no MOBILE_OTP_FIXED_ENABLED env var can override it here).

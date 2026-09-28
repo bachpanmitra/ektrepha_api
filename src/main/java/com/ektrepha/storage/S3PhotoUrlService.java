@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import com.ektrepha.config.properties.AppProperties;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -20,6 +21,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
  * read instead of persisted. Centralized here so callers (currently just children's photo) share
  * one bucket/region config and one presign TTL rather than each re-deriving it.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class S3PhotoUrlService {
@@ -31,6 +33,10 @@ public class S3PhotoUrlService {
 	private final AppProperties appProperties;
 
 	public void upload(String key, byte[] content, String contentType) {
+		if (!appProperties.aws().s3().enabled()) {
+			log.info("S3 disabled (app.aws.s3.enabled=false) - skipping real upload for key={}", key);
+			return;
+		}
 		s3Client.putObject(
 				PutObjectRequest.builder()
 						.bucket(appProperties.aws().s3().bucket())
@@ -40,9 +46,9 @@ public class S3PhotoUrlService {
 				RequestBody.fromBytes(content));
 	}
 
-	/** Returns null unchanged when {@code key} is null — most photo fields are unset. */
+	/** Returns null unchanged when {@code key} is null (most photo fields are unset) or when S3 is disabled - no real object exists to sign a URL for. */
 	public String presign(String key) {
-		if (key == null) {
+		if (key == null || !appProperties.aws().s3().enabled()) {
 			return null;
 		}
 		GetObjectRequest getRequest = GetObjectRequest.builder()

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 35
+      author: ektrepha
+      description: Add payment_transaction.gateway_payment_id for the real Razorpay integration
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/035-payment-gateway-reference.sql
+            relativeToChangelogFile: false

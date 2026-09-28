@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Ektrepha — Hourly Care Payment Demo</title>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+  :root { --teal: #0f766e; --teal-light: #e6f4f2; --ink: #0f2027; --muted: #6b7785; --border: #dfe4e8; --danger: #b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f6f8f9; color: var(--ink); margin: 0; padding: 24px; }
+  .app { max-width: 460px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; }
+  .header { background: var(--teal); color: white; padding: 16px 20px; font-weight: 700; font-size: 18px; }
+  .screen { padding: 20px; display: none; }
+  .screen.active { display: block; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  p.subtitle { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=tel], input[type=date], input[type=datetime-local] { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 16px; width: 100%; margin-top: 10px; }
+  button.primary { background: var(--teal); color: white; }
+  button.secondary { background: var(--teal-light); color: var(--teal); }
+  button.link { background: none; color: var(--teal); width: auto; padding: 4px 0; text-decoration: underline; margin-top: 4px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 10px; cursor: pointer; }
+  .card:hover { border-color: var(--teal); }
+  .card .title { font-weight: 600; font-size: 14px; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .status { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-top: 10px; white-space: pre-wrap; }
+  .status.info { background: #eef6ff; color: #1e5fa8; }
+  .status.error { background: #fdecea; color: var(--danger); }
+  .status.ok { background: var(--teal-light); color: var(--teal); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .small { font-size: 12px; color: var(--muted); }
+  .amount { font-size: 28px; font-weight: 700; margin: 8px 0; }
+  .kv { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">Ektrepha — Hourly Care (Payment demo)</div>
+
+  <!-- Login -->
+  <div class="screen active" id="screen-login">
+    <h2>Sign in</h2>
+    <p class="subtitle">Uses the dev fixed-OTP bypass — no real SMS is sent.</p>
+    <label>Mobile number</label>
+    <input type="tel" id="mobileNumber" value="+919999999999" />
+    <button class="primary" id="btnRequestOtp">Send OTP</button>
+    <div id="otpSection" style="display:none">
+      <label>OTP</label>
+      <input type="text" id="otpCode" value="123456" />
+      <button class="primary" id="btnVerifyOtp">Verify</button>
+    </div>
+    <div id="loginStatus"></div>
+  </div>
+
+  <!-- Setup: pick/create child + address -->
+  <div class="screen" id="screen-setup">
+    <h2>Booking details</h2>
+    <p class="subtitle">Pick (or create) a child and an address, then a time window.</p>
+
+    <label>Child</label>
+    <div id="childList"></div>
+    <div class="row">
+      <input type="text" id="newChildName" placeholder="New child's first name" />
+      <button class="secondary" id="btnAddChild" style="margin-top:0">Add child</button>
+    </div>
+
+    <label style="margin-top:16px">Address</label>
+    <div id="addressList"></div>
+    <button class="secondary" id="btnAddAddress">Add a test address</button>
+
+    <label>Start time</label>
+    <input type="datetime-local" id="startTime" />
+    <label>End time (must be after start)</label>
+    <input type="datetime-local" id="endTime" />
+
+    <button class="primary" id="btnGetPrice">Get price</button>
+    <div id="setupStatus"></div>
+  </div>
+
+  <!-- Review -->
+  <div class="screen" id="screen-review">
+    <h2>Review</h2>
+    <div class="amount" id="reviewAmount">—</div>
+    <div class="kv"><span>Child</span><span id="reviewChild">—</span></div>
+    <div class="kv"><span>Address</span><span id="reviewAddress">—</span></div>
+    <div class="kv"><span>Window</span><span id="reviewWindow">—</span></div>
+    <button class="primary" id="btnContinueToPayment">Continue to payment</button>
+    <button class="link" id="btnBackToSetup">Back</button>
+    <div id="reviewStatus"></div>
+  </div>
+
+  <!-- Payment -->
+  <div class="screen" id="screen-payment">
+    <h2>Pay</h2>
+    <div class="amount" id="paymentAmount">—</div>
+    <p class="subtitle" id="paymentNotice">—</p>
+    <button class="primary" id="btnPayUpi">Pay with UPI</button>
+    <button class="secondary" id="btnPayCard">Pay with Card</button>
+    <div id="paymentStatus"></div>
+  </div>
+
+  <!-- Booking status -->
+  <div class="screen" id="screen-status">
+    <h2>Booking status</h2>
+    <div class="kv"><span>Booking ID</span><span id="statusBookingId">—</span></div>
+    <div class="kv"><span>Status</span><span id="statusValue">—</span></div>
+    <button class="secondary" id="btnRefreshStatus">Refresh</button>
+    <button class="link" id="btnStartOver">Start a new booking</button>
+    <div id="statusStatus"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:8080';
+let accessToken = null;
+let challengeId = null;
+
+let selectedChildId = null;
+let selectedAddressId = null;
+let currentPrice = null;    // { amount, currency, ... } from /hourly-care/price
+let currentBookingId = null;
+let currentPaymentId = null;
+let currentRazorpayKeyId = null;
+let currentOrderId = null;
+
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+}
+
+function statusBox(el, message, kind) {
+  el.innerHTML = message ? `<div class="status ${kind}">${message}</div>` : '';
+}
+
+async function api(path, options = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  const res = await fetch(API_BASE + path, Object.assign({}, options, { headers }));
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = new Error((body && body.message) || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+// ---------------------------------------------------------------- Login
+
+document.getElementById('btnRequestOtp').addEventListener('click', async () => {
+  const el = document.getElementById('loginStatus');
+  try {
+    const mobileNumber = document.getElementById('mobileNumber').value.trim();
+    const resp = await api('/api/v1/auth/mobile/otp/request', { method: 'POST', body: JSON.stringify({ mobileNumber }) });
+    challengeId = resp.challengeId;
+    document.getElementById('otpSection').style.display = 'block';
+    statusBox(el, resp.notice || 'OTP sent.', 'info');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
+  const el = document.getElementById('loginStatus');
+  try {
+    const otp = document.getElementById('otpCode').value.trim();
+    const resp = await api('/api/v1/auth/mobile/otp/verify', { method: 'POST', body: JSON.stringify({ challengeId, otp }) });
+    accessToken = resp.accessToken;
+    statusBox(el, `Signed in (${resp.isNewUser ? 'new' : 'returning'} user).`, 'ok');
+    await loadChildren();
+    await loadAddresses();
+    setDefaultTimes();
+    show('screen-setup');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Setup: children
+
+function setDefaultTimes() {
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000); // tomorrow, same time
+  start.setMinutes(0, 0, 0);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // +2h
+  document.getElementById('startTime').value = toLocalInputValue(start);
+  document.getElementById('endTime').value = toLocalInputValue(end);
+}
+
+function toLocalInputValue(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function loadChildren() {
+  const container = document.getElementById('childList');
+  container.innerHTML = '';
+  try {
+    const children = await api('/api/v1/parents/me/children');
+    if (!children.length) {
+      container.innerHTML = '<div class="small">No children yet — add one below.</div>';
+      return;
+    }
+    children.forEach((c, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="title">${c.firstName} ${c.lastName || ''}</div>`;
+      card.addEventListener('click', () => selectChild(c.id, card));
+      container.appendChild(card);
+      if (i === 0) selectChild(c.id, card);
+    });
+  } catch (e) {
+    statusBox(document.getElementById('setupStatus'), e.message, 'error');
+  }
+}
+
+function selectChild(id, cardEl) {
+  selectedChildId = id;
+  document.querySelectorAll('#childList .card').forEach(c => c.style.borderColor = 'var(--border)');
+  if (cardEl) cardEl.style.borderColor = 'var(--teal)';
+}
+
+document.getElementById('btnAddChild').addEventListener('click', async () => {
+  const el = document.getElementById('setupStatus');
+  const firstName = document.getElementById('newChildName').value.trim();
+  if (!firstName) { statusBox(el, 'Enter a first name for the child.', 'error'); return; }
+  try {
+    // dob just needs to be in the past — 3 years old, arbitrary for this demo.
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 3);
+    await api('/api/v1/parents/me/children', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, dob: dob.toISOString().slice(0, 10) }),
+    });
+    document.getElementById('newChildName').value = '';
+    statusBox(el, '', 'info');
+    await loadChildren();
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Setup: addresses
+
+async function loadAddresses() {
+  const container = document.getElementById('addressList');
+  container.innerHTML = '';
+  try {
+    const addresses = await api('/api/v1/parents/me/addresses');
+    if (!addresses.length) {
+      container.innerHTML = '<div class="small">No addresses yet — add one below.</div>';
+      return;
+    }
+    addresses.forEach((a, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="title">${a.label} — ${a.addressLine1}</div><div class="sub">${a.city}, ${a.pincode}</div>`;
+      card.addEventListener('click', () => selectAddress(a.id, card));
+      container.appendChild(card);
+      if (i === 0) selectAddress(a.id, card);
+    });
+  } catch (e) {
+    statusBox(document.getElementById('setupStatus'), e.message, 'error');
+  }
+}
+
+function selectAddress(id, cardEl) {
+  selectedAddressId = id;
+  document.querySelectorAll('#addressList .card').forEach(c => c.style.borderColor = 'var(--border)');
+  if (cardEl) cardEl.style.borderColor = 'var(--teal)';
+}
+
+document.getElementById('btnAddAddress').addEventListener('click', async () => {
+  const el = document.getElementById('setupStatus');
+  try {
+    await api('/api/v1/parents/me/addresses', {
+      method: 'POST',
+      body: JSON.stringify({
+        label: 'HOME', addressLine1: 'Test Flat 1A', pincode: '560001',
+        city: 'Bengaluru', state: 'Karnataka', lat: 12.9716, lng: 77.5946, makePrimary: true,
+      }),
+    });
+    statusBox(el, '', 'info');
+    await loadAddresses();
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Setup -> Review (price)
+
+document.getElementById('btnGetPrice').addEventListener('click', async () => {
+  const el = document.getElementById('setupStatus');
+  if (!selectedChildId || !selectedAddressId) {
+    statusBox(el, 'Select (or add) a child and an address first.', 'error');
+    return;
+  }
+  const startTime = new Date(document.getElementById('startTime').value).toISOString();
+  const endTime = new Date(document.getElementById('endTime').value).toISOString();
+  try {
+    const price = await api('/api/v1/hourly-care/price', {
+      method: 'POST',
+      body: JSON.stringify({ childId: selectedChildId, addressId: selectedAddressId, startTime, endTime }),
+    });
+    currentPrice = { ...price, startTime, endTime };
+    document.getElementById('reviewAmount').textContent = `₹${price.total}`;
+    document.getElementById('reviewChild').textContent = `#${selectedChildId}`;
+    document.getElementById('reviewAddress').textContent = `#${selectedAddressId}`;
+    document.getElementById('reviewWindow').textContent =
+      `${new Date(startTime).toLocaleString()} → ${new Date(endTime).toLocaleString()}`;
+    statusBox(el, '', 'info');
+    show('screen-review');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+document.getElementById('btnBackToSetup').addEventListener('click', () => show('screen-setup'));
+
+// ---------------------------------------------------------------- Review -> Booking
+
+document.getElementById('btnContinueToPayment').addEventListener('click', async () => {
+  const el = document.getElementById('reviewStatus');
+  try {
+    const booking = await api('/api/v1/hourly-care/bookings', {
+      method: 'POST',
+      body: JSON.stringify({
+        childId: selectedChildId, addressId: selectedAddressId,
+        startTime: currentPrice.startTime, endTime: currentPrice.endTime,
+      }),
+    });
+    currentBookingId = booking.id;
+    document.getElementById('paymentAmount').textContent = `₹${booking.totalAmount ?? currentPrice.total}`;
+    statusBox(el, '', 'info');
+    show('screen-payment');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------- Payment
+
+async function initiatePayment(method) {
+  const el = document.getElementById('paymentStatus');
+  try {
+    const resp = await api(`/api/v1/hourly-care/bookings/${currentBookingId}/payment`, {
+      method: 'POST',
+      body: JSON.stringify({ method }),
+    });
+    currentPaymentId = resp.paymentId;
+    currentOrderId = resp.orderId;
+    currentRazorpayKeyId = resp.razorpayKeyId;
+
+    if (currentRazorpayKeyId) {
+      // Real Razorpay test/live key configured (RAZORPAY_KEY_ID/SECRET) — open the actual
+      // web Checkout modal.
+      document.getElementById('paymentNotice').textContent = 'Opening Razorpay Checkout…';
+      openRazorpayCheckout(resp);
+    } else {
+      // No Razorpay keys set locally — RazorpayGatewayServiceImpl short-circuits order
+      // creation and signature verification, so just confirm straight away with stand-in values.
+      document.getElementById('paymentNotice').textContent =
+        'app.razorpay.key-id/key-secret are blank locally, so this simulates a successful charge directly (no real Checkout to open).';
+      await confirmPayment('LOCAL_SIM_PAYMENT_' + Date.now(), 'LOCAL_SIM_SIGNATURE');
+    }
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+}
+
+function openRazorpayCheckout(initiateResp) {
+  const options = {
+    key: currentRazorpayKeyId,
+    amount: undefined, // Razorpay reads the amount from the order itself
+    order_id: currentOrderId,
+    name: 'Ektrepha',
+    description: `Hourly care booking #${currentBookingId}`,
+    handler: async (response) => {
+      await confirmPayment(response.razorpay_payment_id, response.razorpay_signature);
+    },
+    modal: {
+      ondismiss: async () => {
+        statusBox(document.getElementById('paymentStatus'), 'Checkout closed — marking payment as failed.', 'error');
+        await failPayment();
+      },
+    },
+    theme: { color: '#0f766e' },
+  };
+  const rzp = new Razorpay(options);
+  rzp.open();
+}
+
+async function confirmPayment(razorpayPaymentId, razorpaySignature) {
+  const el = document.getElementById('paymentStatus');
+  try {
+    const result = await api(`/api/v1/hourly-care/payments/${currentPaymentId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ razorpayPaymentId, razorpaySignature }),
+    });
+    statusBox(el, 'Payment confirmed.', 'ok');
+    showStatus(result);
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+}
+
+async function failPayment() {
+  try {
+    const result = await api(`/api/v1/hourly-care/payments/${currentPaymentId}/fail`, { method: 'POST' });
+    showStatus(result);
+  } catch (e) {
+    statusBox(document.getElementById('paymentStatus'), e.message, 'error');
+  }
+}
+
+document.getElementById('btnPayUpi').addEventListener('click', () => initiatePayment('UPI'));
+document.getElementById('btnPayCard').addEventListener('click', () => initiatePayment('CARD'));
+
+// ---------------------------------------------------------------- Status
+
+function showStatus(result) {
+  document.getElementById('statusBookingId').textContent = currentBookingId;
+  document.getElementById('statusValue').textContent = result.status || '—';
+  show('screen-status');
+}
+
+document.getElementById('btnRefreshStatus').addEventListener('click', async () => {
+  const el = document.getElementById('statusStatus');
+  try {
+    const resp = await api(`/api/v1/hourly-care/bookings/${currentBookingId}/status`);
+    document.getElementById('statusValue').textContent = resp.status || '—';
+    statusBox(el, '', 'info');
+  } catch (e) {
+    statusBox(el, e.message, 'error');
+  }
+});
+
+document.getElementById('btnStartOver').addEventListener('click', async () => {
+  currentBookingId = null;
+  currentPaymentId = null;
+  currentOrderId = null;
+  currentRazorpayKeyId = null;
+  setDefaultTimes();
+  show('screen-setup');
+});
+</script>
+</body>
+</html>

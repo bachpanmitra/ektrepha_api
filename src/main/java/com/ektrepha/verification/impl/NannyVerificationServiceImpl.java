@@ -1,15 +1,21 @@
 package com.ektrepha.verification.impl;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import com.ektrepha.exception.InvalidVerificationDocumentException;
+import com.ektrepha.exception.NannyNotFoundException;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerification;
 import com.ektrepha.model.NannyVerificationStatus;
@@ -18,6 +24,7 @@ import com.ektrepha.model.VerificationRecordStatus;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.UserRepository;
+import com.ektrepha.storage.S3PhotoUrlService;
 import com.ektrepha.verification.VerificationRollupCalculator;
 import com.ektrepha.verification.service.NannyVerificationService;
 
@@ -29,9 +36,59 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class NannyVerificationServiceImpl implements NannyVerificationService {
 
+	private static final Set<String> ALLOWED_DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp", "application/pdf");
+
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final NannyRepository nannyRepository;
 	private final UserRepository userRepository;
+	private final S3PhotoUrlService s3PhotoUrlService;
+
+	@Override
+	@Transactional
+	public NannyVerification submitDocument(Long userId, VerificationDocType type, MultipartFile file) {
+		Nanny nanny = nannyRepository.findByUserId(userId)
+				.orElseThrow(() -> new NannyNotFoundException("No nanny profile for the current user"));
+
+		if (file == null || file.isEmpty()) {
+			throw new InvalidVerificationDocumentException("No document was uploaded");
+		}
+		String contentType = file.getContentType();
+		if (contentType == null || !ALLOWED_DOCUMENT_CONTENT_TYPES.contains(contentType)) {
+			throw new InvalidVerificationDocumentException("Document must be a JPEG, PNG, WEBP image or a PDF");
+		}
+
+		// A fresh key per upload (never reused), same reasoning as ChildServiceImpl#uploadPhoto -
+		// a resubmission after rejection must not invalidate a presigned URL already handed out
+		// for the old key.
+		String key = "nanny-verification/%d/%s%s".formatted(nanny.getId(), UUID.randomUUID(), extensionFor(contentType));
+		try {
+			s3PhotoUrlService.upload(key, file.getBytes(), contentType);
+		} catch (IOException e) {
+			throw new InvalidVerificationDocumentException("Could not read the uploaded document");
+		}
+
+		NannyVerification record = NannyVerification.builder()
+				.nanny(nanny)
+				.type(type)
+				.s3Key(key)
+				.status(VerificationRecordStatus.PENDING)
+				.build();
+		record = nannyVerificationRepository.save(record);
+
+		recompute(nanny.getId());
+		log.info("Nanny verification document submitted: nannyId={}, type={}, recordId={}", nanny.getId(), type, record.getId());
+		return record;
+	}
+
+	private String extensionFor(String contentType) {
+		return switch (contentType) {
+			case "image/jpeg" -> ".jpg";
+			case "image/png" -> ".png";
+			case "image/webp" -> ".webp";
+			case "application/pdf" -> ".pdf";
+			default -> "";
+		};
+	}
 
 	// Persists the status/reviewer/rejection-reason change on one verification record, then
 	// recomputes the owning nanny's rollup in the same transaction — the trigger point required by

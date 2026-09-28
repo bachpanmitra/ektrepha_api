@@ -44,8 +44,12 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class BookingReadServiceImpl implements BookingReadService {
 
+	// AWAITING_PAYMENT/ASSIGNING_CAREGIVER are the hourly-care pay-first flow's pre-confirmation
+	// statuses (nanny still null) - without them here, a booking a parent just paid for wouldn't
+	// show up in their own "active" list until ops assigns a caregiver.
 	private static final Set<BookingStatus> ACTIVE_STATUSES = EnumSet.of(
-			BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS);
+			BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS,
+			BookingStatus.AWAITING_PAYMENT, BookingStatus.ASSIGNING_CAREGIVER);
 	private static final Set<BookingStatus> HISTORY_STATUSES = EnumSet.of(
 			BookingStatus.COMPLETED, BookingStatus.CANCELLED);
 
@@ -68,7 +72,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 
 		Page<Booking> bookings = bookingRepository.findByParentIdAndStatusIn(parent.get().getId(), statuses, PageRequest.of(page, pageSize, sort));
 
-		List<Long> nannyIds = bookings.getContent().stream().map(b -> b.getNanny().getId()).distinct().toList();
+		List<Long> nannyIds = bookings.getContent().stream()
+				.map(Booking::getNanny).filter(java.util.Objects::nonNull).map(Nanny::getId).distinct().toList();
 		Map<Long, double[]> ratingByNannyId = ratingAggregates(nannyIds);
 		Set<Long> reviewedBookingIds = reviewedBookingIds(bookings.getContent());
 
@@ -86,8 +91,11 @@ public class BookingReadServiceImpl implements BookingReadService {
 		Booking booking = bookingRepository.findDetailByIdAndParentId(bookingId, parent.getId())
 				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
 
-		List<Object[]> aggregate = reviewRepository.findRatingAggregate(booking.getNanny().getId());
-		NannySummary nanny = toNannySummary(booking.getNanny(), aggregate.isEmpty() ? null : aggregate.get(0));
+		NannySummary nanny = null;
+		if (booking.getNanny() != null) {
+			List<Object[]> aggregate = reviewRepository.findRatingAggregate(booking.getNanny().getId());
+			nanny = toNannySummary(booking.getNanny(), aggregate.isEmpty() ? null : aggregate.get(0));
+		}
 		ReviewSummaryResponse review = reviewRepository.findByBookingId(booking.getId()).map(this::toReviewSummary).orElse(null);
 
 		return new BookingDetailResponse(
@@ -98,6 +106,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 				booking.getServiceType().getCode(),
 				booking.getStartTime(),
 				booking.getEndTime(),
+				booking.getCreatedAt(),
 				(int) Duration.between(booking.getStartTime(), booking.getEndTime()).toHours(),
 				addressResponseMapper.toResponse(booking.getAddress()),
 				booking.getTotalAmount(),
@@ -142,7 +151,10 @@ public class BookingReadServiceImpl implements BookingReadService {
 		if ("history".equals(scope)) {
 			return HISTORY_STATUSES;
 		}
-		throw new IllegalArgumentException("scope must be 'active' or 'history'");
+		if ("all".equals(scope)) {
+			return EnumSet.allOf(BookingStatus.class);
+		}
+		throw new IllegalArgumentException("scope must be 'active', 'history', or 'all'");
 	}
 
 	// Batched — one query for every nanny on the page rather than a per-card rating lookup.
@@ -178,15 +190,20 @@ public class BookingReadServiceImpl implements BookingReadService {
 	}
 
 	private BookingCardResponse toCard(Booking booking, Map<Long, double[]> ratingByNannyId, Set<Long> reviewedBookingIds) {
-		double[] rating = ratingByNannyId.get(booking.getNanny().getId());
-		NannySummary nanny = new NannySummary(
-				booking.getNanny().getId(),
-				booking.getNanny().getFirstName(),
-				booking.getNanny().getLastName(),
-				booking.getNanny().getProfilePhotoS3Key(),
-				booking.getNanny().getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
-				rating == null ? null : rating[0],
-				rating == null ? null : (int) rating[1]);
+		// null while a hourly-care pay-first booking is still AWAITING_PAYMENT/ASSIGNING_CAREGIVER -
+		// ops hasn't assigned a caregiver yet (see Booking#nanny).
+		NannySummary nanny = null;
+		if (booking.getNanny() != null) {
+			double[] rating = ratingByNannyId.get(booking.getNanny().getId());
+			nanny = new NannySummary(
+					booking.getNanny().getId(),
+					booking.getNanny().getFirstName(),
+					booking.getNanny().getLastName(),
+					booking.getNanny().getProfilePhotoS3Key(),
+					booking.getNanny().getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
+					rating == null ? null : rating[0],
+					rating == null ? null : (int) rating[1]);
+		}
 
 		boolean reviewPending = booking.getStatus() == BookingStatus.COMPLETED && !reviewedBookingIds.contains(booking.getId());
 

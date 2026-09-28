@@ -19,6 +19,8 @@ public record BookingDetailResponse(
 		String serviceTypeCode,
 		Instant startTime,
 		Instant endTime,
+		// When the booking itself was placed — distinct from startTime/endTime (the care session).
+		Instant createdAt,
 		Integer durationHours,
 		AddressResponse address,
 		BigDecimal totalAmount,

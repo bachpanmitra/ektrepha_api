@@ -21,9 +21,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * One payment attempt against a hourly-care booking (migration 031). No gateway is integrated yet -
- * {@code providerReference} stays unused until one is; {@code confirm}/{@code fail} in
- * HourlyCareServiceImpl stand in for a real gateway webhook.
+ * One payment attempt against a booking (migration 031). Razorpay is wired up via
+ * {@code com.ektrepha.payment} (migration 035): {@code providerReference} holds the Razorpay order
+ * id set at initiate time, and {@code gatewayPaymentId} holds the actual charge id
+ * (razorpay_payment_id) once verified — by the client's signed confirm call or, authoritatively, by
+ * {@code RazorpayWebhookController}.
  */
 @Entity
 @Table(name = "payment_transaction")
@@ -53,6 +55,9 @@ public class PaymentTransaction {
 
 	@Column(name = "provider_reference", length = 100)
 	private String providerReference;
+
+	@Column(name = "gateway_payment_id", length = 100)
+	private String gatewayPaymentId;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;

@@ -51,6 +51,8 @@ import com.ektrepha.exception.InvalidCredentialsException;
 import com.ektrepha.exception.InvalidOtpException;
 import com.ektrepha.exception.InvalidTokenException;
 import com.ektrepha.exception.UserNotFoundException;
+import com.ektrepha.model.Nanny;
+import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Otp;
 import com.ektrepha.model.OtpPurpose;
 import com.ektrepha.model.RefreshToken;
@@ -58,6 +60,7 @@ import com.ektrepha.model.User;
 import com.ektrepha.model.UserSource;
 import com.ektrepha.model.UserStatus;
 import com.ektrepha.model.UserType;
+import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.RefreshTokenRepository;
 import com.ektrepha.repository.UserRepository;
@@ -81,6 +84,7 @@ public class AuthServiceImpl implements AuthService {
 
 	private final UserRepository userRepository;
 	private final ParentRepository parentRepository;
+	private final NannyRepository nannyRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final OtpService otpService;
 	private final MobileOtpService mobileOtpService;
@@ -345,6 +349,7 @@ public class AuthServiceImpl implements AuthService {
 				.userType(request.role())
 				.build();
 		user = userRepository.save(user);
+		createNannyProfileIfNeeded(user);
 
 		emailService.sendVerificationEmail(user.getEmail());
 		log.info("Register completed: userId={}, email={}, phone={}, role={}", user.getId(), user.getEmail(), user.getPhone(), user.getUserType());
@@ -468,6 +473,24 @@ public class AuthServiceImpl implements AuthService {
 			log.warn("Blocked attempt to self-register with role=ADMIN");
 			throw new IllegalArgumentException("ADMIN accounts cannot be self-registered");
 		}
+	}
+
+	// A NANNY-role user previously got only a users row - every nanny-scoped endpoint
+	// (assign, verification documents, service area) resolves via nannyRepository.findByUserId
+	// and 404s until this row exists. request.name() is only collected on this legacy endpoint
+	// (not signup/email|phone|google, which don't ask for a name), so this stays scoped to here.
+	private void createNannyProfileIfNeeded(User user) {
+		if (user.getUserType() != UserType.NANNY) {
+			return;
+		}
+		String[] nameParts = user.getName().trim().split("\\s+", 2);
+		Nanny nanny = Nanny.builder()
+				.user(user)
+				.firstName(nameParts[0])
+				.lastName(nameParts.length > 1 ? nameParts[1] : "")
+				.overallVerificationStatus(NannyVerificationStatus.PENDING)
+				.build();
+		nannyRepository.save(nanny);
 	}
 
 	/** Coerces a bare 10-digit Indian number to E.164 ({@code +91XXXXXXXXXX}) to match how phones are stored (see signupPhone/Firebase). Anything else is passed through unchanged so lookups still fail naturally instead of throwing here. */

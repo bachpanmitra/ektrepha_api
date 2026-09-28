@@ -12,9 +12,11 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -62,7 +64,8 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidFirebaseTokenException.class, InvalidOtpException.class,
 			IllegalArgumentException.class, InvalidSearchParametersException.class, ParentAddressNotFoundException.class,
-			BookingNotEligibleForReviewException.class, InvalidIdentifierException.class, InvalidPhotoException.class })
+			BookingNotEligibleForReviewException.class, InvalidIdentifierException.class, InvalidPhotoException.class,
+			InvalidVerificationDocumentException.class })
 	public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
 	}
@@ -93,6 +96,14 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
 	}
 
+	// A missing required multipart part (e.g. POST .../documents with no "file" field attached) is
+	// caller error, same class of gap as MissingServletRequestParameterException above — without
+	// this handler it falls through to the generic 500 handler below.
+	@ExceptionHandler(MissingServletRequestPartException.class)
+	public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException ex, HttpServletRequest request) {
+		return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+	}
+
 	// A malformed path variable (e.g. GET /nannies/abc where {id} is declared Long) is caller
 	// error, not a server fault — without this handler it falls through to the generic 500 below.
 	// Same class of gap as MissingServletRequestParameterException above; found via the same kind
@@ -116,6 +127,17 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
 		String message = ex.getBindingResult().getFieldErrors().stream()
 				.map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+				.collect(Collectors.joining("; "));
+		return build(HttpStatus.BAD_REQUEST, message.isBlank() ? "Validation failed" : message, request);
+	}
+
+	// A @Validated controller's @RequestParam/@PathVariable constraint (e.g. @Pattern on a pincode)
+	// throws this directly, outside the @Valid @RequestBody path MethodArgumentNotValidException
+	// covers above — without this handler it falls through to the generic 500 handler below.
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
+		String message = ex.getConstraintViolations().stream()
+				.map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
 				.collect(Collectors.joining("; "));
 		return build(HttpStatus.BAD_REQUEST, message.isBlank() ? "Validation failed" : message, request);
 	}

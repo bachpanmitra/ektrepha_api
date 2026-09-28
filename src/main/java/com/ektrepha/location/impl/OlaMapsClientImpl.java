@@ -168,6 +168,43 @@ public class OlaMapsClientImpl implements OlaMapsClient {
 		}
 	}
 
+	@Override
+	public Optional<GeocodeResult> geocodeByPincode(String pincode) {
+		if (!configured()) {
+			return Optional.empty();
+		}
+		try {
+			String body = restClient.get()
+					.uri(uriBuilder -> uriBuilder
+							.path("/places/v1/geocode")
+							.queryParam("address", pincode + ", India")
+							.queryParam("api_key", apiKey)
+							.build())
+					.retrieve()
+					.body(String.class);
+
+			JsonNode first = body == null ? MissingNode.getInstance() : firstResult(MAPPER.readTree(body));
+			if (first.isMissingNode()) {
+				return Optional.empty();
+			}
+			return Optional.of(new GeocodeResult(
+					textOrNull(first, "formatted_address"),
+					// A bare pincode has no street/house data — administrative_area_level_3 is the
+					// closest thing Ola gives us to a real place name for it (small towns/tehsils
+					// come back tagged at level_3 rather than "locality" — see Barh/803213), so it's
+					// the best available starting point to prefill address line 1 with.
+					component(first, "locality", "administrative_area_level_3"),
+					component(first, "locality", "administrative_area_level_2"),
+					component(first, "administrative_area_level_1"),
+					component(first, "postal_code"),
+					latLng(first, "lat", 0),
+					latLng(first, "lng", 0)));
+		} catch (Exception e) {
+			log.warn("Ola Maps geocode-by-pincode failed: {}", e.getMessage());
+			return Optional.empty();
+		}
+	}
+
 	private boolean configured() {
 		return apiKey != null && !apiKey.isBlank();
 	}
