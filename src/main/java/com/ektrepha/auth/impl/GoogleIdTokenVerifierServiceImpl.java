@@ -52,7 +52,8 @@ public class GoogleIdTokenVerifierServiceImpl implements GoogleIdTokenVerifierSe
 		GoogleIdToken.Payload payload = idToken.getPayload();
 		String name = (String) payload.get("name");
 		log.debug("Verified Google ID token: googleId={}, email={}", payload.getSubject(), payload.getEmail());
-		return new GoogleIdentity(payload.getSubject(), payload.getEmail(), name);
+		boolean emailVerified = Boolean.TRUE.equals(payload.getEmailVerified());
+		return new GoogleIdentity(payload.getSubject(), payload.getEmail(), name, emailVerified);
 	}
 
 }

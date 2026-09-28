@@ -49,8 +49,8 @@ import java.math.BigDecimal;
 
 /**
  * HTTP-level coverage for B4 (cancel), B5 (contact), H4 (rebook), and real booking creation
- * (replacing the old placeholder stub). Uses pincode 560038 / zone 80, part of the Bangalore
- * seed data (migrations 009-012) which already has active childcare pricing — see
+ * (replacing the old placeholder stub). Uses pincode 560034 (Koramangala), part of the Bangalore
+ * seed data (migration 011) which has active childcare pricing (560038/Indiranagar is not migration-seeded) — see
  * {@code docs/test-cases/} conventions for why a seeded fixture is used instead of building a
  * zone/pricing row from scratch in every test.
  */
@@ -58,7 +58,7 @@ import java.math.BigDecimal;
 @Transactional
 class BookingWriteControllerApiTest {
 
-	private static final String SEEDED_PINCODE = "560038";
+	private static final String SEEDED_PINCODE = "560034";
 
 	@Autowired
 	private WebApplicationContext webApplicationContext;

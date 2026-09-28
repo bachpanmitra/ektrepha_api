@@ -8,5 +8,6 @@ public record GoogleLoginResponse(
 		String name,
 		UserType role,
 		String accessToken,
-		String refreshToken) {
+		String refreshToken,
+		boolean isNewUser) {
 }

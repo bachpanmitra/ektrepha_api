@@ -225,6 +225,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
+					<argLine>-Duser.timezone=UTC</argLine>
 					<!--
 						RateLimitFilter's per-IP token bucket (application.yml: app.rate-limit) is a
 						singleton bean shared across every @SpringBootTest class in one JVM (Spring

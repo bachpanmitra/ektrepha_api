@@ -48,7 +48,7 @@ import com.ektrepha.repository.UserRepository;
 @Transactional
 class NannyBookingControllerApiTest {
 
-	private static final String SEEDED_PINCODE = "560038";
+	private static final String SEEDED_PINCODE = "560034";
 
 	@Autowired
 	private WebApplicationContext webApplicationContext;
