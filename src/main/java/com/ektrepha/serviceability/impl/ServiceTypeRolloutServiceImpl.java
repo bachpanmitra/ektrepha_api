@@ -1,7 +1,11 @@
 package com.ektrepha.serviceability.impl;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -64,6 +68,25 @@ public class ServiceTypeRolloutServiceImpl implements ServiceTypeRolloutService 
 		}
 
 		return new ServiceTypeRolloutResponse(zoneId, serviceTypeId, serviceType.getCode(), saved.getStatus(), saved.getLaunchedAt());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<ServiceTypeRolloutResponse> listForZone(Long zoneId) {
+		if (!zoneAreaRepository.existsById(zoneId)) {
+			throw new ZoneNotFoundException("No zone with id " + zoneId);
+		}
+		Map<Long, ServiceabilityServiceType> byServiceTypeId = rolloutRepository.findAllByZoneAreaId(zoneId).stream()
+				.collect(Collectors.toMap(sst -> sst.getServiceType().getId(), Function.identity()));
+
+		return serviceTypeRepository.findAll().stream()
+				.map(serviceType -> {
+					ServiceabilityServiceType rollout = byServiceTypeId.get(serviceType.getId());
+					return rollout == null
+							? new ServiceTypeRolloutResponse(zoneId, serviceType.getId(), serviceType.getCode(), ServiceabilityStatus.NOT_PLANNED, null)
+							: new ServiceTypeRolloutResponse(zoneId, serviceType.getId(), serviceType.getCode(), rollout.getStatus(), rollout.getLaunchedAt());
+				})
+				.toList();
 	}
 
 	private void evictServiceTypeStatusCache(Long zoneAreaId) {

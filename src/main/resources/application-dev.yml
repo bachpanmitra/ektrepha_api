@@ -44,8 +44,10 @@ app:
   firebase:
     service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:secrets/firebase-service-account.json}
   # Placeholder values — mobile OTP SMS will fail against the real MSG91 API without a real key,
-  # but the app still starts. fixed-otp is enabled by default here (dev only) with one allowlisted
-  # test number, so mobile-login can be exercised end-to-end without any MSG91 credentials at all.
+  # but the app still starts. fixed-otp is enabled by default here (dev only) with two allowlisted
+  # test numbers (one PARENT, one NANNY — see nanny(id=1)/users(id=4) in the seed data), so both
+  # the parent app's and the nanny app's login can be exercised end-to-end without any MSG91
+  # credentials at all. The staff-otp flow (com.ektrepha.auth.staff) reuses this same allowlist.
   sms:
     msg91:
       auth-key: ${MSG91_AUTH_KEY:dev-placeholder-msg91-auth-key}
@@ -56,7 +58,7 @@ app:
     fixed-otp:
       enabled: ${MOBILE_OTP_FIXED_ENABLED:true}
       code: ${MOBILE_OTP_FIXED_CODE:123456}
-      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999}
+      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999,+919000000002}
   # Real Razorpay TEST-mode credentials (see com.ektrepha.payment) — order creation and webhook
   # signature verification were both verified end-to-end against these on 2026-09-26. Test-mode
   # only, no real money moves, but still a real account credential — rotate in the Razorpay

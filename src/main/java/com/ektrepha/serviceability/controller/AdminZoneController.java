@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ektrepha.serviceability.dto.request.ZoneCreateRequest;
 import com.ektrepha.serviceability.dto.request.ZoneStatusRequest;
 import com.ektrepha.serviceability.dto.request.ZoneUpdateRequest;
+import com.ektrepha.serviceability.dto.response.PincodeResponse;
 import com.ektrepha.serviceability.dto.response.ZoneResponse;
+import com.ektrepha.serviceability.service.PincodeService;
 import com.ektrepha.serviceability.service.ZoneService;
 
 import jakarta.validation.Valid;
@@ -30,10 +32,18 @@ import lombok.RequiredArgsConstructor;
 public class AdminZoneController {
 
 	private final ZoneService zoneService;
+	private final PincodeService pincodeService;
 
 	@GetMapping
 	public ResponseEntity<List<ZoneResponse>> list() {
 		return ResponseEntity.ok(zoneService.listZones());
+	}
+
+	// No pincode listing existed anywhere before this — backs the admin Zones & Pricing screen's
+	// per-zone pincode table.
+	@GetMapping("/{id}/pincodes")
+	public ResponseEntity<List<PincodeResponse>> listPincodes(@PathVariable Long id) {
+		return ResponseEntity.ok(pincodeService.listByZone(id));
 	}
 
 	@PostMapping

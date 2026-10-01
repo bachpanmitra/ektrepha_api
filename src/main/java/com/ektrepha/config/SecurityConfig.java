@@ -61,10 +61,6 @@ public class SecurityConfig {
 						// Razorpay's own signature on the raw body is this endpoint's only auth -
 						// see RazorpayWebhookController.
 						.requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook/**").permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/{id}/assign").permitAll()
-						// For local testing only, per explicit ask - approving a verification
-						// document normally belongs behind ADMIN.
-						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-verification/documents/{id}/approve").permitAll()
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/nanny-verification/**").hasAnyRole("NANNY", "ADMIN")
 						.requestMatchers("/api/v1/parents/me/**").hasRole("PARENT")
@@ -73,6 +69,10 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/hourly-care/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/hourly-care/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/**").hasRole("NANNY")
+					.requestMatchers(HttpMethod.GET, "/api/v1/nanny-bookings/**").hasRole("NANNY")
+						.requestMatchers("/api/v1/nanny-leave/**").hasRole("NANNY")
+						.requestMatchers("/api/v1/nanny-sos/**").hasRole("NANNY")
+						.requestMatchers("/api/v1/incidents/**").hasAnyRole("NANNY", "PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/locations/reverse-geocode").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/locations/autocomplete", "/api/v1/locations/place-details").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/nanny-search/languages", "/api/v1/nanny-search/skills").authenticated()

@@ -23,6 +23,13 @@ public interface NannyVerificationService {
 	NannyVerification submitDocument(Long userId, VerificationDocType type, MultipartFile file);
 
 	/**
+	 * Same as {@link #submitDocument(Long, VerificationDocType, MultipartFile)}, but for an ADMIN
+	 * uploading on behalf of a nanny identified directly by {@code nannyId} (e.g. a physical document
+	 * collected in person), rather than resolving the nanny from the caller's own user id.
+	 */
+	NannyVerification submitDocumentForNanny(Long nannyId, VerificationDocType type, MultipartFile file);
+
+	/**
 	 * Updates one verification record's status/reviewer/rejection-reason and recomputes the owning
 	 * nanny's rollup in the same transaction. This is the sole trigger point for
 	 * overall_verification_status changes — no other code path may change it.

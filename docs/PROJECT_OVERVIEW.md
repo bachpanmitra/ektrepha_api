@@ -159,6 +159,21 @@ Filter order: `RateLimitFilter` → `TraceIdFilter` → `JwtAuthenticationFilter
 - **CODEOWNERS** — requires `bachpanmitra` approval on all paths.
 - **Docs** (`docs/`) — this file, plus `adr/0001-api-gateway-and-versioning.md`, Postman collection, runbooks for email/SMS auth setup, Nginx setup, SSL setup, and `test-cases/`.
 
+## 10. Admin — Bookings for Ops (`com.ektrepha.admin`)
+
+Read-mostly endpoints backing the internal Ops admin portal (`ektrepha-web`'s `/admin`), all role-gated `ADMIN` via SecurityConfig's blanket `/api/v1/admin/**` rule:
+
+- `AdminBookingController` — `GET /admin/bookings?status=&from=&to=&zoneId=&serviceTypeId=&q=&page=&size=` (paginated list; `from`/`to` are ISO local dates, resolved in IST), `GET /admin/bookings/{id}` (full detail incl. care notes and payment status), `GET /admin/bookings/{id}/candidates` ("Assign a nanny" candidate list — every nanny actively mapped to the booking's zone/service via `caregiver_zone_mapping`, sorted same-family-first then distance then fewest hours booked this week; see `AdminBookingCandidateRepository` for the hand-built geo query).
+- `AdminDashboardController` — `GET /admin/dashboard/today` (KPI counts + "need a nanny"/"live shifts" lists, computed from real `Booking` rows). **`lateOrNoCheckIn`, `nanniesOnLeave`, `openSosCount` and `pendingApprovalsCount` are hardcoded 0** — there is no Attendance/Leave/SOS/Approvals schema yet; the fields are kept in the response shape so the frontend dashboard can be built once against the final shape, ahead of those tables landing.
+- `AdminParentController` — `GET /admin/parents?q=&page=&size=`, `GET /admin/parents/{id}` — read-only, with batched children/booking counts.
+- `AdminBookingCandidateResponse.onTimeRate` is always null for the same reason — no check-in/attendance data exists to compute it from.
+- Actual assignment (`POST /admin/hourly-care/bookings/{id}/assign`) lives in `com.ektrepha.hourlycare.controller.HourlyCareAdminController`, not this package — see §hourlycare above.
+- No new migration — every query reads existing `booking`/`parent`/`nanny`/`caregiver_zone_mapping` tables. An `admin_audit_log` table for write actions (assign, approve/reject, payroll finalise) is still pending (Phase B).
+
+**Phase 0 security fix (this change):** `POST /api/v1/nanny-bookings/{id}/assign` (a fully public duplicate of the ADMIN-only assign call) has been deleted outright, and `POST /api/v1/nanny-verification/documents/{id}/approve` now requires `@PreAuthorize("hasRole('ADMIN')")` instead of being `permitAll()`. Both were previously callable by anyone with no bearer token.
+
+---
+
 ## Tests
 
 `src/test/java/com/ektrepha/`: `EktrephaApplicationTests` (context load), `config/RateLimiterServiceImplTest`, `verification/NannyVerificationRecomputeTest`, `pricing/{PricingControllerApiTest, DemandPricingServiceTest, PricingServiceTest}`, `serviceability/{ServiceabilitySearchServiceTest, ServiceTypeRolloutEventTest, ServiceabilityControllerApiTest}`. Notably **no test coverage yet** for the `auth` package (OTP, login, signup, rate limiting integration) or `bookingrequest`/`nannysearch` packages.

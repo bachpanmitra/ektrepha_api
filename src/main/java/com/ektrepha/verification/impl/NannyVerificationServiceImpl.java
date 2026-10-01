@@ -48,7 +48,18 @@ public class NannyVerificationServiceImpl implements NannyVerificationService {
 	public NannyVerification submitDocument(Long userId, VerificationDocType type, MultipartFile file) {
 		Nanny nanny = nannyRepository.findByUserId(userId)
 				.orElseThrow(() -> new NannyNotFoundException("No nanny profile for the current user"));
+		return storeDocument(nanny, type, file);
+	}
 
+	@Override
+	@Transactional
+	public NannyVerification submitDocumentForNanny(Long nannyId, VerificationDocType type, MultipartFile file) {
+		Nanny nanny = nannyRepository.findById(nannyId)
+				.orElseThrow(() -> new NannyNotFoundException("No nanny with id " + nannyId));
+		return storeDocument(nanny, type, file);
+	}
+
+	private NannyVerification storeDocument(Nanny nanny, VerificationDocType type, MultipartFile file) {
 		if (file == null || file.isEmpty()) {
 			throw new InvalidVerificationDocumentException("No document was uploaded");
 		}

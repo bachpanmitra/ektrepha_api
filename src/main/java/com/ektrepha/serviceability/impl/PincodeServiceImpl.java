@@ -138,6 +138,17 @@ public class PincodeServiceImpl implements PincodeService {
 		return null;
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public List<PincodeResponse> listByZone(Long zoneAreaId) {
+		if (!zoneAreaRepository.existsById(zoneAreaId)) {
+			throw new ZoneNotFoundException("No zone with id " + zoneAreaId);
+		}
+		return pincodeRepository.findAllByZoneAreaIdOrderByPincodeAsc(zoneAreaId).stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
 	private void evictPincodeCache(String pincode) {
 		Cache cache = cacheManager.getCache(CacheConfig.ZONE_BY_PINCODE);
 		if (cache != null) {

@@ -1,6 +1,7 @@
 package com.ektrepha.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,19 @@ import com.ektrepha.model.CaregiverZoneMapping;
 public interface CaregiverZoneMappingRepository extends JpaRepository<CaregiverZoneMapping, Long> {
 
 	Optional<CaregiverZoneMapping> findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(Long caregiverId, Long zoneAreaId, Long serviceTypeId);
+
+	// Admin nanny profile's zone-coverage list.
+	@Query("""
+			SELECT czm FROM CaregiverZoneMapping czm
+			JOIN FETCH czm.zoneArea JOIN FETCH czm.serviceType
+			WHERE czm.caregiver.id = :nannyId
+			ORDER BY czm.zoneArea.name ASC
+			""")
+	List<CaregiverZoneMapping> findByCaregiverIdWithZoneAndServiceType(@Param("nannyId") Long nannyId);
+
+	// Admin "Nannies" list's zone-badges column — one batched query for every nanny on the page.
+	@Query("SELECT czm.caregiver.id, czm.zoneArea.name FROM CaregiverZoneMapping czm WHERE czm.caregiver.id IN :nannyIds AND czm.active = true")
+	List<Object[]> findActiveZoneNamesByCaregiverIds(@Param("nannyIds") List<Long> nannyIds);
 
 	// "active + not currently booked" (design doc's own comment on available_caregivers) - a
 	// caregiver mapped to this zone/service who is mid-booking right now must not count as

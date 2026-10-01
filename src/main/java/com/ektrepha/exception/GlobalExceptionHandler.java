@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -28,7 +29,8 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class })
+	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class, ParentNotFoundException.class,
+			ApprovalRequestNotFoundException.class, SosAlertNotFoundException.class, IncidentReportNotFoundException.class })
 	public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}
@@ -46,7 +48,8 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({ DuplicateReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class,
 			AddressInUseException.class, ChildInUseException.class, AccountHasActiveBookingsException.class,
 			NannyUnavailableException.class, BookingNotCancellableException.class, CareUnavailableException.class,
-			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class })
+			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class,
+			RequestAlreadyDecidedException.class, SelfAccountLockoutException.class })
 	public ResponseEntity<ErrorResponse> handleDuplicateReview(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
 	}
@@ -60,6 +63,17 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({ InvalidCredentialsException.class, InvalidTokenException.class })
 	public ResponseEntity<ErrorResponse> handleUnauthorized(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+	}
+
+	// A @PreAuthorize check failing (e.g. a NANNY calling an ADMIN-only endpoint the URL-level
+	// matcher alone permits, like /nanny-verification/**) throws this from within the controller
+	// method's AOP interceptor. Without this handler it falls through to the generic Exception
+	// handler below and returns 500 instead of 403 — this @RestControllerAdvice's handlers run
+	// inside DispatcherServlet's own try/catch, before the exception would otherwise reach
+	// Spring Security's ExceptionTranslationFilter.
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+		return build(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.", request);
 	}
 
 	@ExceptionHandler({ InvalidGoogleTokenException.class, InvalidFirebaseTokenException.class, InvalidOtpException.class,

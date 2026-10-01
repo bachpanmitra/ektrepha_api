@@ -30,4 +30,7 @@ public final class SecurityConstants {
 	public static final String MOBILE_OTP_REQUEST_RATE_LIMIT_PHONE_PREFIX = "mobile-otp-request:phone:";
 	public static final String MOBILE_OTP_REQUEST_RATE_LIMIT_IP_PREFIX = "mobile-otp-request:ip:";
 
+	// --- Staff (nanny app) OTP request rate-limit key (see StaffAuthServiceImpl) ---
+	public static final String STAFF_OTP_REQUEST_RATE_LIMIT_PHONE_PREFIX = "staff-otp-request:phone:";
+
 }

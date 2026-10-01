@@ -18,4 +18,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 	// order id it was given at initiatePayment - see PaymentTransaction#providerReference.
 	Optional<PaymentTransaction> findByProviderReference(String providerReference);
 
+	// Admin booking detail's payment status — the latest attempt regardless of outcome (most bookings
+	// outside the hourly-care pay-first flow have none at all, hence Optional).
+	Optional<PaymentTransaction> findFirstByBookingIdOrderByIdDesc(Long bookingId);
+
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 36
+      author: ektrepha
+      description: Admin portal Phase 5 - leave_request, shift_change_request, attendance_correction_request, sos_alert, incident_report
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/036-approvals-and-safety.sql
+            relativeToChangelogFile: false

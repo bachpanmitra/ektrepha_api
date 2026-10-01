@@ -1,5 +1,6 @@
 package com.ektrepha.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,5 +12,8 @@ public interface ServiceabilityPincodeRepository extends JpaRepository<Serviceab
 	Optional<ServiceabilityPincode> findByPincode(String pincode);
 
 	boolean existsByPincode(String pincode);
+
+	// Admin Zones & Pricing screen's per-zone pincode table.
+	List<ServiceabilityPincode> findAllByZoneAreaIdOrderByPincodeAsc(Long zoneAreaId);
 
 }
