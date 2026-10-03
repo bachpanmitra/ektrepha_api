@@ -213,6 +213,26 @@ class AdminBookingControllerApiTest {
 	}
 
 	@Test
+	void candidates_excludesDeactivatedNanny() throws Exception {
+		// Regression: the admin "deactivate nanny" toggle flips users.is_active, a column distinct
+		// from users.status (ACTIVE/DELETED/DEACTIVATED) that findMappedCandidates filters on — a
+		// deactivated nanny must not still show up as an assignable candidate.
+		Parent parent = createParent("Divya R");
+		ParentAddress address = createAddress(parent);
+		Booking booking = createBooking(parent, null, address, BookingStatus.ASSIGNING_CAREGIVER);
+		Nanny mapped = createMappedNanny("Meera", 12.9716, 77.5946);
+		Nanny deactivated = createMappedNanny("Rina", 12.9716, 77.5946);
+		User deactivatedUser = deactivated.getUser();
+		deactivatedUser.setActive(false);
+		userRepository.save(deactivatedUser);
+
+		mockMvc.perform(get("/api/v1/admin/bookings/" + booking.getId() + "/candidates").with(user("999").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].nannyId", is(mapped.getId().intValue())));
+	}
+
+	@Test
 	void candidates_addressWithNoLatLng_stillReturnsCandidatesWithNullDistance() throws Exception {
 		// Regression: Postgres rejects a null-valued bind parameter it can't infer a type for from
 		// "CASE WHEN :lat IS NULL ..." alone — hit for real on any booking whose address has no

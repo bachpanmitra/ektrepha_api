@@ -4,6 +4,8 @@ import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -54,6 +56,23 @@ public class Review {
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
+
+	// Moderation (migration 040) - a single current-state record, not a history table; see that
+	// migration's comment for why.
+	@Column(name = "status", nullable = false)
+	@Enumerated(EnumType.STRING)
+	@Builder.Default
+	private ReviewStatus status = ReviewStatus.VISIBLE;
+
+	@Column(name = "moderation_reason", length = 500)
+	private String moderationReason;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "moderated_by")
+	private User moderatedBy;
+
+	@Column(name = "moderated_at")
+	private Instant moderatedAt;
 
 	@PrePersist
 	void onCreate() {

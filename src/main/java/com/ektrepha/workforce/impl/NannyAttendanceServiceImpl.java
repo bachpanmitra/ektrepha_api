@@ -5,11 +5,14 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.InvalidBookingTransitionException;
 import com.ektrepha.exception.NannyNotFoundException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.Nanny;
+import com.ektrepha.model.OrderActivityActorType;
+import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.notification.service.PushSenderService;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.NannyRepository;
@@ -27,6 +30,7 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 	private final NannyRepository nannyRepository;
 	private final BookingRepository bookingRepository;
 	private final PushSenderService pushSenderService;
+	private final OrderActivityService orderActivityService;
 
 	@Override
 	@Transactional
@@ -37,6 +41,7 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 		}
 		booking.setCheckedInAt(Instant.now());
 		booking = bookingRepository.save(booking);
+		orderActivityService.log(booking, OrderActivityType.CHECKED_IN, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
 		log.info("Nanny checked in: bookingId={}, nannyId={}", booking.getId(), booking.getNanny().getId());
 		notifyParent(booking, "Your nanny has arrived",
 				nannyFirstName(booking) + " just checked in for booking BK-" + booking.getId() + ".");
@@ -55,6 +60,7 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 		}
 		booking.setCheckedOutAt(Instant.now());
 		booking = bookingRepository.save(booking);
+		orderActivityService.log(booking, OrderActivityType.CHECKED_OUT, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
 		log.info("Nanny checked out: bookingId={}, nannyId={}", booking.getId(), booking.getNanny().getId());
 		notifyParent(booking, "Your nanny has left",
 				nannyFirstName(booking) + " just checked out of booking BK-" + booking.getId() + ".");

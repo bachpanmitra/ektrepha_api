@@ -1,5 +1,7 @@
 package com.ektrepha.payment.controller;
 
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,8 +11,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.OrderActivityActorType;
+import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.PaymentStatus;
 import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.payment.service.PaymentGatewayService;
@@ -44,6 +49,7 @@ public class RazorpayWebhookController {
 	private final PaymentGatewayService paymentGatewayService;
 	private final PaymentTransactionRepository paymentTransactionRepository;
 	private final BookingRepository bookingRepository;
+	private final OrderActivityService orderActivityService;
 
 	@PostMapping("/razorpay")
 	@Transactional
@@ -82,12 +88,16 @@ public class RazorpayWebhookController {
 			transaction.setGatewayPaymentId(paymentId);
 			paymentTransactionRepository.save(transaction);
 			advanceBooking(transaction.getBooking());
+			orderActivityService.log(transaction.getBooking(), OrderActivityType.PAYMENT_SUCCEEDED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("referenceId", paymentId == null ? "" : paymentId, "source", "webhook"));
 			log.info("Razorpay webhook confirmed payment: bookingId={}, paymentId={}, razorpayPaymentId={}",
 					transaction.getBooking().getId(), transaction.getId(), paymentId);
 		} else if ("payment.failed".equals(event)) {
 			transaction.setStatus(PaymentStatus.FAILED);
 			transaction.setGatewayPaymentId(paymentId);
 			paymentTransactionRepository.save(transaction);
+			orderActivityService.log(transaction.getBooking(), OrderActivityType.PAYMENT_FAILED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("source", "webhook"));
 			log.info("Razorpay webhook reported failed payment: bookingId={}, paymentId={}", transaction.getBooking().getId(), transaction.getId());
 		}
 		return ResponseEntity.ok().build();

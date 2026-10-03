@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
@@ -37,6 +38,7 @@ import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
+import com.ektrepha.repository.UserRepository;
 
 /**
  * Covers {@link HourlyCareServiceImpl#status}'s self-heal path for a booking stuck at
@@ -77,6 +79,10 @@ class HourlyCareServiceImplReconciliationTest {
 	private PricingService pricingService;
 	@Mock
 	private AddressResponseMapper addressResponseMapper;
+	@Mock
+	private OrderActivityService orderActivityService;
+	@Mock
+	private UserRepository userRepository;
 
 	private HourlyCareServiceImpl service;
 	private Parent parent;
@@ -88,7 +94,7 @@ class HourlyCareServiceImplReconciliationTest {
 		service = new HourlyCareServiceImpl(parentRepository, bookingRepository, nannyRepository, serviceTypeRepository,
 				parentAddressRepository, parentChildRepository, serviceabilityPincodeRepository,
 				caregiverZoneMappingRepository, paymentTransactionRepository, paymentGatewayService, pricingService,
-				addressResponseMapper);
+				addressResponseMapper, orderActivityService, userRepository);
 
 		User user = User.builder().id(USER_ID).build();
 		parent = Parent.builder().id(1L).user(user).build();
@@ -110,7 +116,7 @@ class HourlyCareServiceImplReconciliationTest {
 
 	@Test
 	void status_capturedAtGateway_advancesBookingAndMarksPaymentSuccess() {
-		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDesc(BOOKING_ID, PaymentStatus.INITIATED))
+		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDescForUpdate(BOOKING_ID, PaymentStatus.INITIATED))
 				.thenReturn(Optional.of(transaction));
 		when(paymentGatewayService.findLatestPayment(ORDER_ID))
 				.thenReturn(Optional.of(new GatewayPaymentStatus("pay_xyz789", true)));
@@ -129,7 +135,7 @@ class HourlyCareServiceImplReconciliationTest {
 
 	@Test
 	void status_failedAtGateway_marksPaymentFailedButLeavesBookingAwaitingPayment() {
-		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDesc(BOOKING_ID, PaymentStatus.INITIATED))
+		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDescForUpdate(BOOKING_ID, PaymentStatus.INITIATED))
 				.thenReturn(Optional.of(transaction));
 		when(paymentGatewayService.findLatestPayment(ORDER_ID))
 				.thenReturn(Optional.of(new GatewayPaymentStatus(null, false)));
@@ -146,7 +152,7 @@ class HourlyCareServiceImplReconciliationTest {
 
 	@Test
 	void status_gatewayHasNoInfoYet_leavesTransactionPendingForNextPoll() {
-		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDesc(BOOKING_ID, PaymentStatus.INITIATED))
+		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDescForUpdate(BOOKING_ID, PaymentStatus.INITIATED))
 				.thenReturn(Optional.of(transaction));
 		when(paymentGatewayService.findLatestPayment(ORDER_ID)).thenReturn(Optional.empty());
 		when(paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDesc(BOOKING_ID, PaymentStatus.SUCCESS))
@@ -169,7 +175,7 @@ class HourlyCareServiceImplReconciliationTest {
 
 		verify(paymentGatewayService, never()).findLatestPayment(any());
 		verify(paymentTransactionRepository, never())
-				.findFirstByBookingIdAndStatusOrderByIdDesc(BOOKING_ID, PaymentStatus.INITIATED);
+				.findFirstByBookingIdAndStatusOrderByIdDescForUpdate(BOOKING_ID, PaymentStatus.INITIATED);
 	}
 
 }

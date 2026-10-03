@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 40
+      author: ektrepha
+      description: Adds review moderation (status/reason/moderated_by/moderated_at) so ops can hide abusive or fake reviews
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/040-review-moderation.sql
+            relativeToChangelogFile: false

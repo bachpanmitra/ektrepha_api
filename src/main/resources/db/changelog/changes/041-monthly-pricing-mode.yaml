@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 41
+      author: ektrepha
+      description: Adds a MONTHLY pricing mode (flat recurring price per area+service) alongside the existing fixed/range hourly modes
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/041-monthly-pricing-mode.sql
+            relativeToChangelogFile: false

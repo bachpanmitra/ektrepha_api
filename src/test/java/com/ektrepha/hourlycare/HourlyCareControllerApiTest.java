@@ -282,6 +282,65 @@ class HourlyCareControllerApiTest {
 	}
 
 	@Test
+	void reassign_onConfirmedNotYetCheckedInBooking_swapsCaregiver() throws Exception {
+		Parent parent = createParent();
+		Nanny original = createMappedNanny();
+		Nanny replacement = createMappedNanny();
+		ParentAddress address = createAddress(parent);
+		Children child = createChild(parent);
+		Instant start = Instant.now().plusSeconds(7 * 86400);
+		Instant end = start.plusSeconds(4 * 3600);
+		var parentAuth = user(parent.getUser().getId().toString()).roles("PARENT");
+
+		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		long bookingId = ((Number) com.jayway.jsonpath.JsonPath.read(createResponse, "$.id")).longValue();
+
+		String initiateResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings/" + bookingId + "/payment").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"UPI\"}"))
+				.andReturn().getResponse().getContentAsString();
+		long paymentId = ((Number) com.jayway.jsonpath.JsonPath.read(initiateResponse, "$.paymentId")).longValue();
+		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"razorpayPaymentId\":\"pay_test123\",\"razorpaySignature\":\"sig_test123\"}"))
+				.andExpect(status().isOk());
+
+		// A booking still ASSIGNING_CAREGIVER (no caregiver yet) isn't reassignable - use assign.
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/reassign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + replacement.getId() + ",\"reason\":\"test\"}"))
+				.andExpect(status().isConflict());
+
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/assign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + original.getId() + "}"))
+				.andExpect(status().isOk());
+
+		// No-show: ops swaps to the replacement caregiver.
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/reassign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + replacement.getId() + ",\"reason\":\"No-show, unreachable\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status", is("CONFIRMED")))
+				.andExpect(jsonPath("$.nannyId", is(replacement.getId().intValue())));
+
+		mockMvc.perform(get("/api/v1/admin/bookings/" + bookingId + "/activity").with(user("999").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.eventType == 'CAREGIVER_REASSIGNED')]", org.hamcrest.Matchers.hasSize(1)))
+				.andExpect(jsonPath("$[?(@.eventType == 'CAREGIVER_REASSIGNED')].metadata.toNannyName", org.hamcrest.Matchers.contains(org.hamcrest.Matchers.containsString("Priya"))));
+
+		// Reassigning to the same caregiver already on it is rejected.
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/reassign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + replacement.getId() + ",\"reason\":\"test\"}"))
+				.andExpect(status().isConflict());
+
+		// A required reason that's blank is rejected at validation.
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/reassign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + original.getId() + ",\"reason\":\"\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void confirmPayment_alreadyConfirmed_isConflict() throws Exception {
 		Parent parent = createParent();
 		createMappedNanny();

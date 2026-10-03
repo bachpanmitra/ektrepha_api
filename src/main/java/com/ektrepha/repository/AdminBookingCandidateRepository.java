@@ -47,7 +47,7 @@ public class AdminBookingCandidateRepository {
 				JOIN users u ON u.id = n.user_id
 				LEFT JOIN nanny_service_area nsa ON nsa.nanny_id = n.id
 				WHERE czm.zone_area_id = :zoneAreaId AND czm.service_type_id = :serviceTypeId AND czm.is_active = true
-				  AND u.status = 0
+				  AND u.status = 0 AND u.is_active = true
 				ORDER BY n.id, distance_m ASC NULLS LAST
 				""";
 

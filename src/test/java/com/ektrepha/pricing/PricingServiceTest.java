@@ -97,6 +97,14 @@ class PricingServiceTest {
 				.active(true).build());
 	}
 
+	private ZoneServicePricing saveMonthlyPricing(BigDecimal monthlyPrice, BigDecimal platformFeePct) {
+		return pricingRepository.save(ZoneServicePricing.builder()
+				.zoneArea(zone).serviceType(childcare).pricingMode(PricingMode.MONTHLY)
+				.monthlyPrice(monthlyPrice)
+				.currency("INR").minBookingHours(BigDecimal.ONE).platformFeePct(platformFeePct)
+				.active(true).build());
+	}
+
 	// The design doc's own worked example: base_rate 300 (midpoint of 200-400... here 250-350),
 	// weekend x1.5 -> 450, x4h -> subtotal 1800, 5% platform fee -> total 1890.
 	@Test
@@ -143,6 +151,40 @@ class PricingServiceTest {
 		assertThat(quote.baseRate()).isEqualByComparingTo("500.00");
 		assertThat(quote.subtotal()).isEqualByComparingTo("500.00");
 		assertThat(quote.combinedMultiplier()).isNull();
+	}
+
+	@Test
+	void monthlyMode_usesFlatMonthlyPriceRegardlessOfHours() {
+		saveMonthlyPricing(new BigDecimal("25000"), new BigDecimal("10"));
+
+		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(9, 0), LocalTime.of(10, 0), null));
+
+		assertThat(quote.pricingMode()).isEqualTo(PricingMode.MONTHLY);
+		assertThat(quote.baseRate()).isEqualByComparingTo("25000");
+		assertThat(quote.subtotal()).isEqualByComparingTo("25000");
+		assertThat(quote.platformFee()).isEqualByComparingTo("2500.00");
+		assertThat(quote.total()).isEqualByComparingTo("27500.00");
+		assertThat(quote.combinedMultiplier()).isNull();
+		assertThat(quote.appliedRule()).isNull();
+	}
+
+	// Day-type/time rules are hourly-pricing machinery - a monthly row must never pick one up, even
+	// when one happens to be configured on it (e.g. left over from switching a row's mode).
+	@Test
+	void monthlyMode_ignoresDayTypeRulesEvenIfConfigured() {
+		ZoneServicePricing pricing = saveMonthlyPricing(new BigDecimal("25000"), BigDecimal.ZERO);
+		ruleRepository.save(ZonePricingRule.builder()
+				.zoneServicePricing(pricing).dayType(DayType.WEEKEND)
+				.startTime(LocalTime.MIN).endTime(LocalTime.of(23, 59, 59))
+				.priceMultiplier(new BigDecimal("1.5")).priority(1).active(true).build());
+
+		// 2026-09-12 is a Saturday - a WEEKEND rule would apply to RANGE/FIXED mode, but must not here.
+		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(14, 0), LocalTime.of(18, 0), null));
+
+		assertThat(quote.appliedRule()).isNull();
+		assertThat(quote.baseRate()).isEqualByComparingTo("25000");
 	}
 
 	@Test

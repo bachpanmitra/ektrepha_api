@@ -75,3 +75,9 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/037-booking-attendance-checkin.yaml
   - include:
       file: classpath:db/changelog/changes/038-caregiver-verification-overhaul.yaml
+  - include:
+      file: classpath:db/changelog/changes/039-order-activity.yaml
+  - include:
+      file: classpath:db/changelog/changes/040-review-moderation.yaml
+  - include:
+      file: classpath:db/changelog/changes/041-monthly-pricing-mode.yaml

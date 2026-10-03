@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.admin.dto.response.AdminAddressResponse;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
@@ -27,6 +28,7 @@ import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminBookingSummaryResponse;
 import com.ektrepha.admin.dto.response.AdminChildRefResponse;
 import com.ektrepha.admin.dto.response.AdminNannyRefResponse;
+import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.dto.response.AdminParentRefResponse;
 import com.ektrepha.admin.service.AdminBookingService;
 import com.ektrepha.exception.BookingNotFoundException;
@@ -34,6 +36,7 @@ import com.ektrepha.exception.NotServiceableException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.ParentAddress;
+import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.repository.AdminBookingCandidateRepository;
 import com.ektrepha.repository.AdminBookingCandidateRepository.CandidateRow;
 import com.ektrepha.repository.BookingRepository;
@@ -65,6 +68,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final AdminBookingCandidateRepository candidateRepository;
 	private final PaymentTransactionRepository paymentTransactionRepository;
 	private final ReviewRepository reviewRepository;
+	private final OrderActivityService orderActivityService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -83,8 +87,14 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 		Booking booking = bookingRepository.findDetailById(id)
 				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + id));
 
-		String paymentStatus = paymentTransactionRepository.findFirstByBookingIdOrderByIdDesc(id)
-				.map(t -> t.getStatus().name()).orElse(null);
+		PaymentTransaction latestPayment = paymentTransactionRepository.findFirstByBookingIdOrderByIdDesc(id).orElse(null);
+		String paymentStatus = latestPayment == null ? null : latestPayment.getStatus().name();
+		// gatewayPaymentId (the actual Razorpay charge id) only exists once a payment is verified -
+		// providerReference (the order id, set at initiatePayment) is the best reference available
+		// before that, so a payment stuck INITIATED still shows ops something to look up.
+		String paymentReferenceId = latestPayment == null ? null
+				: latestPayment.getGatewayPaymentId() != null ? latestPayment.getGatewayPaymentId() : latestPayment.getProviderReference();
+		String paymentMethod = latestPayment == null ? null : latestPayment.getMethod().name();
 
 		AdminNannyRefResponse nanny = booking.getNanny() == null ? null
 				: new AdminNannyRefResponse(booking.getNanny().getId(), AdminBookingMapper.fullName(booking.getNanny().getFirstName(), booking.getNanny().getLastName()),
@@ -100,8 +110,18 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 		return new AdminBookingDetailResponse(
 				booking.getId(), booking.getServiceType().getCode(), booking.getServiceType().getName(), booking.getStatus().name(),
 				booking.getStartTime(), booking.getEndTime(), booking.getCareNotes(), booking.getTotalAmount(), paymentStatus,
+				paymentReferenceId, paymentMethod,
 				new AdminParentRefResponse(booking.getParent().getId(), AdminBookingMapper.resolveParentName(booking), booking.getParent().getUser().getPhone(), booking.getParent().getUser().getEmail()),
 				nanny, child, address, booking.getCreatedAt(), booking.getCheckedInAt(), booking.getCheckedOutAt());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<AdminOrderActivityResponse> activity(Long id) {
+		if (!bookingRepository.existsById(id)) {
+			throw new BookingNotFoundException("No booking found with id " + id);
+		}
+		return orderActivityService.findForBooking(id);
 	}
 
 	@Override

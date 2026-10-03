@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 39
+      author: ektrepha
+      description: Adds order_activity, a per-booking event log (created/assigned/checked-in/checked-out/payment)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/039-order-activity.sql
+            relativeToChangelogFile: false

@@ -67,8 +67,12 @@ public class PricingServiceImpl implements PricingService {
 				.orElseThrow(() -> new NotServiceableException("No active pricing configured for this zone and service type"));
 
 		DayType dayType = dayTypeResolver.resolve(request.bookingDate(), pricing.getZoneArea().getState());
-		ZonePricingRule rule = ruleRepository.findApplicableRules(pricing.getId(), dayType, request.startTime(), request.endTime())
-				.stream().findFirst().orElse(null);
+		// Day-type/time rules are hourly-pricing machinery (a weekend or holiday window within a
+		// single day) and have no meaning for a flat monthly retainer, so a monthly row never looks
+		// one up — no rule ever applies to it.
+		ZonePricingRule rule = pricing.getPricingMode() != PricingMode.MONTHLY
+				? ruleRepository.findApplicableRules(pricing.getId(), dayType, request.startTime(), request.endTime()).stream().findFirst().orElse(null)
+				: null;
 
 		BigDecimal hours = enforceMinimumHours(calculateHours(request.startTime(), request.endTime()), pricing.getMinBookingHours());
 
@@ -78,6 +82,11 @@ public class PricingServiceImpl implements PricingService {
 
 		if (pricing.getPricingMode() == PricingMode.FIXED) {
 			baseRate = (rule != null && rule.getAdjustedFixPrice() != null) ? rule.getAdjustedFixPrice() : pricing.getFixPrice();
+			subtotal = baseRate;
+		} else if (pricing.getPricingMode() == PricingMode.MONTHLY) {
+			// A flat recurring rate — independent of booking hours, day-type rules, and demand
+			// surge, none of which have meaning for a monthly retainer.
+			baseRate = pricing.getMonthlyPrice();
 			subtotal = baseRate;
 		} else {
 			BigDecimal effectiveRate = resolveEffectiveRate(request, pricing);

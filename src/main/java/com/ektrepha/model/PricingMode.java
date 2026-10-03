@@ -1,10 +1,11 @@
 package com.ektrepha.model;
 
-/** {@code zone_service_pricing.pricing_mode} — whether a zone×service combo quotes a flat price or an hourly range. */
+/** {@code zone_service_pricing.pricing_mode} — whether a zone×service combo quotes a flat price, an hourly range, or a flat monthly rate. */
 public enum PricingMode implements StringCodedEnum {
 
 	FIXED("fixed"),
-	RANGE("range");
+	RANGE("range"),
+	MONTHLY("monthly");
 
 	private final String value;
 

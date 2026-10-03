@@ -23,6 +23,9 @@ public interface ZoneServicePricingRepository extends JpaRepository<ZoneServiceP
 
 	List<ZoneServicePricing> findAllByZoneAreaId(Long zoneAreaId);
 
+	// Admin bulk rate-entry screen's one row per area for a given service type.
+	List<ZoneServicePricing> findAllByServiceTypeId(Long serviceTypeId);
+
 	boolean existsByZoneAreaIdAndServiceTypeId(Long zoneAreaId, Long serviceTypeId);
 
 }

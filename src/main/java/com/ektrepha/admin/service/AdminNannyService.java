@@ -3,10 +3,12 @@ package com.ektrepha.admin.service;
 import com.ektrepha.admin.dto.request.AdminNannyCreateRequest;
 import com.ektrepha.admin.dto.request.AdminNannyStatusChangeRequest;
 import com.ektrepha.admin.dto.request.AdminNannyUpdateRequest;
+import com.ektrepha.admin.dto.request.ReviewModerationRequest;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyDetailResponse;
 import com.ektrepha.admin.dto.response.AdminNannyListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyReviewListResponse;
+import com.ektrepha.admin.dto.response.AdminNannyReviewResponse;
 import com.ektrepha.admin.dto.response.AdminNannyStatusHistoryResponse;
 import com.ektrepha.admin.dto.response.AdminNannyVerificationDocumentResponse;
 import com.ektrepha.model.NannyVerificationStatus;
@@ -42,5 +44,8 @@ public interface AdminNannyService {
 	AdminBookingListResponse roster(Long nannyId, int page, int size);
 
 	AdminNannyReviewListResponse reviews(Long nannyId, int page, int size);
+
+	/** Hide an abusive/fake review, or restore a previously-hidden one - see {@link ReviewModerationRequest}. */
+	AdminNannyReviewResponse moderateReview(Long nannyId, Long reviewId, ReviewModerationRequest request, Long moderatedByUserId);
 
 }

@@ -19,10 +19,12 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ektrepha.admin.dto.request.AdminNannyCreateRequest;
 import com.ektrepha.admin.dto.request.AdminNannyStatusChangeRequest;
 import com.ektrepha.admin.dto.request.AdminNannyUpdateRequest;
+import com.ektrepha.admin.dto.request.ReviewModerationRequest;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyDetailResponse;
 import com.ektrepha.admin.dto.response.AdminNannyListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyReviewListResponse;
+import com.ektrepha.admin.dto.response.AdminNannyReviewResponse;
 import com.ektrepha.admin.dto.response.AdminNannyStatusHistoryResponse;
 import com.ektrepha.admin.dto.response.AdminNannyVerificationDocumentResponse;
 import com.ektrepha.admin.service.AdminNannyService;
@@ -107,6 +109,14 @@ public class AdminNannyController {
 	public ResponseEntity<AdminNannyReviewListResponse> reviews(@PathVariable Long id,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 		return ResponseEntity.ok(adminNannyService.reviews(id, page, size));
+	}
+
+	// Hide an abusive/fake review (status=HIDDEN) or restore one (status=VISIBLE) - see
+	// ReviewModerationRequest's javadoc on why reason is required both ways.
+	@PostMapping("/{id}/reviews/{reviewId}/status")
+	public ResponseEntity<AdminNannyReviewResponse> moderateReview(Authentication authentication,
+			@PathVariable Long id, @PathVariable Long reviewId, @Valid @RequestBody ReviewModerationRequest request) {
+		return ResponseEntity.ok(adminNannyService.moderateReview(id, reviewId, request, Long.valueOf(authentication.getName())));
 	}
 
 }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
+import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.service.AdminBookingService;
 import com.ektrepha.model.BookingStatus;
 
@@ -47,6 +48,11 @@ public class AdminBookingController {
 	@GetMapping("/{id}/candidates")
 	public ResponseEntity<List<AdminBookingCandidateResponse>> candidates(@PathVariable Long id) {
 		return ResponseEntity.ok(adminBookingService.candidates(id));
+	}
+
+	@GetMapping("/{id}/activity")
+	public ResponseEntity<List<AdminOrderActivityResponse>> activity(@PathVariable Long id) {
+		return ResponseEntity.ok(adminBookingService.activity(id));
 	}
 
 }

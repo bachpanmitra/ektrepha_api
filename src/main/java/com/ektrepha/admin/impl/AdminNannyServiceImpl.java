@@ -1,5 +1,6 @@
 package com.ektrepha.admin.impl;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ektrepha.admin.dto.request.AdminNannyCreateRequest;
 import com.ektrepha.admin.dto.request.AdminNannyStatusChangeRequest;
 import com.ektrepha.admin.dto.request.AdminNannyUpdateRequest;
+import com.ektrepha.admin.dto.request.ReviewModerationRequest;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminBookingSummaryResponse;
 import com.ektrepha.admin.dto.response.AdminNannyDetailResponse;
@@ -28,6 +30,7 @@ import com.ektrepha.admin.dto.response.AdminNannyZoneMappingResponse;
 import com.ektrepha.admin.service.AdminNannyService;
 import com.ektrepha.exception.DuplicateAccountException;
 import com.ektrepha.exception.NannyNotFoundException;
+import com.ektrepha.exception.ReviewNotFoundException;
 import com.ektrepha.exception.ServiceTypeNotFoundException;
 import com.ektrepha.exception.ZoneNotFoundException;
 import com.ektrepha.model.Booking;
@@ -242,11 +245,31 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 			throw new NannyNotFoundException("No nanny with id " + nannyId);
 		}
 		Page<Review> reviews = reviewRepository.findByNannyIdOrderByCreatedAtDesc(nannyId, PageRequest.of(page, size));
-		List<AdminNannyReviewResponse> items = reviews.getContent().stream()
-				.map(r -> new AdminNannyReviewResponse(r.getId(), r.getBooking().getId(),
-						AdminBookingMapper.resolveParentName(r.getBooking()), r.getRating(), r.getComment(), r.getCreatedAt()))
-				.toList();
+		List<AdminNannyReviewResponse> items = reviews.getContent().stream().map(this::toReviewResponse).toList();
 		return new AdminNannyReviewListResponse(items, reviews.getNumber(), reviews.getSize(), reviews.getTotalElements(), reviews.getTotalPages());
+	}
+
+	@Override
+	@Transactional
+	public AdminNannyReviewResponse moderateReview(Long nannyId, Long reviewId, ReviewModerationRequest request, Long moderatedByUserId) {
+		Review review = reviewRepository.findById(reviewId)
+				.filter(r -> r.getNanny().getId().equals(nannyId))
+				.orElseThrow(() -> new ReviewNotFoundException("No review with id " + reviewId + " for nanny " + nannyId));
+
+		review.setStatus(request.status());
+		review.setModerationReason(request.reason());
+		review.setModeratedBy(userRepository.findById(moderatedByUserId).orElse(null));
+		review.setModeratedAt(Instant.now());
+		review = reviewRepository.save(review);
+
+		return toReviewResponse(review);
+	}
+
+	private AdminNannyReviewResponse toReviewResponse(Review r) {
+		return new AdminNannyReviewResponse(r.getId(), r.getBooking().getId(),
+				AdminBookingMapper.resolveParentName(r.getBooking()), r.getRating(), r.getComment(), r.getCreatedAt(),
+				r.getStatus().name(), r.getModerationReason(),
+				r.getModeratedBy() == null ? null : r.getModeratedBy().getName(), r.getModeratedAt());
 	}
 
 	private AdminNannyDetailResponse toDetail(Nanny nanny) {

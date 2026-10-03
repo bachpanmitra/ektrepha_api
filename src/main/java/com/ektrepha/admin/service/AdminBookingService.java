@@ -5,6 +5,7 @@ import java.util.List;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
+import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.model.BookingStatus;
 
 public interface AdminBookingService {
@@ -15,5 +16,7 @@ public interface AdminBookingService {
 	AdminBookingDetailResponse detail(Long id);
 
 	List<AdminBookingCandidateResponse> candidates(Long id);
+
+	List<AdminOrderActivityResponse> activity(Long id);
 
 }

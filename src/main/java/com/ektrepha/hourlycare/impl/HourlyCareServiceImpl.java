@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -15,10 +16,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.exception.BookingNotAwaitingAssignmentException;
 import com.ektrepha.exception.BookingNotFoundException;
+import com.ektrepha.exception.BookingNotReassignableException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
 import com.ektrepha.exception.NannyNotFoundException;
 import com.ektrepha.exception.NannyUnavailableException;
@@ -34,6 +37,7 @@ import com.ektrepha.hourlycare.dto.request.MonthlyAvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentConfirmRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentInitiateRequest;
+import com.ektrepha.hourlycare.dto.request.ReassignCaregiverRequest;
 import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingProgressStep;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
@@ -49,12 +53,15 @@ import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
 import com.ektrepha.model.Nanny;
+import com.ektrepha.model.OrderActivityActorType;
+import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.ParentChild;
 import com.ektrepha.model.PaymentStatus;
 import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.model.ServiceType;
+import com.ektrepha.model.User;
 import com.ektrepha.parent.dto.response.AddressResponse;
 import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.payment.dto.GatewayOrder;
@@ -72,6 +79,7 @@ import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
+import com.ektrepha.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,6 +114,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private final PaymentGatewayService paymentGatewayService;
 	private final PricingService pricingService;
 	private final AddressResponseMapper addressResponseMapper;
+	private final OrderActivityService orderActivityService;
+	private final UserRepository userRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -158,6 +168,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.careNotes(request.careNotes())
 				.build();
 		booking = bookingRepository.save(booking);
+		orderActivityService.log(booking, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null);
 
 		log.info("Hourly-care booking reserved: id={}, parentId={}, amount={}", booking.getId(), parent.getId(), booking.getTotalAmount());
 		return toBookingResponse(booking);
@@ -225,6 +236,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 					.careNotes(request.careNotes())
 					.build();
 			booking = bookingRepository.save(booking);
+			orderActivityService.log(booking, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null);
 			seriesTotal = seriesTotal.add(quote.total());
 
 			if (anchor == null) {
@@ -285,6 +297,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		if (!verified) {
 			transaction.setStatus(PaymentStatus.FAILED);
 			paymentTransactionRepository.save(transaction);
+			orderActivityService.log(booking, OrderActivityType.PAYMENT_FAILED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("reason", "signature_verification_failed", "orderId", String.valueOf(transaction.getProviderReference())));
 			log.warn("Razorpay payment signature verification failed: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
 			throw new PaymentStateException("This payment could not be verified");
 		}
@@ -292,6 +306,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		transaction.setStatus(PaymentStatus.SUCCESS);
 		transaction.setGatewayPaymentId(request.razorpayPaymentId());
 		paymentTransactionRepository.save(transaction);
+		orderActivityService.log(booking, OrderActivityType.PAYMENT_SUCCEEDED, OrderActivityActorType.SYSTEM, null, null,
+				Map.of("referenceId", request.razorpayPaymentId(), "method", transaction.getMethod().name()));
 
 		// One payment settles the whole monthly-care series — every occurrence moves to
 		// ASSIGNING_CAREGIVER together, not just the anchor row the transaction is attached to.
@@ -318,6 +334,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		transaction.setStatus(PaymentStatus.FAILED);
 		paymentTransactionRepository.save(transaction);
+		orderActivityService.log(transaction.getBooking(), OrderActivityType.PAYMENT_FAILED, OrderActivityActorType.PARENT, userId, null,
+				Map.of("reason", "client_reported_failure"));
 
 		// Booking stays AWAITING_PAYMENT - the parent can retry with a fresh initiate call.
 		return toStatusResponse(transaction.getBooking());
@@ -341,7 +359,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			return;
 		}
 		Optional<PaymentTransaction> pending = paymentTransactionRepository
-				.findFirstByBookingIdAndStatusOrderByIdDesc(booking.getId(), PaymentStatus.INITIATED);
+				.findFirstByBookingIdAndStatusOrderByIdDescForUpdate(booking.getId(), PaymentStatus.INITIATED);
 		if (pending.isEmpty()) {
 			return;
 		}
@@ -357,17 +375,21 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			paymentTransactionRepository.save(transaction);
 			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
 			bookingRepository.save(booking);
+			orderActivityService.log(booking, OrderActivityType.PAYMENT_SUCCEEDED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("referenceId", result.paymentId(), "method", transaction.getMethod().name(), "source", "reconciled"));
 			log.info("Reconciled stuck hourly-care payment via Razorpay lookup: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
 		} else {
 			transaction.setStatus(PaymentStatus.FAILED);
 			paymentTransactionRepository.save(transaction);
+			orderActivityService.log(booking, OrderActivityType.PAYMENT_FAILED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("source", "reconciled"));
 			log.info("Reconciled stuck hourly-care payment as failed via Razorpay lookup: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
 		}
 	}
 
 	@Override
 	@Transactional
-	public CaregiverAssignmentResponse assignCaregiver(Long bookingId, AssignCaregiverRequest request) {
+	public CaregiverAssignmentResponse assignCaregiver(Long adminUserId, Long bookingId, AssignCaregiverRequest request) {
 		Booking booking = bookingRepository.findById(bookingId)
 				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
 		if (booking.getStatus() != BookingStatus.ASSIGNING_CAREGIVER) {
@@ -393,8 +415,56 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			throw new NannyUnavailableException("This caregiver already has a conflicting booking for this window");
 		}
 
+		String adminName = userRepository.findById(adminUserId).map(User::getName).orElse(null);
+		orderActivityService.log(booking, OrderActivityType.CAREGIVER_ASSIGNED, OrderActivityActorType.ADMIN, adminUserId, adminName,
+				Map.of("nannyId", nanny.getId(), "nannyName", nanny.getFirstName() + " " + nanny.getLastName()));
+
 		log.info("Hourly-care booking assigned: id={}, nannyId={}", booking.getId(), nanny.getId());
 		return new CaregiverAssignmentResponse(booking.getId(), nanny.getId(), booking.getStatus().name());
+	}
+
+	@Override
+	@Transactional
+	public CaregiverAssignmentResponse reassignCaregiver(Long adminUserId, Long bookingId, ReassignCaregiverRequest request) {
+		Booking booking = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+		if (booking.getNanny() == null) {
+			throw new BookingNotReassignableException("This booking has no caregiver yet - use assign, not reassign");
+		}
+		// CONFIRMED and not yet checked in only - once a caregiver has checked in, swapping mid-shift
+		// would orphan the existing checkedInAt/checkedOutAt timestamps against a caregiver who didn't
+		// earn them. A no-show/last-minute swap always happens before that point.
+		if (booking.getStatus() != BookingStatus.CONFIRMED || booking.getCheckedInAt() != null) {
+			throw new BookingNotReassignableException("This booking isn't eligible for reassignment - it must be CONFIRMED and not yet checked in");
+		}
+
+		Nanny previousNanny = booking.getNanny();
+		if (previousNanny.getId().equals(request.nannyId())) {
+			throw new BookingNotReassignableException("This booking is already assigned to that caregiver");
+		}
+
+		Nanny newNanny = nannyRepository.findById(request.nannyId())
+				.orElseThrow(() -> new NannyNotFoundException("No nanny with id " + request.nannyId()));
+		Long zoneAreaId = resolveZoneAreaId(booking.getAddress());
+		caregiverZoneMappingRepository.findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(newNanny.getId(), zoneAreaId, booking.getServiceType().getId())
+				.orElseThrow(() -> new NannyUnavailableException("This caregiver does not serve this booking's zone/service"));
+
+		booking.setNanny(newNanny);
+		try {
+			bookingRepository.saveAndFlush(booking);
+		} catch (DataIntegrityViolationException e) {
+			throw new NannyUnavailableException("This caregiver already has a conflicting booking for this window");
+		}
+
+		String adminName = userRepository.findById(adminUserId).map(User::getName).orElse(null);
+		orderActivityService.log(booking, OrderActivityType.CAREGIVER_REASSIGNED, OrderActivityActorType.ADMIN, adminUserId, adminName,
+				Map.of(
+						"fromNannyId", previousNanny.getId(), "fromNannyName", previousNanny.getFirstName() + " " + previousNanny.getLastName(),
+						"toNannyId", newNanny.getId(), "toNannyName", newNanny.getFirstName() + " " + newNanny.getLastName(),
+						"reason", request.reason()));
+
+		log.info("Hourly-care booking reassigned: id={}, fromNannyId={}, toNannyId={}, reason={}", booking.getId(), previousNanny.getId(), newNanny.getId(), request.reason());
+		return new CaregiverAssignmentResponse(booking.getId(), newNanny.getId(), booking.getStatus().name());
 	}
 
 	// -------------------------------------------------------------- helpers

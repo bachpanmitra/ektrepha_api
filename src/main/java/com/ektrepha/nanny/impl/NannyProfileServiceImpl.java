@@ -16,6 +16,7 @@ import com.ektrepha.model.NannyVerification;
 import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.Review;
+import com.ektrepha.model.ReviewStatus;
 import com.ektrepha.model.VerificationDocType;
 import com.ektrepha.model.VerificationRecordStatus;
 import com.ektrepha.nanny.dto.response.NannyPublicProfileResponse;
@@ -69,7 +70,7 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 		Long reviewCount = aggregate == null ? null : (Long) aggregate[1];
 
 		List<PublicReviewResponse> recentReviews = reviewRepository
-				.findByNannyIdOrderByCreatedAtDesc(nannyId, PageRequest.of(0, 5))
+				.findByNannyIdAndStatusOrderByCreatedAtDesc(nannyId, ReviewStatus.VISIBLE, PageRequest.of(0, 5))
 				.map(this::toPublicReview)
 				.getContent();
 
@@ -116,7 +117,7 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 	@Transactional(readOnly = true)
 	public NannyReviewListResponse listReviews(Long nannyId, int page, int pageSize) {
 		resolveNanny(nannyId);
-		Page<Review> reviews = reviewRepository.findByNannyIdOrderByCreatedAtDesc(nannyId, PageRequest.of(page, pageSize));
+		Page<Review> reviews = reviewRepository.findByNannyIdAndStatusOrderByCreatedAtDesc(nannyId, ReviewStatus.VISIBLE, PageRequest.of(page, pageSize));
 		Object[] aggregate = firstAggregateRow(nannyId);
 		Double ratingAvg = aggregate == null ? null : (Double) aggregate[0];
 		Long reviewCount = aggregate == null ? 0L : (Long) aggregate[1];

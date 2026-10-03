@@ -7,6 +7,7 @@ import com.ektrepha.hourlycare.dto.request.MonthlyAvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentConfirmRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentInitiateRequest;
+import com.ektrepha.hourlycare.dto.request.ReassignCaregiverRequest;
 import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.CaregiverAssignmentResponse;
@@ -39,7 +40,12 @@ public interface HourlyCareService {
 
 	BookingStatusResponse status(Long userId, Long bookingId);
 
-	// Ops-only (ADMIN role) - no userId scoping, unlike the parent-facing methods above.
-	CaregiverAssignmentResponse assignCaregiver(Long bookingId, AssignCaregiverRequest request);
+	// Ops-only (ADMIN role) - adminUserId isn't a scoping filter like the parent-facing methods
+	// above, it's just who to attribute the CAREGIVER_ASSIGNED activity-log row to.
+	CaregiverAssignmentResponse assignCaregiver(Long adminUserId, Long bookingId, AssignCaregiverRequest request);
+
+	// Emergency-replacement flow: swaps the caregiver on a booking that's already CONFIRMED (not
+	// awaiting assignment like assignCaregiver above) - a no-show or last-minute cancellation.
+	CaregiverAssignmentResponse reassignCaregiver(Long adminUserId, Long bookingId, ReassignCaregiverRequest request);
 
 }

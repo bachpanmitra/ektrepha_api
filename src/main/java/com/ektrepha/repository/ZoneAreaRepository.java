@@ -14,6 +14,9 @@ public interface ZoneAreaRepository extends JpaRepository<ZoneArea, Long> {
 
 	List<ZoneArea> findAllByCityIgnoreCaseAndStateIgnoreCaseAndActiveTrue(String city, String state);
 
+	// Admin bulk rate-entry screen's full area list, grouped visually by city.
+	List<ZoneArea> findAllByOrderByCityAscNameAsc();
+
 	// Nearest-zone-by-centroid via earthdistance (cube/earthdistance extensions, already enabled by
 	// migration 006) - the substitute for PostGIS polygon containment; see migration 008 header.
 	@Query(value = """

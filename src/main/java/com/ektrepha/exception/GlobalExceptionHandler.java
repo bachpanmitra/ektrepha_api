@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class, ParentNotFoundException.class,
 			ApprovalRequestNotFoundException.class, SosAlertNotFoundException.class, IncidentReportNotFoundException.class,
-			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class })
+			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class, ReviewNotFoundException.class })
 	public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}
@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
 			NannyUnavailableException.class, BookingNotCancellableException.class, CareUnavailableException.class,
 			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class,
 			RequestAlreadyDecidedException.class, SelfAccountLockoutException.class, BanEvasionDetectedException.class,
-			NannyNotEligibleForApprovalException.class })
+			NannyNotEligibleForApprovalException.class, BookingNotReassignableException.class })
 	public ResponseEntity<ErrorResponse> handleDuplicateReview(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
 	}
