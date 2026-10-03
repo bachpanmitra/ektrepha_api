@@ -171,4 +171,57 @@ class WorkforceRequestControllerApiTest {
 				.andExpect(status().isForbidden());
 	}
 
+	@Test
+	void checkIn_onOwnBooking_stampsTimestamp() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.checkedInAt").exists())
+				.andExpect(jsonPath("$.checkedOutAt").doesNotExist());
+	}
+
+	@Test
+	void checkIn_twice_isConflict() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
+	void checkOut_withoutCheckIn_isConflict() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
+	void checkOut_afterCheckIn_stampsTimestamp() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.checkedOutAt").exists());
+	}
+
+	@Test
+	void checkIn_onAnotherNannysBooking_isNotFound() throws Exception {
+		Nanny owner = createNanny();
+		Nanny other = createNanny();
+		Booking booking = createBookingFor(owner);
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(other.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isNotFound());
+	}
+
 }

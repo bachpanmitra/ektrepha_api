@@ -18,5 +18,7 @@ public record AdminBookingDetailResponse(
 		AdminNannyRefResponse nanny,
 		AdminChildRefResponse child,
 		AdminAddressResponse address,
-		Instant createdAt) {
+		Instant createdAt,
+		Instant checkedInAt,
+		Instant checkedOutAt) {
 }

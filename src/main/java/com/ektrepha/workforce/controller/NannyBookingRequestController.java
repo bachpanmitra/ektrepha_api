@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ektrepha.workforce.dto.request.ReasonRequest;
+import com.ektrepha.workforce.dto.response.AttendanceResponse;
 import com.ektrepha.workforce.dto.response.RequestCreatedResponse;
+import com.ektrepha.workforce.service.NannyAttendanceService;
 import com.ektrepha.workforce.service.WorkforceRequestService;
 
 import jakarta.validation.Valid;
@@ -28,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class NannyBookingRequestController {
 
 	private final WorkforceRequestService workforceRequestService;
+	private final NannyAttendanceService nannyAttendanceService;
 
 	@PostMapping("/{id}/shift-change-request")
 	public ResponseEntity<RequestCreatedResponse> requestShiftChange(Authentication authentication,
@@ -39,6 +42,16 @@ public class NannyBookingRequestController {
 	public ResponseEntity<RequestCreatedResponse> requestAttendanceCorrection(Authentication authentication,
 			@PathVariable Long id, @Valid @RequestBody ReasonRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(workforceRequestService.requestAttendanceCorrection(userId(authentication), id, request));
+	}
+
+	@PostMapping("/{id}/check-in")
+	public ResponseEntity<AttendanceResponse> checkIn(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(nannyAttendanceService.checkIn(userId(authentication), id));
+	}
+
+	@PostMapping("/{id}/check-out")
+	public ResponseEntity<AttendanceResponse> checkOut(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(nannyAttendanceService.checkOut(userId(authentication), id));
 	}
 
 	private Long userId(Authentication authentication) {

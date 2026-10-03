@@ -17,7 +17,8 @@ final class AdminBookingMapper {
 				booking.getChild() == null ? 0 : 1,
 				booking.getNanny() == null ? null : booking.getNanny().getId(),
 				booking.getNanny() == null ? null : fullName(booking.getNanny().getFirstName(), booking.getNanny().getLastName()),
-				booking.getStartTime(), booking.getEndTime(), booking.getStatus().name());
+				booking.getStartTime(), booking.getEndTime(), booking.getStatus().name(),
+				booking.getCheckedInAt(), booking.getCheckedOutAt(), null);
 	}
 
 	static AdminLiveShiftResponse toLiveShift(Booking booking) {
@@ -27,7 +28,7 @@ final class AdminBookingMapper {
 				booking.getNanny() == null ? null : fullName(booking.getNanny().getFirstName(), booking.getNanny().getLastName()),
 				resolveParentName(booking),
 				booking.getAddress() == null ? null : booking.getAddress().getCity(),
-				booking.getStartTime(), booking.getEndTime());
+				booking.getStartTime(), booking.getEndTime(), booking.getCheckedInAt());
 	}
 
 	// Parent.firstName/lastName is nullable (auto-vivified stub rows, see Parent's own comment) —

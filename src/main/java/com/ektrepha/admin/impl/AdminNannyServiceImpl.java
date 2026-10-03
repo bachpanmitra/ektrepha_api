@@ -1,5 +1,7 @@
 package com.ektrepha.admin.impl;
 
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.admin.dto.request.AdminNannyCreateRequest;
+import com.ektrepha.admin.dto.request.AdminNannyStatusChangeRequest;
 import com.ektrepha.admin.dto.request.AdminNannyUpdateRequest;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminBookingSummaryResponse;
@@ -18,6 +21,7 @@ import com.ektrepha.admin.dto.response.AdminNannyDetailResponse;
 import com.ektrepha.admin.dto.response.AdminNannyListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyReviewListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyReviewResponse;
+import com.ektrepha.admin.dto.response.AdminNannyStatusHistoryResponse;
 import com.ektrepha.admin.dto.response.AdminNannySummaryResponse;
 import com.ektrepha.admin.dto.response.AdminNannyVerificationDocumentResponse;
 import com.ektrepha.admin.dto.response.AdminNannyZoneMappingResponse;
@@ -40,12 +44,15 @@ import com.ektrepha.model.ZoneArea;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
 import com.ektrepha.repository.NannyRepository;
+import com.ektrepha.repository.NannyStatusHistoryRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.ReviewRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.UserRepository;
 import com.ektrepha.repository.ZoneAreaRepository;
 import com.ektrepha.storage.S3PhotoUrlService;
+import com.ektrepha.verification.BanEvasionCheckService;
+import com.ektrepha.verification.IdentityHashUtil;
 import com.ektrepha.verification.service.NannyVerificationService;
 
 import org.springframework.web.multipart.MultipartFile;
@@ -62,10 +69,12 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 	private final ZoneAreaRepository zoneAreaRepository;
 	private final ServiceTypeRepository serviceTypeRepository;
 	private final NannyVerificationRepository nannyVerificationRepository;
+	private final NannyStatusHistoryRepository nannyStatusHistoryRepository;
 	private final ReviewRepository reviewRepository;
 	private final S3PhotoUrlService s3PhotoUrlService;
 	private final BookingRepository bookingRepository;
 	private final NannyVerificationService nannyVerificationService;
+	private final BanEvasionCheckService banEvasionCheckService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -102,7 +111,11 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 	@Override
 	@Transactional
 	public AdminNannyDetailResponse create(AdminNannyCreateRequest request) {
+		if (Period.between(request.dob(), LocalDate.now()).getYears() < 18) {
+			throw new IllegalArgumentException("Caregiver must be at least 18 years old");
+		}
 		String phone = normalizePhone(request.phone());
+		banEvasionCheckService.checkPhoneHash(IdentityHashUtil.sha256Hex(phone));
 		if (userRepository.existsByPhone(phone)) {
 			throw DuplicateAccountException.phone(phone);
 		}
@@ -125,6 +138,7 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 				.user(user)
 				.firstName(request.firstName())
 				.lastName(request.lastName())
+				.dob(request.dob())
 				.educationLevel(request.educationLevel())
 				.yearsExperience(request.yearsExperience())
 				.hourlyRate(request.hourlyRate())
@@ -177,16 +191,35 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 		}
 		return nannyVerificationRepository.findByNannyId(nannyId).stream()
 				.map(v -> new AdminNannyVerificationDocumentResponse(v.getId(), v.getType().name(), v.getStatus().name(),
-						v.getCreatedAt(), v.getReviewedAt(), v.getRejectionReason(), s3PhotoUrlService.presign(v.getS3Key())))
+						v.getCreatedAt(), v.getReviewedAt(), v.getRejectionReason(), s3PhotoUrlService.presign(v.getS3Key()), v.getExpiryDate()))
 				.toList();
 	}
 
 	@Override
 	@Transactional
-	public AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file) {
-		var record = nannyVerificationService.submitDocumentForNanny(nannyId, type, file);
+	public AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file, LocalDate expiryDate) {
+		var record = nannyVerificationService.submitDocumentForNanny(nannyId, type, file, expiryDate);
 		return new AdminNannyVerificationDocumentResponse(record.getId(), record.getType().name(), record.getStatus().name(),
-				record.getCreatedAt(), record.getReviewedAt(), record.getRejectionReason(), s3PhotoUrlService.presign(record.getS3Key()));
+				record.getCreatedAt(), record.getReviewedAt(), record.getRejectionReason(), s3PhotoUrlService.presign(record.getS3Key()), record.getExpiryDate());
+	}
+
+	@Override
+	@Transactional
+	public AdminNannyDetailResponse changeStatus(Long id, AdminNannyStatusChangeRequest request, Long changedByUserId) {
+		nannyVerificationService.changeStatus(id, request.status(), request.reason(), changedByUserId);
+		return toDetail(nannyRepository.findByIdWithUser(id).orElseThrow(() -> new NannyNotFoundException("No nanny with id " + id)));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<AdminNannyStatusHistoryResponse> statusHistory(Long nannyId) {
+		if (!nannyRepository.existsById(nannyId)) {
+			throw new NannyNotFoundException("No nanny with id " + nannyId);
+		}
+		return nannyStatusHistoryRepository.findByNannyIdOrderByChangedAtDesc(nannyId).stream()
+				.map(h -> new AdminNannyStatusHistoryResponse(h.getId(), h.getPreviousStatus().name(), h.getNewStatus().name(),
+						h.getReason(), h.getChangedBy() != null ? h.getChangedBy().getName() : "System", h.getChangedAt()))
+				.toList();
 	}
 
 	@Override
@@ -232,9 +265,11 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 		}
 
 		return new AdminNannyDetailResponse(
-				nanny.getId(), nanny.getFirstName(), nanny.getLastName(), nanny.getUser().getPhone(), nanny.getUser().getEmail(),
+				nanny.getId(), nanny.getFirstName(), nanny.getLastName(), nanny.getUser().getPhone(), nanny.getUser().getEmail(), nanny.getDob(),
 				nanny.getBio(), nanny.getEducationLevel(), nanny.getYearsExperience(), nanny.getHourlyRate(),
-				nanny.getOverallVerificationStatus().name(), nanny.getUser().isActive(), ratingAvg, reviewCount,
+				nanny.getOverallVerificationStatus().name(), nanny.getStatusReason(),
+				nanny.getStatusChangedBy() != null ? nanny.getStatusChangedBy().getName() : null, nanny.getStatusChangedAt(),
+				nanny.getUser().isActive(), ratingAvg, reviewCount,
 				zoneMappings, nanny.getCreatedAt());
 	}
 

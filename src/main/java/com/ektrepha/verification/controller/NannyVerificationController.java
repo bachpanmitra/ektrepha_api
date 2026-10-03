@@ -1,5 +1,7 @@
 package com.ektrepha.verification.controller;
 
+import java.time.LocalDate;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,7 +29,10 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Nanny document verification: a NANNY submits one document per {@link VerificationDocType}, an
- * ADMIN reviews it.
+ * ADMIN reviews it. This is one of several onboarding-signal controllers under
+ * {@code /api/v1/nanny-verification/**} that together feed the rollup - see also
+ * {@code NannyReferenceController}, {@code NannyInterviewController}, {@code NannyTrainingController}
+ * and {@code NannyCodeOfConductController}.
  */
 @Tag(name = "Nanny Verification", description = "Nanny document submission and admin approval.")
 @RestController
@@ -37,13 +42,17 @@ public class NannyVerificationController {
 
 	private final NannyVerificationService nannyVerificationService;
 
-	@Operation(summary = "Submit a verification document", description = "Uploads a document (JPEG/PNG/WEBP/PDF) for the caller's own nanny profile as PENDING.")
+	@Operation(summary = "Submit a verification document", description = "Uploads a document (JPEG/PNG/WEBP/PDF) for the caller's own nanny profile as PENDING. expiryDate is only meaningful for BACKGROUND_CHECK (the PCC).")
 	@PostMapping("/documents")
 	@PreAuthorize("hasRole('NANNY')")
 	public ResponseEntity<VerificationDocumentResponse> uploadDocument(Authentication authentication,
 			@Parameter(description = "Which kind of document this is") @RequestParam("type") VerificationDocType type,
-			@RequestParam("file") MultipartFile file) {
-		NannyVerification record = nannyVerificationService.submitDocument(userId(authentication), type, file);
+			@RequestParam("file") MultipartFile file,
+			@Parameter(description = "Police Clearance Certificate expiry date - required for BACKGROUND_CHECK, ignored otherwise")
+			@RequestParam(value = "expiryDate", required = false) LocalDate expiryDate,
+			@Parameter(description = "The mobile app's own device identifier - checked for ban evasion and recorded on the nanny")
+			@RequestParam(value = "deviceId", required = false) String deviceId) {
+		NannyVerification record = nannyVerificationService.submitDocument(userId(authentication), type, file, expiryDate, deviceId);
 		return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(record));
 	}
 
@@ -68,7 +77,7 @@ public class NannyVerificationController {
 
 	private VerificationDocumentResponse toResponse(NannyVerification record) {
 		return new VerificationDocumentResponse(record.getId(), record.getNanny().getId(), record.getType().name(),
-				record.getStatus().name(), record.getCreatedAt(), record.getReviewedAt());
+				record.getStatus().name(), record.getCreatedAt(), record.getReviewedAt(), record.getExpiryDate());
 	}
 
 	private Long userId(Authentication authentication) {

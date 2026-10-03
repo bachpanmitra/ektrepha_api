@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 37
+      author: ektrepha
+      description: Adds checked_in_at/checked_out_at to booking for nanny-driven attendance
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/037-booking-attendance-checkin.sql
+            relativeToChangelogFile: false

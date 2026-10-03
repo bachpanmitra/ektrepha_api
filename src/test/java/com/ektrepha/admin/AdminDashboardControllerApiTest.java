@@ -22,16 +22,22 @@ import org.springframework.web.context.WebApplicationContext;
 import com.ektrepha.model.AddressLabel;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.Nanny;
+import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
+import com.ektrepha.model.RequestStatus;
 import com.ektrepha.model.ServiceType;
+import com.ektrepha.model.ShiftChangeRequest;
 import com.ektrepha.model.User;
 import com.ektrepha.model.UserSource;
 import com.ektrepha.model.UserType;
 import com.ektrepha.repository.BookingRepository;
+import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
+import com.ektrepha.repository.ShiftChangeRequestRepository;
 import com.ektrepha.repository.UserRepository;
 
 /** HTTP-level coverage for the admin "Today" dashboard endpoint (Prompt 2 Phase A). */
@@ -51,6 +57,10 @@ class AdminDashboardControllerApiTest {
 	private ServiceTypeRepository serviceTypeRepository;
 	@Autowired
 	private BookingRepository bookingRepository;
+	@Autowired
+	private NannyRepository nannyRepository;
+	@Autowired
+	private ShiftChangeRequestRepository shiftChangeRequestRepository;
 
 	private MockMvc mockMvc;
 	private ServiceType childcare;
@@ -100,6 +110,53 @@ class AdminDashboardControllerApiTest {
 				.andExpect(jsonPath("$.openSosCount", greaterThanOrEqualTo(0)))
 				.andExpect(jsonPath("$.pendingApprovalsCount", greaterThanOrEqualTo(0)))
 				.andExpect(jsonPath("$.bookingsNeedingAssignment[?(@.id == " + needsAssignment.getId() + ")]").exists());
+	}
+
+	@Test
+	void today_needsNannyBookingWithNoShiftChangeHistory_reasonIsNewBooking() throws Exception {
+		Parent parent = createParent();
+		ParentAddress address = createAddress(parent);
+		Instant start = Instant.now().plusSeconds(1800);
+		Booking needsAssignment = bookingRepository.save(Booking.builder()
+				.parent(parent).serviceType(childcare).address(address)
+				.startTime(start).endTime(start.plusSeconds(3600)).status(BookingStatus.ASSIGNING_CAREGIVER)
+				.build());
+
+		mockMvc.perform(get("/api/v1/admin/dashboard/today").with(user("999").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.bookingsNeedingAssignment[?(@.id == " + needsAssignment.getId() + ")].reason", org.hamcrest.Matchers.hasItem("New booking")))
+				.andExpect(jsonPath("$.waitingForYou.pendingLeave", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.waitingForYou.pendingShiftChanges", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.waitingForYou.pendingAttendanceCorrections", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.waitingForYou.pendingDocuments", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.absencesToday").isArray());
+	}
+
+	@Test
+	void today_needsNannyBookingFreedByApprovedShiftChange_reasonIsRequestText() throws Exception {
+		Parent parent = createParent();
+		ParentAddress address = createAddress(parent);
+		User nannyUser = userRepository.save(User.builder()
+				.name("Dash Nanny").phone("+9190012" + (System.nanoTime() % 100000))
+				.active(true).emailVerified(true).phoneVerified(true)
+				.userSource(UserSource.PHONE).userType(UserType.NANNY)
+				.build());
+		Nanny nanny = nannyRepository.save(Nanny.builder()
+				.user(nannyUser).firstName("Dash").lastName("Nanny")
+				.overallVerificationStatus(NannyVerificationStatus.PENDING)
+				.build());
+		Instant start = Instant.now().plusSeconds(1800);
+		Booking booking = bookingRepository.save(Booking.builder()
+				.parent(parent).serviceType(childcare).address(address)
+				.startTime(start).endTime(start.plusSeconds(3600)).status(BookingStatus.ASSIGNING_CAREGIVER)
+				.build());
+		shiftChangeRequestRepository.save(ShiftChangeRequest.builder()
+				.booking(booking).nanny(nanny).reason("Feeling unwell").status(RequestStatus.APPROVED).reviewedAt(Instant.now())
+				.build());
+
+		mockMvc.perform(get("/api/v1/admin/dashboard/today").with(user("999").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.bookingsNeedingAssignment[?(@.id == " + booking.getId() + ")].reason", org.hamcrest.Matchers.hasItem("Feeling unwell")));
 	}
 
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 38
+      author: ektrepha
+      description: Caregiver verification overhaul - 6-state status machine, PCC expiry, references, interview, training, code of conduct, ban-evasion lookup, status history
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/038-caregiver-verification-overhaul.sql
+            relativeToChangelogFile: false

@@ -1,9 +1,11 @@
 package com.ektrepha.admin.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,11 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ektrepha.admin.dto.request.AdminNannyCreateRequest;
+import com.ektrepha.admin.dto.request.AdminNannyStatusChangeRequest;
 import com.ektrepha.admin.dto.request.AdminNannyUpdateRequest;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyDetailResponse;
 import com.ektrepha.admin.dto.response.AdminNannyListResponse;
 import com.ektrepha.admin.dto.response.AdminNannyReviewListResponse;
+import com.ektrepha.admin.dto.response.AdminNannyStatusHistoryResponse;
 import com.ektrepha.admin.dto.response.AdminNannyVerificationDocumentResponse;
 import com.ektrepha.admin.service.AdminNannyService;
 import com.ektrepha.model.NannyVerificationStatus;
@@ -63,6 +67,20 @@ public class AdminNannyController {
 		return ResponseEntity.ok(adminNannyService.update(id, request));
 	}
 
+	// Approve/reject/suspend/ban/reinstate — the state-machine transition endpoint. Separate from
+	// `update` (which only ever touches the active flag/profile fields) since a status change
+	// needs a reason, triggers an audit-trail row, and (for BANNED) seeds the ban-evasion lookup.
+	@PostMapping("/{id}/status")
+	public ResponseEntity<AdminNannyDetailResponse> changeStatus(Authentication authentication, @PathVariable Long id,
+			@Valid @RequestBody AdminNannyStatusChangeRequest request) {
+		return ResponseEntity.ok(adminNannyService.changeStatus(id, request, Long.valueOf(authentication.getName())));
+	}
+
+	@GetMapping("/{id}/status-history")
+	public ResponseEntity<List<AdminNannyStatusHistoryResponse>> statusHistory(@PathVariable Long id) {
+		return ResponseEntity.ok(adminNannyService.statusHistory(id));
+	}
+
 	@GetMapping("/{id}/documents")
 	public ResponseEntity<List<AdminNannyVerificationDocumentResponse>> documents(@PathVariable Long id) {
 		return ResponseEntity.ok(adminNannyService.documents(id));
@@ -70,10 +88,12 @@ public class AdminNannyController {
 
 	// Admin uploading a document on the nanny's behalf (e.g. collected in person) — lands as PENDING,
 	// same as the nanny's own /api/v1/nanny-verification/documents submission, reviewed the same way.
+	// expiryDate is only meaningful for BACKGROUND_CHECK (the PCC).
 	@PostMapping("/{id}/documents")
 	public ResponseEntity<AdminNannyVerificationDocumentResponse> uploadDocument(@PathVariable Long id,
-			@RequestParam("type") VerificationDocType type, @RequestParam("file") MultipartFile file) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(adminNannyService.uploadDocument(id, type, file));
+			@RequestParam("type") VerificationDocType type, @RequestParam("file") MultipartFile file,
+			@RequestParam(value = "expiryDate", required = false) LocalDate expiryDate) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(adminNannyService.uploadDocument(id, type, file, expiryDate));
 	}
 
 	// Stands in for a "Roster" tab until a real schedule table exists — see AdminNannyDetailResponse's javadoc.

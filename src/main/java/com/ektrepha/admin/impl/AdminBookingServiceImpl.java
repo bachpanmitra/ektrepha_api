@@ -69,7 +69,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	@Override
 	@Transactional(readOnly = true)
 	public AdminBookingListResponse list(BookingStatus status, String from, String to, Long zoneAreaId, Long serviceTypeId, String q, int page, int size) {
-		String likeQ = (q == null || q.isBlank()) ? null : "%" + q.trim().toLowerCase() + "%";
+		String likeQ = (q == null || q.isBlank()) ? null : "%" + normalizeBookingSearch(q.trim()) + "%";
 		Instant fromInstant = (from == null || from.isBlank()) ? FAR_PAST : LocalDate.parse(from).atStartOfDay(INDIA_ZONE).toInstant();
 		Instant toInstant = (to == null || to.isBlank()) ? FAR_FUTURE : LocalDate.parse(to).plusDays(1).atStartOfDay(INDIA_ZONE).toInstant();
 		Page<Booking> bookings = bookingRepository.searchForAdmin(status, fromInstant, toInstant, zoneAreaId, serviceTypeId, likeQ, PageRequest.of(page, size));
@@ -101,7 +101,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				booking.getId(), booking.getServiceType().getCode(), booking.getServiceType().getName(), booking.getStatus().name(),
 				booking.getStartTime(), booking.getEndTime(), booking.getCareNotes(), booking.getTotalAmount(), paymentStatus,
 				new AdminParentRefResponse(booking.getParent().getId(), AdminBookingMapper.resolveParentName(booking), booking.getParent().getUser().getPhone(), booking.getParent().getUser().getEmail()),
-				nanny, child, address, booking.getCreatedAt());
+				nanny, child, address, booking.getCreatedAt(), booking.getCheckedInAt(), booking.getCheckedOutAt());
 	}
 
 	@Override
@@ -168,6 +168,17 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				.thenComparing(AdminBookingCandidateResponse::hoursBookedThisWeek));
 
 		return candidates;
+	}
+
+	// The admin UI always displays a booking's id as "BK-{id}" (see AdminBookingMapper / the
+	// frontend's `BK-${b.id}`), so that's what ops staff type into the global search box. The id
+	// column itself is just the bare number, so a literal "bk-2041" would never LIKE-match it —
+	// strip that display prefix before the query runs its substring match.
+	private String normalizeBookingSearch(String q) {
+		if (q.regionMatches(true, 0, "bk-", 0, 3)) {
+			return q.substring(3).trim().toLowerCase();
+		}
+		return q.toLowerCase();
 	}
 
 	private Integer ageYears(LocalDate dob) {

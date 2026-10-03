@@ -15,6 +15,7 @@ import com.ektrepha.admin.dto.response.AdminLeaveRequestListResponse;
 import com.ektrepha.admin.dto.response.AdminLeaveRequestResponse;
 import com.ektrepha.admin.dto.response.AdminShiftChangeRequestListResponse;
 import com.ektrepha.admin.dto.response.AdminShiftChangeRequestResponse;
+import com.ektrepha.admin.dto.response.AdminWaitingForYouResponse;
 import com.ektrepha.admin.service.AdminApprovalService;
 import com.ektrepha.exception.ApprovalRequestNotFoundException;
 import com.ektrepha.exception.InvalidBookingTransitionException;
@@ -26,9 +27,11 @@ import com.ektrepha.model.LeaveRequest;
 import com.ektrepha.model.RequestStatus;
 import com.ektrepha.model.ShiftChangeRequest;
 import com.ektrepha.model.User;
+import com.ektrepha.model.VerificationRecordStatus;
 import com.ektrepha.repository.AttendanceCorrectionRequestRepository;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.LeaveRequestRepository;
+import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.ShiftChangeRequestRepository;
 import com.ektrepha.repository.UserRepository;
 
@@ -41,6 +44,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 	private final LeaveRequestRepository leaveRequestRepository;
 	private final ShiftChangeRequestRepository shiftChangeRequestRepository;
 	private final AttendanceCorrectionRequestRepository attendanceCorrectionRequestRepository;
+	private final NannyVerificationRepository nannyVerificationRepository;
 	private final BookingRepository bookingRepository;
 	private final UserRepository userRepository;
 
@@ -147,6 +151,16 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		return leaveRequestRepository.countByStatus(RequestStatus.PENDING)
 				+ shiftChangeRequestRepository.countByStatus(RequestStatus.PENDING)
 				+ attendanceCorrectionRequestRepository.countByStatus(RequestStatus.PENDING);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public AdminWaitingForYouResponse waitingForYouBreakdown() {
+		return new AdminWaitingForYouResponse(
+				leaveRequestRepository.countByStatus(RequestStatus.PENDING),
+				shiftChangeRequestRepository.countByStatus(RequestStatus.PENDING),
+				attendanceCorrectionRequestRepository.countByStatus(RequestStatus.PENDING),
+				nannyVerificationRepository.countByStatus(VerificationRecordStatus.PENDING));
 	}
 
 	private LeaveRequest findLeaveRequest(Long id) {

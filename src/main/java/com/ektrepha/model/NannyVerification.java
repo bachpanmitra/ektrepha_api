@@ -1,6 +1,7 @@
 package com.ektrepha.model;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -48,6 +49,18 @@ public class NannyVerification {
 
 	@Column(name = "vendor_reference_id", length = 100)
 	private String vendorReferenceId;
+
+	/** Only ever set for {@link VerificationDocType#BACKGROUND_CHECK} (the PCC) - {@code com.ektrepha.verification.impl.VerificationExpiryAuditJob} auto-suspends a nanny whose latest VERIFIED PCC has an expiry_date in the past. */
+	@Column(name = "expiry_date")
+	private LocalDate expiryDate;
+
+	/** One-way hash from {@code KycVerificationProvider#verifyIdentity} - only ever set on an {@link VerificationDocType#ID_PROOF} row. Never the raw extracted ID number. */
+	@Column(name = "id_doc_hash", length = 128)
+	private String idDocHash;
+
+	/** One-way hash from {@code KycVerificationProvider#verifyLiveness} - only ever set on a {@link VerificationDocType#LIVENESS_SELFIE} row. Never a reusable biometric template. */
+	@Column(name = "face_embedding_hash", length = 128)
+	private String faceEmbeddingHash;
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "reviewed_by")

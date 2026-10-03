@@ -296,7 +296,7 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 		Object[] ratingAggregate = firstAggregateRow(nanny.getId());
 		NannySummary nannySummary = new NannySummary(
 				nanny.getId(), nanny.getFirstName(), nanny.getLastName(), nanny.getProfilePhotoS3Key(),
-				nanny.getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
+				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
 				ratingAggregate == null ? null : (Double) ratingAggregate[0],
 				ratingAggregate == null ? null : ((Long) ratingAggregate[1]).intValue());
 

@@ -1,6 +1,7 @@
 package com.ektrepha.repository;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,5 +28,14 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 	// Dashboard's "On leave" KPI — nannies with an APPROVED leave request spanning today.
 	@Query("SELECT COUNT(DISTINCT lr.nanny.id) FROM LeaveRequest lr WHERE lr.status = com.ektrepha.model.RequestStatus.APPROVED AND lr.startDate <= :date AND lr.endDate >= :date")
 	long countApprovedCoveringDate(@Param("date") LocalDate date);
+
+	// Dashboard's "Absences today" panel — same coverage rule as countApprovedCoveringDate, but the
+	// actual rows (nanny + reason) rather than just a count.
+	@Query("""
+			SELECT lr FROM LeaveRequest lr JOIN FETCH lr.nanny n JOIN FETCH n.user
+			WHERE lr.status = com.ektrepha.model.RequestStatus.APPROVED AND lr.startDate <= :date AND lr.endDate >= :date
+			ORDER BY n.firstName
+			""")
+	List<LeaveRequest> findApprovedCoveringDate(@Param("date") LocalDate date);
 
 }

@@ -7,6 +7,7 @@ import com.ektrepha.admin.dto.response.AdminLeaveRequestListResponse;
 import com.ektrepha.admin.dto.response.AdminLeaveRequestResponse;
 import com.ektrepha.admin.dto.response.AdminShiftChangeRequestListResponse;
 import com.ektrepha.admin.dto.response.AdminShiftChangeRequestResponse;
+import com.ektrepha.admin.dto.response.AdminWaitingForYouResponse;
 import com.ektrepha.model.RequestStatus;
 
 public interface AdminApprovalService {
@@ -32,5 +33,8 @@ public interface AdminApprovalService {
 
 	/** Sum of pending counts across all three — backs the dashboard's pendingApprovalsCount and the sidebar's Approvals badge. */
 	long countPending();
+
+	/** Per-queue pending counts (leave/shift-change/attendance-correction/documents) for the dashboard's "Waiting for you" panel. */
+	AdminWaitingForYouResponse waitingForYouBreakdown();
 
 }

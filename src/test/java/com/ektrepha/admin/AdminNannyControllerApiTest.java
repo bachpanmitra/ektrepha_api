@@ -68,7 +68,7 @@ class AdminNannyControllerApiTest {
 		String phone = "+9190000" + (System.nanoTime() % 100000);
 		mockMvc.perform(post("/api/v1/admin/nannies").with(user("999").roles("ADMIN"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"firstName\":\"Priya\",\"lastName\":\"Sharma\",\"phone\":\"" + phone + "\"}"))
+				.content("{\"firstName\":\"Priya\",\"lastName\":\"Sharma\",\"phone\":\"" + phone + "\",\"dob\":\"1995-05-05\"}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.firstName", is("Priya")))
 				.andExpect(jsonPath("$.phone", is(phone)))
@@ -83,7 +83,7 @@ class AdminNannyControllerApiTest {
 
 		mockMvc.perform(post("/api/v1/admin/nannies").with(user("999").roles("ADMIN"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"firstName\":\"Another\",\"phone\":\"" + phone + "\"}"))
+				.content("{\"firstName\":\"Another\",\"phone\":\"" + phone + "\",\"dob\":\"1995-05-05\"}"))
 				.andExpect(status().isConflict());
 	}
 

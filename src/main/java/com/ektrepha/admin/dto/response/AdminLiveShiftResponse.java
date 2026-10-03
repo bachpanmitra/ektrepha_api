@@ -9,5 +9,6 @@ public record AdminLiveShiftResponse(
 		String parentName,
 		String city,
 		Instant startTime,
-		Instant endTime) {
+		Instant endTime,
+		Instant checkedInAt) {
 }

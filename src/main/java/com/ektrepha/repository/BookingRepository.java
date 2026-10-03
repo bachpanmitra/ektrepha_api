@@ -127,6 +127,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	@Query(value = """
 			SELECT b FROM Booking b
 			LEFT JOIN FETCH b.nanny n
+			LEFT JOIN n.user nu
 			JOIN FETCH b.parent p
 			JOIN FETCH p.user pu
 			JOIN FETCH b.serviceType
@@ -139,12 +140,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 			  AND (:q IS NULL
 			       OR LOWER(p.firstName) LIKE :q OR LOWER(p.lastName) LIKE :q OR LOWER(pu.name) LIKE :q
 			       OR LOWER(pu.phone) LIKE :q OR LOWER(n.firstName) LIKE :q OR LOWER(n.lastName) LIKE :q
-			       OR CAST(b.id AS string) LIKE :q)
+			       OR LOWER(nu.phone) LIKE :q OR CAST(b.id AS string) LIKE :q)
 			ORDER BY b.startTime DESC
 			""",
 			countQuery = """
 			SELECT COUNT(b) FROM Booking b
 			LEFT JOIN b.nanny n
+			LEFT JOIN n.user nu
 			JOIN b.parent p
 			JOIN p.user pu
 			LEFT JOIN b.address a
@@ -156,7 +158,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 			  AND (:q IS NULL
 			       OR LOWER(p.firstName) LIKE :q OR LOWER(p.lastName) LIKE :q OR LOWER(pu.name) LIKE :q
 			       OR LOWER(pu.phone) LIKE :q OR LOWER(n.firstName) LIKE :q OR LOWER(n.lastName) LIKE :q
-			       OR CAST(b.id AS string) LIKE :q)
+			       OR LOWER(nu.phone) LIKE :q OR CAST(b.id AS string) LIKE :q)
 			""")
 	Page<Booking> searchForAdmin(@Param("status") BookingStatus status, @Param("from") Instant from, @Param("to") Instant to,
 			@Param("zoneAreaId") Long zoneAreaId, @Param("serviceTypeId") Long serviceTypeId, @Param("q") String q, Pageable pageable);
@@ -249,5 +251,20 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 			""",
 			countQuery = "SELECT COUNT(b) FROM Booking b WHERE b.nanny.id = :nannyId")
 	Page<Booking> findByNannyIdForAdmin(@Param("nannyId") Long nannyId, Pageable pageable);
+
+	// Dashboard's lateOrNoCheckIn KPI — native SQL because comparing start_time + a grace interval
+	// against checked_in_at per row isn't portable JPQL. status is a SMALLINT-coded enum
+	// (BookingStatusConverter): 2=CONFIRMED, 3=IN_PROGRESS, the two "should already be under way"
+	// statuses. Only counts shifts whose grace-adjusted start has already passed, so a shift that
+	// starts in ten minutes doesn't get flagged before the nanny is even late.
+	@Query(value = """
+			SELECT COUNT(*) FROM booking b
+			WHERE b.status IN (2, 3)
+			AND b.start_time >= :dayStart AND b.start_time < :dayEnd
+			AND (b.start_time + make_interval(mins => :graceMinutes)) <= :now
+			AND (b.checked_in_at IS NULL OR b.checked_in_at > b.start_time + make_interval(mins => :graceMinutes))
+			""", nativeQuery = true)
+	long countLateOrNoCheckInToday(@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd,
+			@Param("now") Instant now, @Param("graceMinutes") int graceMinutes);
 
 }

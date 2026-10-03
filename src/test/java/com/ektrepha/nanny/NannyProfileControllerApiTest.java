@@ -128,7 +128,7 @@ class NannyProfileControllerApiTest {
 		verify(nanny, VerificationDocType.ID_PROOF, VerificationRecordStatus.VERIFIED);
 		verify(nanny, VerificationDocType.BACKGROUND_CHECK, VerificationRecordStatus.VERIFIED);
 		verify(nanny, VerificationDocType.EDUCATION, VerificationRecordStatus.VERIFIED);
-		nanny.applyRecomputedVerificationStatus(NannyVerificationStatus.VERIFIED);
+		nanny.applyRecomputedVerificationStatus(NannyVerificationStatus.APPROVED);
 		nannyRepository.save(nanny);
 		addReview(nanny, 5, "Wonderful");
 		addReview(nanny, 4, "Great");
@@ -166,15 +166,17 @@ class NannyProfileControllerApiTest {
 		verify(nanny, VerificationDocType.EDUCATION, VerificationRecordStatus.VERIFIED);
 		verify(nanny, VerificationDocType.FIRST_AID, VerificationRecordStatus.PENDING);
 		verify(nanny, VerificationDocType.REFERENCE, VerificationRecordStatus.REJECTED);
-		nanny.applyRecomputedVerificationStatus(NannyVerificationStatus.VERIFIED);
+		nanny.applyRecomputedVerificationStatus(NannyVerificationStatus.APPROVED);
 		nannyRepository.save(nanny);
 
 		mockMvc.perform(get("/api/v1/nannies/" + nanny.getId() + "/verification").with(user(parentAuth).roles("PARENT")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.completedCount", is(3)))
-				.andExpect(jsonPath("$.totalCount", is(5)))
-				// REJECTED on REFERENCE (a non-required type) must not drag the rollup down from VERIFIED.
-				.andExpect(jsonPath("$.overallStatus", is("VERIFIED")));
+				.andExpect(jsonPath("$.totalCount", is(7)))
+				// REJECTED on REFERENCE (a non-required type) must not drag the rollup down - and
+				// recompute isn't invoked here (the nanny's rollup is set directly), so it stays
+				// whatever applyRecomputedVerificationStatus set it to above.
+				.andExpect(jsonPath("$.overallStatus", is("APPROVED")));
 	}
 
 	@Test
@@ -200,11 +202,11 @@ class NannyProfileControllerApiTest {
 	void getVerification_typeWithNoRecordAtAll_reportsPending() throws Exception {
 		Nanny nanny = createNanny();
 		verify(nanny, VerificationDocType.ID_PROOF, VerificationRecordStatus.VERIFIED);
-		// BACKGROUND_CHECK, EDUCATION, FIRST_AID, REFERENCE: no rows at all for this nanny.
+		// BACKGROUND_CHECK, EDUCATION, FIRST_AID, REFERENCE, ADDRESS_PROOF, LIVENESS_SELFIE: no rows at all for this nanny.
 
 		mockMvc.perform(get("/api/v1/nannies/" + nanny.getId() + "/verification").with(user(parentAuth).roles("PARENT")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.items.length()", is(5)))
+				.andExpect(jsonPath("$.items.length()", is(7)))
 				.andExpect(jsonPath("$.items[?(@.type=='BACKGROUND_CHECK')].status", org.hamcrest.Matchers.contains("PENDING")))
 				.andExpect(jsonPath("$.items[?(@.type=='BACKGROUND_CHECK')].verifiedAt", org.hamcrest.Matchers.contains((Object) null)));
 	}

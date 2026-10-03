@@ -94,6 +94,13 @@ public class Booking {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** Stamped by the nanny's own check-in/check-out action (migration 037) — independent of {@link #status}, which other lifecycle actions (start/complete care) own. */
+	@Column(name = "checked_in_at")
+	private Instant checkedInAt;
+
+	@Column(name = "checked_out_at")
+	private Instant checkedOutAt;
+
 	@PrePersist
 	void onCreate() {
 		this.createdAt = Instant.now();

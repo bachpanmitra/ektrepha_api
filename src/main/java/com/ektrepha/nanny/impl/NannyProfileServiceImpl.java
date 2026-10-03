@@ -39,17 +39,21 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 	// stay a server-side, one-place edit.
 	private static final Map<VerificationDocType, String> LABELS = Map.of(
 			VerificationDocType.ID_PROOF, "Government ID",
-			VerificationDocType.BACKGROUND_CHECK, "Background check",
+			VerificationDocType.BACKGROUND_CHECK, "Police Clearance Certificate",
 			VerificationDocType.EDUCATION, "Education",
 			VerificationDocType.FIRST_AID, "First aid certification",
-			VerificationDocType.REFERENCE, "Reference check");
+			VerificationDocType.REFERENCE, "Reference check",
+			VerificationDocType.ADDRESS_PROOF, "Address verification",
+			VerificationDocType.LIVENESS_SELFIE, "Identity selfie match");
 
 	private static final Map<VerificationDocType, String> DESCRIPTIONS = Map.of(
 			VerificationDocType.ID_PROOF, "Government-issued photo ID verified",
-			VerificationDocType.BACKGROUND_CHECK, "Criminal background check completed",
+			VerificationDocType.BACKGROUND_CHECK, "Police Clearance Certificate on file and not expired",
 			VerificationDocType.EDUCATION, "Educational qualifications verified",
 			VerificationDocType.FIRST_AID, "First aid / CPR certification on file",
-			VerificationDocType.REFERENCE, "Prior employer or personal reference checked");
+			VerificationDocType.REFERENCE, "Prior employer or personal reference checked",
+			VerificationDocType.ADDRESS_PROOF, "Home address verified",
+			VerificationDocType.LIVENESS_SELFIE, "Live selfie matched to government ID");
 
 	private final NannyRepository nannyRepository;
 	private final NannyVerificationRepository nannyVerificationRepository;
@@ -80,7 +84,7 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 				nanny.getHourlyRate(),
 				ratingAvg,
 				reviewCount == null ? 0 : reviewCount.intValue(),
-				nanny.getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
+				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
 				nannySkillLanguageRepository.findSkillNames(nannyId),
 				nannySkillLanguageRepository.findLanguageNames(nannyId),
 				recentReviews);

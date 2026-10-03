@@ -117,7 +117,7 @@ class AdminBookingControllerApiTest {
 				.build());
 		return nannyRepository.save(Nanny.builder()
 				.user(nannyUser).firstName(firstName).lastName("T")
-				.overallVerificationStatus(NannyVerificationStatus.VERIFIED)
+				.overallVerificationStatus(NannyVerificationStatus.APPROVED)
 				.build());
 	}
 

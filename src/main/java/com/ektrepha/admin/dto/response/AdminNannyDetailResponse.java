@@ -2,6 +2,7 @@ package com.ektrepha.admin.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -17,11 +18,16 @@ public record AdminNannyDetailResponse(
 		String lastName,
 		String phone,
 		String email,
+		LocalDate dob,
 		String bio,
 		String educationLevel,
 		Integer yearsExperience,
 		BigDecimal hourlyRate,
 		String verificationStatus,
+		/** The reason behind the *current* status - see {@code AdminNannyStatusHistoryResponse} for the full trail. */
+		String statusReason,
+		String statusChangedByName,
+		Instant statusChangedAt,
 		boolean active,
 		Double ratingAvg,
 		long reviewCount,

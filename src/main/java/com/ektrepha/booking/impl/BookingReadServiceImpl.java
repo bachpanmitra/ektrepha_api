@@ -200,7 +200,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 					booking.getNanny().getFirstName(),
 					booking.getNanny().getLastName(),
 					booking.getNanny().getProfilePhotoS3Key(),
-					booking.getNanny().getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
+					booking.getNanny().getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
 					rating == null ? null : rating[0],
 					rating == null ? null : (int) rating[1]);
 		}
@@ -229,7 +229,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 				nanny.getFirstName(),
 				nanny.getLastName(),
 				nanny.getProfilePhotoS3Key(),
-				nanny.getOverallVerificationStatus() == NannyVerificationStatus.VERIFIED,
+				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
 				avg,
 				count == null ? null : count.intValue());
 	}

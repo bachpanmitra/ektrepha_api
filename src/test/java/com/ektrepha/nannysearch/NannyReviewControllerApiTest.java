@@ -80,7 +80,7 @@ class NannyReviewControllerApiTest {
 				.build());
 		return nannyRepository.save(Nanny.builder()
 				.user(nannyUser).firstName("Priya").lastName("Sharma")
-				.overallVerificationStatus(NannyVerificationStatus.VERIFIED)
+				.overallVerificationStatus(NannyVerificationStatus.APPROVED)
 				.build());
 	}
 

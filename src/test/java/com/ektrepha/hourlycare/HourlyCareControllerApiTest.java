@@ -149,7 +149,7 @@ class HourlyCareControllerApiTest {
 				.build());
 		Nanny nanny = nannyRepository.save(Nanny.builder()
 				.user(nannyUser).firstName("Priya").lastName("Sharma")
-				.overallVerificationStatus(NannyVerificationStatus.VERIFIED)
+				.overallVerificationStatus(NannyVerificationStatus.APPROVED)
 				.build());
 		caregiverZoneMappingRepository.save(CaregiverZoneMapping.builder()
 				.caregiver(nanny).zoneArea(zone).serviceType(childcare).active(true).build());

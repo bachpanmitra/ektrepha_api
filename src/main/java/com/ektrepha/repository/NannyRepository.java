@@ -1,5 +1,7 @@
 package com.ektrepha.repository;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -14,6 +16,12 @@ import com.ektrepha.model.NannyVerificationStatus;
 public interface NannyRepository extends JpaRepository<Nanny, Long> {
 
 	Optional<Nanny> findByUserId(Long userId);
+
+	// For VerificationExpiryAuditJob's periodic re-verification check: every APPROVED nanny whose
+	// last status change (i.e. the approval itself) is older than the 12-month re-verification
+	// window.
+	@Query("SELECT n.id FROM Nanny n WHERE n.overallVerificationStatus = :status AND n.statusChangedAt < :cutoff")
+	List<Long> findIdsByStatusAndStatusChangedAtBefore(@Param("status") NannyVerificationStatus status, @Param("cutoff") Instant cutoff);
 
 	// Admin "Nanny" detail — the nanny's own user row (phone/email/active), not the requesting admin's.
 	@Query("SELECT n FROM Nanny n JOIN FETCH n.user WHERE n.id = :id")
