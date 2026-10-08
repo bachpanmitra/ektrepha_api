@@ -34,7 +34,9 @@ import com.ektrepha.repository.ZoneAreaRepository;
 import com.ektrepha.repository.ZoneServicePricingRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ZonePricingServiceImpl implements ZonePricingService {
@@ -89,12 +91,17 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 				.orElseThrow(() -> new ZonePricingNotFoundException("No pricing row with id " + pricingId));
 		validatePricingFields(request.pricingMode(), request.fixPrice(), request.rateMin(), request.rateMax(), request.monthlyPrice());
 
+		// Hourly (rateMin/rateMax), daily (fixPrice) and monthly (monthlyPrice) are independent
+		// products a zone+service can offer simultaneously - each booking screen asks for its own
+		// one explicitly (see PriceCalculationRequest.requestedMode), so all three are always
+		// written here together rather than gated by a single "active" mode. pricingMode itself is
+		// now just which one the admin wants highlighted as this row's headline price in listings.
 		pricing.setPricingMode(request.pricingMode());
 		pricing.setFixPrice(request.fixPrice());
 		pricing.setRateMin(request.rateMin());
 		pricing.setRateMax(request.rateMax());
-		pricing.setUnitPrice(request.unitPrice());
 		pricing.setMonthlyPrice(request.monthlyPrice());
+		pricing.setUnitPrice(request.unitPrice());
 		if (request.currency() != null) {
 			pricing.setCurrency(request.currency());
 		}
@@ -132,12 +139,14 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 			ZoneServicePricing pricing = pricingRepository.findByZoneAreaIdAndServiceTypeId(item.zoneId(), serviceTypeId)
 					.orElseGet(() -> ZoneServicePricing.builder().zoneArea(zone).serviceType(serviceType).active(true).build());
 
+			// See update()'s identical comment - hourly/daily/monthly are independent products, all
+			// written together rather than gated by a single active mode.
 			pricing.setPricingMode(item.pricingMode());
 			pricing.setFixPrice(item.fixPrice());
 			pricing.setRateMin(item.rateMin());
 			pricing.setRateMax(item.rateMax());
-			pricing.setUnitPrice(item.unitPrice());
 			pricing.setMonthlyPrice(item.monthlyPrice());
+			pricing.setUnitPrice(item.unitPrice());
 			pricing.setCurrency(item.currency() != null ? item.currency() : "INR");
 			pricing.setMinBookingHours(item.minBookingHours() != null ? item.minBookingHours() : BigDecimal.ONE);
 			pricing.setPlatformFeePct(item.platformFeePct() != null ? item.platformFeePct() : BigDecimal.ZERO);
@@ -175,14 +184,24 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 				pricing.getPlatformFeePct(), pricing.isActive());
 	}
 
-	// Backstops the DB CHECK constraints (migration 008/041) with a clean 400 instead of a raw
-	// constraint-violation error bubbling up from the flush.
+	// Hourly, daily and monthly are independent products a zone+service can offer simultaneously -
+	// any combination may be configured, or none at all. The one remaining required-ness is
+	// pricingMode itself: it names this row's primary/headline product (shown in admin summaries),
+	// so THAT product's own field must actually be populated - backstops the DB CHECK constraints
+	// (migration 008/041) with a clean 400 instead of a raw constraint-violation error from the
+	// flush. Whatever the other two products' fields hold is unrelated to this and never required.
 	private void validatePricingFields(PricingMode mode, BigDecimal fixPrice, BigDecimal rateMin, BigDecimal rateMax, BigDecimal monthlyPrice) {
+		if ((rateMin == null) != (rateMax == null)) {
+			throw new IllegalArgumentException("rateMin and rateMax must be provided together");
+		}
+		if (rateMin != null && rateMax != null && rateMin.compareTo(rateMax) > 0) {
+			throw new IllegalArgumentException("rateMin must be <= rateMax");
+		}
 		if (mode == PricingMode.FIXED && fixPrice == null) {
 			throw new IllegalArgumentException("fixPrice is required when pricingMode is FIXED");
 		}
-		if (mode == PricingMode.RANGE && (rateMin == null || rateMax == null || rateMin.compareTo(rateMax) > 0)) {
-			throw new IllegalArgumentException("rateMin and rateMax are required when pricingMode is RANGE, with rateMin <= rateMax");
+		if (mode == PricingMode.RANGE && (rateMin == null || rateMax == null)) {
+			throw new IllegalArgumentException("rateMin and rateMax are required when pricingMode is RANGE");
 		}
 		if (mode == PricingMode.MONTHLY && monthlyPrice == null) {
 			throw new IllegalArgumentException("monthlyPrice is required when pricingMode is MONTHLY");

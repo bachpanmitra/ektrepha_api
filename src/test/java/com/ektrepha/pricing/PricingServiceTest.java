@@ -117,7 +117,7 @@ class PricingServiceTest {
 
 		// 2026-09-12 is a Saturday.
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(14, 0), LocalTime.of(18, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(14, 0), LocalTime.of(18, 0), null, PricingMode.RANGE));
 
 		assertThat(quote.baseRate()).isEqualByComparingTo("450.00");
 		assertThat(quote.appliedRule().dayType()).isEqualTo(DayType.WEEKEND);
@@ -133,7 +133,7 @@ class PricingServiceTest {
 
 		// 2026-09-14 is a Monday.
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(14, 0), LocalTime.of(18, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(14, 0), LocalTime.of(18, 0), null, PricingMode.RANGE));
 
 		assertThat(quote.appliedRule()).isNull();
 		assertThat(quote.baseRate()).isEqualByComparingTo("300.00");
@@ -145,7 +145,7 @@ class PricingServiceTest {
 		savePricing(PricingMode.FIXED, new BigDecimal("500"), null, null, new BigDecimal("2"), BigDecimal.ZERO);
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(16, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(16, 0), null, PricingMode.FIXED));
 
 		assertThat(quote.pricingMode()).isEqualTo(PricingMode.FIXED);
 		assertThat(quote.baseRate()).isEqualByComparingTo("500.00");
@@ -158,7 +158,7 @@ class PricingServiceTest {
 		saveMonthlyPricing(new BigDecimal("25000"), new BigDecimal("10"));
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(9, 0), LocalTime.of(10, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(9, 0), LocalTime.of(10, 0), null, PricingMode.MONTHLY));
 
 		assertThat(quote.pricingMode()).isEqualTo(PricingMode.MONTHLY);
 		assertThat(quote.baseRate()).isEqualByComparingTo("25000");
@@ -181,7 +181,7 @@ class PricingServiceTest {
 
 		// 2026-09-12 is a Saturday - a WEEKEND rule would apply to RANGE/FIXED mode, but must not here.
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(14, 0), LocalTime.of(18, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(14, 0), LocalTime.of(18, 0), null, PricingMode.MONTHLY));
 
 		assertThat(quote.appliedRule()).isNull();
 		assertThat(quote.baseRate()).isEqualByComparingTo("25000");
@@ -192,7 +192,7 @@ class PricingServiceTest {
 		savePricing(PricingMode.RANGE, null, new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("2"), BigDecimal.ZERO);
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(10, 30), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(10, 30), null, PricingMode.RANGE));
 
 		assertThat(quote.hours()).isEqualByComparingTo("2.00");
 		assertThat(quote.subtotal()).isEqualByComparingTo("200.00");
@@ -207,7 +207,7 @@ class PricingServiceTest {
 				.ownRate(new BigDecimal("999")).active(true).build());
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), caregiver.getId()));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), caregiver.getId(), PricingMode.RANGE));
 
 		assertThat(quote.baseRate()).isEqualByComparingTo("350.00");
 	}
@@ -221,7 +221,7 @@ class PricingServiceTest {
 				.ownRate(new BigDecimal("300")).active(true).build());
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), caregiver.getId()));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), caregiver.getId(), PricingMode.RANGE));
 
 		assertThat(quote.baseRate()).isEqualByComparingTo("300.00");
 	}
@@ -246,7 +246,7 @@ class PricingServiceTest {
 				.computedAt(java.time.Instant.now()).build());
 
 		PriceQuoteResponse quote = pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(10, 0), LocalTime.of(11, 0), null));
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 12), LocalTime.of(10, 0), LocalTime.of(11, 0), null, PricingMode.RANGE));
 
 		assertThat(quote.combinedMultiplier()).isEqualByComparingTo(appProperties.pricing().combinedMultiplierCap());
 		assertThat(quote.dynamicPricing().enabled()).isTrue();
@@ -256,7 +256,7 @@ class PricingServiceTest {
 	@Test
 	void noActivePricingRow_throwsNotServiceable() {
 		assertThatThrownBy(() -> pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), null)))
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(10, 0), LocalTime.of(11, 0), null, PricingMode.RANGE)))
 				.isInstanceOf(NotServiceableException.class);
 	}
 
@@ -265,7 +265,7 @@ class PricingServiceTest {
 		savePricing(PricingMode.RANGE, null, new BigDecimal("100"), new BigDecimal("100"), BigDecimal.ONE, BigDecimal.ZERO);
 
 		assertThatThrownBy(() -> pricingService.calculate(new PriceCalculationRequest(
-				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(11, 0), LocalTime.of(10, 0), null)))
+				zone.getId(), "childcare", LocalDate.of(2026, 9, 14), LocalTime.of(11, 0), LocalTime.of(10, 0), null, PricingMode.RANGE)))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 

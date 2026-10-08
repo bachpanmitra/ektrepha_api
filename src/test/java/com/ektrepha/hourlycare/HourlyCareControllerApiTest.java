@@ -183,7 +183,7 @@ class HourlyCareControllerApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.available", is(true)))
 				.andExpect(jsonPath("$.priceQuote.total", org.hamcrest.Matchers.notNullValue()));
@@ -202,7 +202,7 @@ class HourlyCareControllerApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/price").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.total", org.hamcrest.Matchers.notNullValue()));
 	}
@@ -220,7 +220,7 @@ class HourlyCareControllerApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.available", is(true)))
 				.andExpect(jsonPath("$.priceQuote.total", org.hamcrest.Matchers.notNullValue()));
@@ -238,7 +238,7 @@ class HourlyCareControllerApiTest {
 
 		// Reserve.
 		String createBody = "{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-				+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}";
+				+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}";
 		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
 				.contentType(MediaType.APPLICATION_JSON).content(createBody))
 				.andExpect(status().isCreated())
@@ -295,7 +295,7 @@ class HourlyCareControllerApiTest {
 		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		long bookingId = ((Number) com.jayway.jsonpath.JsonPath.read(createResponse, "$.id")).longValue();
@@ -353,7 +353,7 @@ class HourlyCareControllerApiTest {
 		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
-						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\"}"))
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		long bookingId = ((Number) com.jayway.jsonpath.JsonPath.read(createResponse, "$.id")).longValue();

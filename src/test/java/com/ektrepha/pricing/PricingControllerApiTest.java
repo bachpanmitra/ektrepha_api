@@ -69,7 +69,7 @@ class PricingControllerApiTest {
 	void calculate_isPublic() throws Exception {
 		mockMvc.perform(post("/api/v1/pricing/calculate")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"zoneAreaId\":" + zone.getId() + ",\"serviceTypeCode\":\"childcare\",\"bookingDate\":\"2026-09-14\",\"startTime\":\"10:00:00\",\"endTime\":\"12:00:00\"}"))
+				.content("{\"zoneAreaId\":" + zone.getId() + ",\"serviceTypeCode\":\"childcare\",\"bookingDate\":\"2026-09-14\",\"startTime\":\"10:00:00\",\"endTime\":\"12:00:00\",\"requestedMode\":\"RANGE\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.baseRate", is(250.00)));
 	}
@@ -78,7 +78,7 @@ class PricingControllerApiTest {
 	void calculate_unknownServiceType_isNotFound() throws Exception {
 		mockMvc.perform(post("/api/v1/pricing/calculate")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"zoneAreaId\":" + zone.getId() + ",\"serviceTypeCode\":\"nope\",\"bookingDate\":\"2026-09-14\",\"startTime\":\"10:00:00\",\"endTime\":\"12:00:00\"}"))
+				.content("{\"zoneAreaId\":" + zone.getId() + ",\"serviceTypeCode\":\"nope\",\"bookingDate\":\"2026-09-14\",\"startTime\":\"10:00:00\",\"endTime\":\"12:00:00\",\"requestedMode\":\"RANGE\"}"))
 				.andExpect(status().isNotFound());
 	}
 

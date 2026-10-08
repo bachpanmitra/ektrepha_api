@@ -65,12 +65,14 @@ public class PricingServiceImpl implements PricingService {
 				.orElseThrow(() -> new ServiceTypeNotFoundException("No service type with code " + request.serviceTypeCode()));
 		ZoneServicePricing pricing = pricingRepository.findByZoneAreaIdAndServiceTypeIdAndActiveTrue(request.zoneAreaId(), serviceType.getId())
 				.orElseThrow(() -> new NotServiceableException("No active pricing configured for this zone and service type"));
+		PricingMode requestedMode = request.requestedMode();
+		requireModeConfigured(pricing, requestedMode);
 
 		DayType dayType = dayTypeResolver.resolve(request.bookingDate(), pricing.getZoneArea().getState());
 		// Day-type/time rules are hourly-pricing machinery (a weekend or holiday window within a
-		// single day) and have no meaning for a flat monthly retainer, so a monthly row never looks
-		// one up — no rule ever applies to it.
-		ZonePricingRule rule = pricing.getPricingMode() != PricingMode.MONTHLY
+		// single day) and have no meaning for a flat monthly retainer, so a monthly request never
+		// looks one up — no rule ever applies to it.
+		ZonePricingRule rule = requestedMode != PricingMode.MONTHLY
 				? ruleRepository.findApplicableRules(pricing.getId(), dayType, request.startTime(), request.endTime()).stream().findFirst().orElse(null)
 				: null;
 
@@ -80,10 +82,10 @@ public class PricingServiceImpl implements PricingService {
 		BigDecimal subtotal;
 		BigDecimal combinedMultiplier = null;
 
-		if (pricing.getPricingMode() == PricingMode.FIXED) {
+		if (requestedMode == PricingMode.FIXED) {
 			baseRate = (rule != null && rule.getAdjustedFixPrice() != null) ? rule.getAdjustedFixPrice() : pricing.getFixPrice();
 			subtotal = baseRate;
-		} else if (pricing.getPricingMode() == PricingMode.MONTHLY) {
+		} else if (requestedMode == PricingMode.MONTHLY) {
 			// A flat recurring rate — independent of booking hours, day-type rules, and demand
 			// surge, none of which have meaning for a monthly retainer.
 			baseRate = pricing.getMonthlyPrice();
@@ -107,8 +109,22 @@ public class PricingServiceImpl implements PricingService {
 
 		AppliedRuleResponse appliedRule = rule != null ? new AppliedRuleResponse(rule.getDayType(), rule.getPriceMultiplier()) : null;
 
-		return new PriceQuoteResponse(baseRate, pricing.getPricingMode(), appliedRule, buildDynamicInfo(pricing),
+		return new PriceQuoteResponse(baseRate, requestedMode, appliedRule, buildDynamicInfo(pricing),
 				combinedMultiplier, hours, subtotal, platformFee, total, pricing.getCurrency());
+	}
+
+	// Hourly, daily and monthly prices are all independently optional on a zone+service row (an
+	// admin configures whichever products that zone actually offers), so "not configured" needs its
+	// own clean error instead of surfacing as an NPE deep in the branch above.
+	private void requireModeConfigured(ZoneServicePricing pricing, PricingMode requestedMode) {
+		boolean configured = switch (requestedMode) {
+			case FIXED -> pricing.getFixPrice() != null;
+			case RANGE -> pricing.getRateMin() != null && pricing.getRateMax() != null;
+			case MONTHLY -> pricing.getMonthlyPrice() != null;
+		};
+		if (!configured) {
+			throw new NotServiceableException("This zone/service does not offer " + requestedMode.name().toLowerCase() + " pricing");
+		}
 	}
 
 	private BigDecimal calculateHours(LocalTime start, LocalTime end) {

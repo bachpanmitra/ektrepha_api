@@ -150,6 +150,50 @@ class ServiceabilityControllerApiTest {
 	}
 
 	@Test
+	void adminPincodeBulkStatus_asAdmin_deactivatesValidIdsAndReportsInvalidOnes() throws Exception {
+		String body = mockMvc.perform(post("/api/v1/admin/pincodes").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"pincode\":\"" + uniquePincode() + "\",\"zoneAreaId\":" + zone.getId() + "}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		long pincodeId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).get("id").asLong();
+
+		mockMvc.perform(post("/api/v1/admin/pincodes/bulk-status").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"pincodeIds\":[" + pincodeId + ",999999],\"status\":\"NOT_PLANNED\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total", is(2)))
+				.andExpect(jsonPath("$.updated", is(1)))
+				.andExpect(jsonPath("$.failed", is(1)));
+	}
+
+	@Test
+	void adminPincodeList_asAdmin_filtersBySearchAndStatus() throws Exception {
+		String pincode = uniquePincode();
+		mockMvc.perform(post("/api/v1/admin/pincodes").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"pincode\":\"" + pincode + "\",\"zoneAreaId\":" + zone.getId() + "}"))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/admin/pincodes").with(user("1").roles("ADMIN"))
+				.param("q", pincode))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].pincode", is(pincode)))
+				.andExpect(jsonPath("$.totalElements", is(1)));
+
+		mockMvc.perform(get("/api/v1/admin/pincodes").with(user("1").roles("ADMIN"))
+				.param("q", pincode)
+				.param("status", "COMING_SOON"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements", is(0)));
+	}
+
+	@Test
+	void adminPincodeList_withoutAuth_isUnauthorized() throws Exception {
+		mockMvc.perform(get("/api/v1/admin/pincodes")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void adminPincodeBulkImport_asAdmin_importsValidRowsAndReportsInvalidOnes() throws Exception {
 		String csv = "pincode,zone_area_id\n" + uniquePincode() + "," + zone.getId() + "\nBADROW\n";
 		MockMultipartFile file = new MockMultipartFile("file", "pincodes.csv", "text/csv", csv.getBytes());

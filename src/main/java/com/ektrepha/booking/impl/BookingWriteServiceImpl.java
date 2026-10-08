@@ -1,5 +1,6 @@
 package com.ektrepha.booking.impl;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -42,6 +43,7 @@ import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.ParentChild;
+import com.ektrepha.model.PricingMode;
 import com.ektrepha.model.ServiceType;
 import com.ektrepha.parent.dto.response.AddressResponse;
 import com.ektrepha.parent.impl.AddressResponseMapper;
@@ -143,16 +145,21 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 
 		Long recurrenceGroupId = null;
 		Booking anchor = null;
+		// Picking a specific nanny is always the hourly-rate product (see quotePrice's comment), so
+		// every occurrence in a REPEAT_* series - including REPEAT_MONTHLY, which is just "book this
+		// nanny repeatedly across a month" - is charged independently at their hourly rate. There is
+		// no flat monthly retainer here; that's HourlyCareServiceImpl's own "team assigns" product.
 		for (int i = 0; i < windows.size(); i++) {
 			Instant start = windows.get(i)[0];
 			Instant end = windows.get(i)[1];
 			PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), nanny.getId(), start, end);
+			BigDecimal occurrenceAmount = quote.total();
 
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(nanny).child(child).serviceType(serviceType).address(address)
 					.startTime(start).endTime(end)
 					.status(BookingStatus.PENDING)
-					.totalAmount(quote.total())
+					.totalAmount(occurrenceAmount)
 					.frequency(frequency)
 					.recurrenceGroupId(recurrenceGroupId)
 					.build();
@@ -330,11 +337,14 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 				.orElse(null);
 	}
 
+	// Always RANGE - every caller here has a specific nannyId (picking a caregiver directly), so this
+	// is always the hourly-rate product, never the "team assigns" flat daily/monthly plans that live
+	// under HourlyCareServiceImpl instead.
 	private PriceQuoteResponse quotePrice(Long zoneAreaId, String serviceTypeCode, Long nannyId, Instant startTime, Instant endTime) {
 		LocalDate bookingDate = LocalDate.ofInstant(startTime, INDIA_ZONE);
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
 		LocalTime endLocalTime = LocalTime.from(endTime.atZone(INDIA_ZONE));
-		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, serviceTypeCode, bookingDate, startLocalTime, endLocalTime, nannyId));
+		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, serviceTypeCode, bookingDate, startLocalTime, endLocalTime, nannyId, PricingMode.RANGE));
 	}
 
 	// Re-anchors a past booking's time-of-day onto today's date, for a same-slot price estimate.

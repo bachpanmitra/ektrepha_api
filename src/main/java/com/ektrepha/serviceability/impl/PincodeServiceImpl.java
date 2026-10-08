@@ -10,6 +10,8 @@ import java.util.Optional;
 
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,9 +25,12 @@ import com.ektrepha.model.ServiceabilityStatus;
 import com.ektrepha.model.ZoneArea;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
 import com.ektrepha.repository.ZoneAreaRepository;
+import com.ektrepha.serviceability.dto.request.PincodeBulkStatusRequest;
 import com.ektrepha.serviceability.dto.request.PincodeCreateRequest;
 import com.ektrepha.serviceability.dto.request.PincodeStatusRequest;
 import com.ektrepha.serviceability.dto.response.PincodeBulkImportResponse;
+import com.ektrepha.serviceability.dto.response.PincodeBulkStatusResponse;
+import com.ektrepha.serviceability.dto.response.PincodeListResponse;
 import com.ektrepha.serviceability.dto.response.PincodeResponse;
 import com.ektrepha.serviceability.service.PincodeService;
 
@@ -66,6 +71,23 @@ public class PincodeServiceImpl implements PincodeService {
 		ServiceabilityPincode saved = pincodeRepository.save(pincode);
 		evictPincodeCache(saved.getPincode());
 		return toResponse(saved);
+	}
+
+	@Override
+	@Transactional
+	public PincodeBulkStatusResponse bulkSetStatus(PincodeBulkStatusRequest request) {
+		List<String> errors = new ArrayList<>();
+		int updated = 0;
+		for (Long pincodeId : request.pincodeIds()) {
+			try {
+				setStatus(pincodeId, new PincodeStatusRequest(request.status()));
+				updated++;
+			} catch (PincodeNotFoundException e) {
+				errors.add(e.getMessage());
+			}
+		}
+		int total = request.pincodeIds().size();
+		return new PincodeBulkStatusResponse(total, updated, total - updated, errors);
 	}
 
 	@Override
@@ -147,6 +169,15 @@ public class PincodeServiceImpl implements PincodeService {
 		return pincodeRepository.findAllByZoneAreaIdOrderByPincodeAsc(zoneAreaId).stream()
 				.map(this::toResponse)
 				.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PincodeListResponse list(String q, ServiceabilityStatus status, int page, int size) {
+		String likeQ = (q == null || q.isBlank()) ? null : "%" + q.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+		Page<ServiceabilityPincode> result = pincodeRepository.search(likeQ, status, PageRequest.of(page, size));
+		List<PincodeResponse> items = result.getContent().stream().map(this::toResponse).toList();
+		return new PincodeListResponse(items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
 	}
 
 	private void evictPincodeCache(String pincode) {

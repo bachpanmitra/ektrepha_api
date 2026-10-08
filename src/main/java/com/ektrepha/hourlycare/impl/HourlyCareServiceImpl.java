@@ -60,6 +60,7 @@ import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.ParentChild;
 import com.ektrepha.model.PaymentStatus;
 import com.ektrepha.model.PaymentTransaction;
+import com.ektrepha.model.PricingMode;
 import com.ektrepha.model.ServiceType;
 import com.ektrepha.model.User;
 import com.ektrepha.parent.dto.response.AddressResponse;
@@ -126,10 +127,11 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		resolveServiceType();
 		validateWindow(request.startTime(), request.endTime());
 
+		requireOneOffMode(request.pricingMode());
 		// No caregiver-capacity gate - ops handles caregiver assignment for every reservation
 		// manually, capacity or not (see createBooking).
 		Long zoneAreaId = resolveZoneAreaId(address);
-		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.startTime(), request.endTime());
+		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 		return new AvailabilityResponse(true, quote, null);
 	}
 
@@ -140,9 +142,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		ParentAddress address = resolveAddress(parent, request.addressId());
 		resolveChild(parent, request.childId());
 //		validateWindow(request.startTime(), request.endTime());
+		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		return quotePrice(zoneAreaId, request.startTime(), request.endTime());
+		return quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 	}
 
 	@Override
@@ -153,11 +156,12 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		Children child = resolveChild(parent, request.childId());
 		ServiceType serviceType = resolveServiceType();
 //		validateWindow(request.startTime(), request.endTime());
+		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
 		// No caregiver-capacity gate - the reservation always succeeds; ops assigns a caregiver
 		// afterward regardless of capacity (see assignCaregiver, HourlyCareAdminController).
-		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.startTime(), request.endTime());
+		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 
 		Booking booking = Booking.builder()
 				.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
@@ -221,23 +225,35 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		Booking anchor = null;
 		Long recurrenceGroupId = null;
 		BigDecimal seriesTotal = BigDecimal.ZERO;
+		// Monthly care always bills the zone's flat MONTHLY retainer exactly once for the whole
+		// series, regardless of how many calendar months the date range touches - quotePrice()
+		// returns the full flat rate on every call since it has no notion of "already billed", so
+		// charge it on the series' first occurrence only and zero the rest. If this zone doesn't
+		// have a monthly rate configured, quotePrice() throws (see PricingServiceImpl) and this
+		// whole booking attempt fails rather than silently falling back to an hourly/daily charge.
+		boolean monthlyChargeApplied = false;
 		for (LocalDate date : dates) {
 			Instant start = date.atTime(request.dailyStartTime()).atZone(INDIA_ZONE).toInstant();
 			Instant end = date.atTime(request.dailyEndTime()).atZone(INDIA_ZONE).toInstant();
-			PriceQuoteResponse quote = quotePrice(zoneAreaId, start, end);
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, PricingMode.MONTHLY, start, end);
+			boolean chargeThisOccurrence = !monthlyChargeApplied;
+			BigDecimal occurrenceAmount = chargeThisOccurrence ? quote.total() : BigDecimal.ZERO;
+			if (chargeThisOccurrence) {
+				monthlyChargeApplied = true;
+			}
 
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
 					.startTime(start).endTime(end)
 					.status(BookingStatus.AWAITING_PAYMENT)
-					.totalAmount(quote.total())
+					.totalAmount(occurrenceAmount)
 					.frequency(BookingFrequency.REPEAT_MONTHLY)
 					.recurrenceGroupId(recurrenceGroupId)
 					.careNotes(request.careNotes())
 					.build();
 			booking = bookingRepository.save(booking);
 			orderActivityService.log(booking, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null);
-			seriesTotal = seriesTotal.add(quote.total());
+			seriesTotal = seriesTotal.add(occurrenceAmount);
 
 			if (anchor == null) {
 				anchor = booking;
@@ -506,12 +522,20 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.orElseThrow(() -> new NotServiceableException("This address is not in a serviceable zone"));
 	}
 
-	private PriceQuoteResponse quotePrice(Long zoneAreaId, Instant startTime, Instant endTime) {
+	private PriceQuoteResponse quotePrice(Long zoneAreaId, PricingMode mode, Instant startTime, Instant endTime) {
 		LocalDate bookingDate = LocalDate.ofInstant(startTime, INDIA_ZONE);
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
 		LocalTime endLocalTime = LocalTime.from(endTime.atZone(INDIA_ZONE));
 		// caregiverId=null - managed-model midpoint rate, since no nanny is picked yet.
-		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, CHILDCARE_CODE, bookingDate, startLocalTime, endLocalTime, null));
+		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, CHILDCARE_CODE, bookingDate, startLocalTime, endLocalTime, null, mode));
+	}
+
+	// The one-off Hourly/Daily care screens only ever offer RANGE or FIXED - MONTHLY is exclusively
+	// screens/monthlyCare.tsx's own product (checkMonthlyAvailability/createMonthlyBooking above).
+	private void requireOneOffMode(PricingMode mode) {
+		if (mode == PricingMode.MONTHLY) {
+			throw new IllegalArgumentException("pricingMode must be RANGE or FIXED for this endpoint - use the monthly-care endpoints for MONTHLY");
+		}
 	}
 
 	// A generous but real cap - at 7 days/week this is ~5.7 months, comfortably past the "one
@@ -545,14 +569,23 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		BigDecimal platformFee = BigDecimal.ZERO;
 		BigDecimal total = BigDecimal.ZERO;
 		String currency = null;
+		// Mirrors createMonthlyBooking()'s flat-rate handling: PricingMode.MONTHLY bills exactly
+		// once for the whole series, so this preview must match - not once per occurrence day, and
+		// not once per calendar month the range happens to touch.
+		boolean monthlyChargeApplied = false;
 		for (LocalDate date : dates) {
 			Instant start = date.atTime(dailyStartTime).atZone(INDIA_ZONE).toInstant();
 			Instant end = date.atTime(dailyEndTime).atZone(INDIA_ZONE).toInstant();
-			PriceQuoteResponse quote = quotePrice(zoneAreaId, start, end);
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, PricingMode.MONTHLY, start, end);
+			boolean chargeThisOccurrence = !monthlyChargeApplied;
+			currency = quote.currency();
+			if (!chargeThisOccurrence) {
+				continue;
+			}
+			monthlyChargeApplied = true;
 			subtotal = subtotal.add(quote.subtotal());
 			platformFee = platformFee.add(quote.platformFee());
 			total = total.add(quote.total());
-			currency = quote.currency();
 		}
 		return new MonthlyPriceSummary(dates.size(), subtotal, platformFee, total, currency);
 	}
