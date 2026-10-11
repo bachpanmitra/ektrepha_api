@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 42
+      author: ektrepha
+      description: Backing tables for the nanny staff app (ektrepha-nanny-ui) - employment profile, shift notes/extensions/absences, family reviews, payslips, in-app notifications
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/042-nanny-app.sql
+            relativeToChangelogFile: false

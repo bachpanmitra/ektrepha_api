@@ -47,6 +47,10 @@ public class LeaveRequest {
 	@Column(name = "reason", nullable = false, length = 500)
 	private String reason;
 
+	/** CASUAL | SICK | EARNED - set by the nanny app; null for requests that predate it. */
+	@Column(name = "leave_type", length = 10)
+	private String leaveType;
+
 	@Column(name = "status", nullable = false)
 	@Builder.Default
 	private RequestStatus status = RequestStatus.PENDING;

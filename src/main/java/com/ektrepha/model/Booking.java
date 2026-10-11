@@ -101,6 +101,10 @@ public class Booking {
 	@Column(name = "checked_out_at")
 	private Instant checkedOutAt;
 
+	/** Nanny app's "On my way" tap - the step before check-in. */
+	@Column(name = "on_the_way_at")
+	private Instant onTheWayAt;
+
 	@PrePersist
 	void onCreate() {
 		this.createdAt = Instant.now();

@@ -38,4 +38,14 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 			""")
 	List<LeaveRequest> findApprovedCoveringDate(@Param("date") LocalDate date);
 
+	// Nanny app's roster/attendance/leave balance - this nanny's requests of the given status
+	// overlapping [from, to] (inclusive dates).
+	@Query("""
+			SELECT lr FROM LeaveRequest lr
+			WHERE lr.nanny.id = :nannyId AND lr.status = :status AND lr.startDate <= :to AND lr.endDate >= :from
+			ORDER BY lr.startDate
+			""")
+	List<LeaveRequest> findForNannyOverlapping(@Param("nannyId") Long nannyId, @Param("status") RequestStatus status,
+			@Param("from") LocalDate from, @Param("to") LocalDate to);
+
 }

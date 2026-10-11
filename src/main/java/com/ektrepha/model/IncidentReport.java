@@ -48,6 +48,13 @@ public class IncidentReport {
 	@Column(name = "description", nullable = false, length = 2000)
 	private String description;
 
+	/** Nanny app's report category (OUTSIDE_CHILDCARE_WORK, FELT_UNSAFE, ...) - null for parent reports. */
+	@Column(name = "category", length = 40)
+	private String category;
+
+	@Column(name = "request_callback", nullable = false)
+	private boolean requestCallback;
+
 	@Column(name = "status", nullable = false)
 	@Builder.Default
 	private IncidentStatus status = IncidentStatus.OPEN;

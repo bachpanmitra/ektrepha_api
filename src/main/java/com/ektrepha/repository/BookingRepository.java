@@ -37,6 +37,28 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	List<Booking> findByNannyIdAndWindow(@Param("nannyId") Long nannyId, @Param("statuses") Collection<BookingStatus> statuses,
 			@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
 
+	// Nanny app's roster/attendance/salary views - every booking of the given statuses starting in
+	// [from, to), soonest first. Same fetch shape as findByNannyIdAndWindow.
+	@Query("""
+			SELECT b FROM Booking b
+			LEFT JOIN FETCH b.child
+			LEFT JOIN FETCH b.address
+			WHERE b.nanny.id = :nannyId AND b.status IN :statuses
+			  AND b.startTime >= :from AND b.startTime < :to
+			ORDER BY b.startTime ASC
+			""")
+	List<Booking> findByNannyIdStartingBetween(@Param("nannyId") Long nannyId, @Param("statuses") Collection<BookingStatus> statuses,
+			@Param("from") Instant from, @Param("to") Instant to);
+
+	// Nanny app's shift details "3rd visit to this family" - how many of this nanny's non-cancelled
+	// bookings with this parent started at or before the given one.
+	@Query("""
+			SELECT COUNT(b) FROM Booking b
+			WHERE b.nanny.id = :nannyId AND b.parent.id = :parentId AND b.startTime <= :startTime
+			  AND b.status <> com.ektrepha.model.BookingStatus.CANCELLED
+			""")
+	long countVisitsUpTo(@Param("nannyId") Long nannyId, @Param("parentId") Long parentId, @Param("startTime") Instant startTime);
+
 	// B1/H1 card list — one query, one status-set param, shared by both the "active" and "history"
 	// scopes (PRD "PRD API Design Spec" §3.4: same repository method, different status sets, so the
 	// two screens can never drift). JOIN FETCH avoids N+1 on every card's nanny/child/address.

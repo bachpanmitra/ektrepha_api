@@ -70,6 +70,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/hourly-care/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/nanny-bookings/**").hasRole("NANNY")
 					.requestMatchers(HttpMethod.GET, "/api/v1/nanny-bookings/**").hasRole("NANNY")
+						.requestMatchers("/api/v1/nanny/me", "/api/v1/nanny/me/**").hasRole("NANNY")
 						.requestMatchers("/api/v1/nanny-leave/**").hasRole("NANNY")
 						.requestMatchers("/api/v1/nanny-sos/**").hasRole("NANNY")
 						.requestMatchers("/api/v1/incidents/**").hasAnyRole("NANNY", "PARENT")

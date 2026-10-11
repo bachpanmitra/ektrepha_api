@@ -44,6 +44,10 @@ public class ShiftChangeRequest {
 	@Column(name = "reason", nullable = false, length = 500)
 	private String reason;
 
+	/** SWAP | RESCHEDULE | LEAVE_FOR_SHIFT - set by the nanny app; null for requests that predate it. */
+	@Column(name = "kind", length = 20)
+	private String kind;
+
 	@Column(name = "status", nullable = false)
 	@Builder.Default
 	private RequestStatus status = RequestStatus.PENDING;

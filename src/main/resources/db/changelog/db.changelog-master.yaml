@@ -81,3 +81,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/040-review-moderation.yaml
   - include:
       file: classpath:db/changelog/changes/041-monthly-pricing-mode.yaml
+  - include:
+      file: classpath:db/changelog/changes/042-nanny-app.yaml

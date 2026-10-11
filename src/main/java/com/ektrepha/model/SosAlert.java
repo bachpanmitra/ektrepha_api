@@ -49,6 +49,10 @@ public class SosAlert {
 	@Column(name = "notes", length = 500)
 	private String notes;
 
+	/** Set when the nanny cancels a false alarm from the app (distinct from ops resolving it). */
+	@Column(name = "cancelled_at")
+	private Instant cancelledAt;
+
 	@Column(name = "acknowledged_at")
 	private Instant acknowledgedAt;
 

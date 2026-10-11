@@ -24,6 +24,7 @@ import com.ektrepha.model.AttendanceCorrectionRequest;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.LeaveRequest;
+import com.ektrepha.model.Nanny;
 import com.ektrepha.model.RequestStatus;
 import com.ektrepha.model.ShiftChangeRequest;
 import com.ektrepha.model.User;
@@ -34,6 +35,7 @@ import com.ektrepha.repository.LeaveRequestRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.ShiftChangeRequestRepository;
 import com.ektrepha.repository.UserRepository;
+import com.ektrepha.notification.service.UserNotificationService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +49,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final BookingRepository bookingRepository;
 	private final UserRepository userRepository;
+	private final UserNotificationService userNotificationService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -63,6 +66,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		requirePending(request.getStatus());
 		request.setStatus(RequestStatus.APPROVED);
 		applyReview(request, reviewerUserId, null);
+		notifyNanny(request.getNanny(), "Leave approved", request.getStartDate() + " to " + request.getEndDate(), "roster");
 		return toLeaveResponse(leaveRequestRepository.save(request));
 	}
 
@@ -73,6 +77,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		requirePending(request.getStatus());
 		request.setStatus(RequestStatus.REJECTED);
 		applyReview(request, reviewerUserId, rejectionRequest.reason());
+		notifyNanny(request.getNanny(), "Leave declined", rejectionRequest.reason(), "roster");
 		return toLeaveResponse(leaveRequestRepository.save(request));
 	}
 
@@ -103,6 +108,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 
 		request.setStatus(RequestStatus.APPROVED);
 		applyReview(request, reviewerUserId, null);
+		notifyNanny(request.getNanny(), "Shift change approved", "Your shift has been released for reassignment", "roster");
 		return toShiftChangeResponse(shiftChangeRequestRepository.save(request));
 	}
 
@@ -114,6 +120,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		requirePending(request.getStatus());
 		request.setStatus(RequestStatus.REJECTED);
 		applyReview(request, reviewerUserId, rejectionRequest.reason());
+		notifyNanny(request.getNanny(), "Shift change declined", rejectionRequest.reason(), "roster");
 		return toShiftChangeResponse(shiftChangeRequestRepository.save(request));
 	}
 
@@ -132,6 +139,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		requirePending(request.getStatus());
 		request.setStatus(RequestStatus.APPROVED);
 		applyReview(request, reviewerUserId, null);
+		notifyNanny(request.getNanny(), "Attendance correction approved", null, "attendance");
 		return toAttendanceResponse(attendanceCorrectionRequestRepository.save(request));
 	}
 
@@ -142,6 +150,7 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 		requirePending(request.getStatus());
 		request.setStatus(RequestStatus.REJECTED);
 		applyReview(request, reviewerUserId, rejectionRequest.reason());
+		notifyNanny(request.getNanny(), "Attendance correction declined", rejectionRequest.reason(), "attendance");
 		return toAttendanceResponse(attendanceCorrectionRequestRepository.save(request));
 	}
 
@@ -161,6 +170,11 @@ public class AdminApprovalServiceImpl implements AdminApprovalService {
 				shiftChangeRequestRepository.countByStatus(RequestStatus.PENDING),
 				attendanceCorrectionRequestRepository.countByStatus(RequestStatus.PENDING),
 				nannyVerificationRepository.countByStatus(VerificationRecordStatus.PENDING));
+	}
+
+	// Lands in the nanny app's Updates inbox (and as a push) - the nanny otherwise has no way to learn the outcome.
+	private void notifyNanny(Nanny nanny, String title, String body, String route) {
+		userNotificationService.notify(nanny.getUser().getId(), title, body, route, null);
 	}
 
 	private LeaveRequest findLeaveRequest(Long id) {

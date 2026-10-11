@@ -139,6 +139,42 @@ A request for a child not linked to the caller returns **403**, not 404 — don'
 
 A malformed or missing `{id}` (e.g. `/nannies/` with nothing after the slash, or a non-numeric id) now returns a clean `400`/`404` — safe to build error-state UI around normal HTTP semantics here, no special-casing needed for garbage input.
 
+## Nanny staff app (`/api/v1/nanny/me`) — NANNY role only
+
+Everything `ektrepha-nanny-ui` calls. Sign-in is `POST /api/v1/auth/staff/otp/request` + `/verify` (returns `{userId, phone, accessToken, refreshToken}`); refresh/logout reuse `/api/v1/auth/refresh` and `/api/v1/auth/logout`. Response shapes match that app's `api/types.ts` exactly. A "shift" is one booking assigned to the nanny; shift ids are booking ids as strings. Dates/times are IST (`date` = `YYYY-MM-DD`, `startTime`/`endTime` = `HH:mm`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET / PATCH | `/nanny/me` | Profile. PATCH takes `{language: "en"\|"kn"\|"hi"}` only. `employmentStatus` comes from HR's `nanny_employment` row, else is derived from verification (APPROVED → `ACTIVE`) |
+| GET | `/nanny/me/onboarding` | Joining checklist — 7 steps with `DONE`/`IN_REVIEW`/`TODO`, plus HR contact (`app.nanny-app.hr-contact-*` config) |
+| GET | `/nanny/me/documents` | The nanny's verification documents with presigned `fileUrl` |
+| GET / PUT | `/nanny/me/bank-account` | PUT `{accountNumber (9-18 digits), ifsc}`. Response is always masked; a changed account resets `verifiedByHr` to false |
+| GET | `/nanny/me/statutory`, `/nanny/me/trainings` | PF/ESI numbers; HR-scheduled training sessions |
+| GET / PUT | `/nanny/me/emergency-contact` | `{name, relation, phone}` |
+| GET | `/nanny/me/today` | Today's shift, or 200 with an empty body |
+| GET | `/nanny/me/roster?weekStart=YYYY-MM-DD` | One row per shift; days with none get a synthetic `LEAVE` (approved leave) or `WEEKLY_OFF` (Sunday) row |
+| GET | `/nanny/me/shifts/{id}` | Shift detail. `familyMaskedPhone` is the parent's number only while CONFIRMED/IN_PROGRESS (same rule as the parent side's contact endpoint), else `""` |
+| POST | `/nanny/me/shifts/{id}/on-the-way` | 204. Pushes the family |
+| POST | `/nanny/me/shifts/{id}/check-in` | `{code, lat, lng}`. **409 unless within 300 m of the booking address and between start−60 min and end.** Sets `checked_in_at` and moves the booking to IN_PROGRESS. Geofence is skipped (logged) for addresses saved without coordinates |
+| POST | `/nanny/me/shifts/{id}/check-out` | Same geofence; sets `checked_out_at`, booking → COMPLETED |
+| POST | `/nanny/me/shifts/{id}/extensions` | `{minutes: 15-240}` — one per shift, only while IN_PROGRESS |
+| POST | `/nanny/me/shifts/{id}/updates` | `{text}` — note pushed to the family |
+| POST | `/nanny/me/shifts/{id}/family-review` | `{stars 1-5, tags[], privateNote}` — after the shift, once. Never shown to the parent |
+| POST | `/nanny/me/shifts/{id}/change-requests` | `{kind: SWAP\|RESCHEDULE\|LEAVE_FOR_SHIFT, reason}` — lands in admin Approvals |
+| POST | `/nanny/me/absences` | `{shiftId, reason: UNWELL\|FAMILY_EMERGENCY\|RUNNING_LATE\|TRAVEL_PROBLEM}` |
+| GET | `/nanny/me/attendance?month=YYYY-MM` | Per-day `PRESENT`/`LATE` (check-in > start+10 min)/`LEAVE`/`WEEKLY_OFF`/`FUTURE`/`NONE`, plus overtime past scheduled end |
+| POST | `/nanny/me/attendance/corrections` | `{date, note}` — filed against that day's shift (404 if none) |
+| GET | `/nanny/me/leave/balance` | Yearly allowance (config `app.nanny-app.leave.*`, default 12 casual / 6 sick / 15 earned) minus approved + pending days |
+| POST | `/nanny/me/leave-requests` | `{type, fromDate, toDate}` — 409 if over balance |
+| GET | `/nanny/me/salary/current` | Estimate from HR's `base_monthly_salary` + overtime − PF/ESI. All zeros until HR sets a salary |
+| GET | `/nanny/me/payslips`, `/nanny/me/payslips/{id}/download` | Payroll-issued payslips; download returns `{url}` (presigned) |
+| POST | `/nanny/me/sos`, `/nanny/me/sos/{id}/cancel` | `{lat?, lng?}`. Appears in admin Safety immediately; cancel marks it a false alarm but leaves it open for ops |
+| POST | `/nanny/me/incidents` | `{shiftId?, category, description, requestCallback}` |
+| GET | `/users/me/notifications` | Any role. Inbox; approvals/rejections of leave, shift changes and attendance corrections write here (and push) |
+| POST | `/users/me/notifications/{id}/read`, `/users/me/notifications/read-all` | 204 |
+
+HR-side data with no admin UI yet (set directly in the DB for now): `nanny_employment` (employee code, status, manager, salary, PF/ESI, bank verification, offer letter / uniform), `nanny_training_session`, `nanny_payslip`. Not built: the family accepting/declining an extension, emergency-contact SMS on SOS, and real number masking.
+
 ---
 
 ## Conventions worth knowing before you build
