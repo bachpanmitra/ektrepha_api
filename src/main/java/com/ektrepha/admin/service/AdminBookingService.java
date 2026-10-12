@@ -2,6 +2,7 @@ package com.ektrepha.admin.service;
 
 import java.util.List;
 
+import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
@@ -14,6 +15,10 @@ public interface AdminBookingService {
 	AdminBookingListResponse list(BookingStatus status, String from, String to, Long zoneAreaId, Long serviceTypeId, String q, int page, int size);
 
 	AdminBookingDetailResponse detail(Long id);
+
+	// Ops override-cancel — any status except already CANCELLED/COMPLETED, including mid-shift
+	// IN_PROGRESS, unlike the parent-facing cancel which is PENDING/CONFIRMED only.
+	AdminBookingDetailResponse cancel(Long adminUserId, Long bookingId, AdminBookingCancelRequest request);
 
 	List<AdminBookingCandidateResponse> candidates(Long id);
 

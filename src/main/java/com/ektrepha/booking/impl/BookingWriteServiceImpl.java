@@ -23,6 +23,7 @@ import com.ektrepha.booking.dto.response.NannySummary;
 import com.ektrepha.booking.dto.response.RebookContextResponse;
 import com.ektrepha.booking.service.BookingReadService;
 import com.ektrepha.booking.service.BookingWriteService;
+import com.ektrepha.cancellation.service.BookingCancellationLogService;
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.exception.BookingContactNotAvailableException;
 import com.ektrepha.exception.BookingNotCancellableException;
@@ -35,11 +36,13 @@ import com.ektrepha.exception.ParentAddressNotFoundException;
 import com.ektrepha.exception.ServiceTypeNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.Booking;
+import com.ektrepha.model.BookingCancellationReasonCode;
 import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerificationStatus;
+import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.ParentChild;
@@ -94,6 +97,7 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 	private final PricingService pricingService;
 	private final AddressResponseMapper addressResponseMapper;
 	private final BookingReadService bookingReadService;
+	private final BookingCancellationLogService bookingCancellationLogService;
 
 	@Override
 	@Transactional
@@ -237,13 +241,40 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 			throw new BookingNotCancellableException("This booking can no longer be cancelled");
 		}
 
+		BookingStatus previousStatus = booking.getStatus();
+		String reason = request == null ? null : request.reason();
+
 		booking.setStatus(BookingStatus.CANCELLED);
 		booking.setCancelledBy(parent.getUser());
-		booking.setCancellationReason(request == null ? null : request.reason());
+		booking.setCancellationReason(reason);
 		bookingRepository.save(booking);
+		bookingCancellationLogService.log(booking, parent.getUser(), OrderActivityActorType.PARENT,
+				BookingCancellationReasonCode.PARENT_REQUESTED, reason, previousStatus);
 
 		log.info("Booking cancelled: id={}, cancelledBy={}", booking.getId(), parent.getUser().getId());
 		return bookingReadService.get(userId, booking.getId());
+	}
+
+	@Override
+	@Transactional
+	public void autoCancelStale(Long bookingId) {
+		Booking booking = bookingRepository.findById(bookingId).orElse(null);
+		if (booking == null || !CANCELLABLE.contains(booking.getStatus())) {
+			// Already cancelled/started/completed between the sweep's query and this call - leave it alone.
+			return;
+		}
+
+		BookingStatus previousStatus = booking.getStatus();
+		String reason = "Automatically cancelled — booking was never started and its start time has passed";
+
+		booking.setStatus(BookingStatus.CANCELLED);
+		booking.setCancelledBy(null);
+		booking.setCancellationReason(reason);
+		bookingRepository.save(booking);
+		bookingCancellationLogService.log(booking, null, OrderActivityActorType.SYSTEM,
+				BookingCancellationReasonCode.OTHER, reason, previousStatus);
+
+		log.info("Booking auto-cancelled (stale): id={}, startTime={}", booking.getId(), booking.getStartTime());
 	}
 
 	@Override

@@ -68,7 +68,14 @@ public class BookingReadServiceImpl implements BookingReadService {
 		if (parent.isEmpty()) {
 			return new BookingListResponse(List.of(), page, pageSize, 0, 0);
 		}
-		Sort sort = "active".equals(scope) ? Sort.by("startTime").ascending() : Sort.by("startTime").descending();
+		// id as a tie-breaker makes pagination deterministic — recurring bookings are created in the
+		// same batch and can share an identical startTime/createdAt, which without it let the same
+		// row land on two consecutive pages (duplicate React key on the client's booking list).
+		// Primary column still differs by scope per BK-A-02/BK-H-02 (docs/test-cases/bookings-read.md):
+		// active is soonest-start-first, history/all is most-recent-start-first.
+		Sort sort = "active".equals(scope)
+				? Sort.by("startTime").ascending().and(Sort.by("id").ascending())
+				: Sort.by("startTime").descending().and(Sort.by("id").descending());
 
 		Page<Booking> bookings = bookingRepository.findByParentIdAndStatusIn(parent.get().getId(), statuses, PageRequest.of(page, pageSize, sort));
 

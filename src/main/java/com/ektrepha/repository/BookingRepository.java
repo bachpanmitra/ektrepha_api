@@ -192,6 +192,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	long countByStartTimeGreaterThanEqualAndStartTimeLessThanAndStatusIn(Instant from, Instant to, Collection<BookingStatus> statuses);
 
+	// BookingStaleAutoCancelJob's sweep — never-started bookings (still PENDING/CONFIRMED) whose
+	// start time is already more than the grace window in the past. IDs only, so each one can be
+	// re-checked and cancelled in its own transaction (see BookingWriteServiceImpl#autoCancelStale).
+	@Query("SELECT b.id FROM Booking b WHERE b.status IN :statuses AND b.startTime < :cutoff")
+	List<Long> findIdsByStatusInAndStartTimeBefore(@Param("statuses") Collection<BookingStatus> statuses, @Param("cutoff") Instant cutoff);
+
 	long countByStatus(BookingStatus status);
 
 	// "Assign a nanny" candidates — which of the mapped candidates already have a conflicting

@@ -62,6 +62,12 @@ app:
   verification:
     # Daily at 3am by default — audit frequency is an ops tuning knob, not a code change.
     audit-cron: ${VERIFICATION_AUDIT_CRON:0 0 3 * * *}
+  booking:
+    # BookingStaleAutoCancelJob — hourly by default, cheap on an indexed status/start_time query.
+    stale-cancel-cron: ${BOOKING_STALE_CANCEL_CRON:0 0 * * * *}
+    # How long past its own start time a never-started (PENDING/CONFIRMED) booking is left alone
+    # before the sweep cancels it on the parent/nanny's behalf.
+    stale-cancel-grace-days: ${BOOKING_STALE_CANCEL_GRACE_DAYS:2}
   pricing:
     # Hard ceiling on static-rule-multiplier x dynamic-demand-multiplier so a weekend/holiday
     # surge stacked with a demand surge never compounds past this — the design doc's "surge

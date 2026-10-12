@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.activity.service.OrderActivityService;
+import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
 import com.ektrepha.admin.dto.response.AdminAddressResponse;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
@@ -31,21 +32,29 @@ import com.ektrepha.admin.dto.response.AdminNannyRefResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.dto.response.AdminParentRefResponse;
 import com.ektrepha.admin.service.AdminBookingService;
+import com.ektrepha.cancellation.service.BookingCancellationLogService;
+import com.ektrepha.exception.BookingNotCancellableException;
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.NotServiceableException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.OrderActivityActorType;
+import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.PaymentTransaction;
+import com.ektrepha.model.User;
 import com.ektrepha.repository.AdminBookingCandidateRepository;
 import com.ektrepha.repository.AdminBookingCandidateRepository.CandidateRow;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ReviewRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
+import com.ektrepha.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminBookingServiceImpl implements AdminBookingService {
@@ -69,6 +78,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final PaymentTransactionRepository paymentTransactionRepository;
 	private final ReviewRepository reviewRepository;
 	private final OrderActivityService orderActivityService;
+	private final UserRepository userRepository;
+	private final BookingCancellationLogService bookingCancellationLogService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -113,6 +124,39 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				paymentReferenceId, paymentMethod,
 				new AdminParentRefResponse(booking.getParent().getId(), AdminBookingMapper.resolveParentName(booking), booking.getParent().getUser().getPhone(), booking.getParent().getUser().getEmail()),
 				nanny, child, address, booking.getCreatedAt(), booking.getCheckedInAt(), booking.getCheckedOutAt());
+	}
+
+	@Override
+	@Transactional
+	public AdminBookingDetailResponse cancel(Long adminUserId, Long bookingId, AdminBookingCancelRequest request) {
+		Booking booking = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+
+		// Ops can override at any point short of a booking that's already finished one way or
+		// another - unlike the parent-facing cancel (PENDING/CONFIRMED only), this also covers
+		// IN_PROGRESS (e.g. an incident mid-shift) and the hourly-care pre-assignment statuses.
+		if (booking.getStatus() == BookingStatus.CANCELLED) {
+			throw new BookingNotCancellableException("This booking is already cancelled");
+		}
+		if (booking.getStatus() == BookingStatus.COMPLETED) {
+			throw new BookingNotCancellableException("A completed booking cannot be cancelled");
+		}
+
+		BookingStatus previousStatus = booking.getStatus();
+		User admin = userRepository.findById(adminUserId).orElse(null);
+
+		booking.setStatus(BookingStatus.CANCELLED);
+		booking.setCancelledBy(admin);
+		booking.setCancellationReason(request.reason());
+		bookingRepository.save(booking);
+
+		orderActivityService.log(booking, OrderActivityType.BOOKING_CANCELLED, OrderActivityActorType.ADMIN, adminUserId,
+				admin == null ? null : admin.getName(),
+				Map.of("previousStatus", previousStatus.name(), "reason", request.reason()));
+		bookingCancellationLogService.log(booking, admin, OrderActivityActorType.ADMIN, request.reasonCode(), request.reason(), previousStatus);
+
+		log.info("Booking cancelled by admin: id={}, previousStatus={}, adminUserId={}", booking.getId(), previousStatus, adminUserId);
+		return detail(bookingId);
 	}
 
 	@Override

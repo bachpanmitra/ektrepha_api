@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 42
+      author: ektrepha
+      description: Adds booking_cancellation_log, a typed audit trail of who/why/what-status for every booking cancellation
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/042-booking-cancellation-log.sql
+            relativeToChangelogFile: false

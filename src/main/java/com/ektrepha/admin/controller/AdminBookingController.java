@@ -3,12 +3,16 @@ package com.ektrepha.admin.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
@@ -16,6 +20,7 @@ import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.service.AdminBookingService;
 import com.ektrepha.model.BookingStatus;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 // Role enforcement for the whole /api/v1/admin/** prefix is centralized in SecurityConfig
@@ -53,6 +58,13 @@ public class AdminBookingController {
 	@GetMapping("/{id}/activity")
 	public ResponseEntity<List<AdminOrderActivityResponse>> activity(@PathVariable Long id) {
 		return ResponseEntity.ok(adminBookingService.activity(id));
+	}
+
+	// Ops override-cancel - any booking, any non-terminal status (including IN_PROGRESS), any time.
+	@PostMapping("/{id}/cancel")
+	public ResponseEntity<AdminBookingDetailResponse> cancel(Authentication authentication, @PathVariable Long id,
+			@Valid @RequestBody AdminBookingCancelRequest request) {
+		return ResponseEntity.ok(adminBookingService.cancel(Long.valueOf(authentication.getName()), id, request));
 	}
 
 }
