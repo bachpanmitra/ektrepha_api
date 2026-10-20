@@ -42,22 +42,29 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	// two screens can never drift). JOIN FETCH avoids N+1 on every card's nanny/child/address.
 	// nanny is LEFT JOIN, not inner - an hourly-care pay-first booking (AWAITING_PAYMENT/
 	// ASSIGNING_CAREGIVER, included in "active") has nanny=null until ops assigns one, and an inner
-	// join would silently drop it from every list/count.
+	// join would silently drop it from every list/count. serviceTypeCode is an optional filter
+	// (GET /bookings?serviceTypeCode=) - null leaves every status/vertical in, unchanged from before
+	// this param existed.
 	@Query(value = """
 			SELECT b FROM Booking b
-			LEFT JOIN FETCH b.nanny JOIN FETCH b.serviceType
-			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.address
+			LEFT JOIN FETCH b.nanny JOIN FETCH b.serviceType st
+			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.elder LEFT JOIN FETCH b.address
 			WHERE b.parent.id = :parentId AND b.status IN :statuses
+			  AND (:serviceTypeCode IS NULL OR st.code = :serviceTypeCode)
 			""",
-			countQuery = "SELECT COUNT(b) FROM Booking b WHERE b.parent.id = :parentId AND b.status IN :statuses")
+			countQuery = """
+			SELECT COUNT(b) FROM Booking b JOIN b.serviceType st
+			WHERE b.parent.id = :parentId AND b.status IN :statuses
+			  AND (:serviceTypeCode IS NULL OR st.code = :serviceTypeCode)
+			""")
 	Page<Booking> findByParentIdAndStatusIn(@Param("parentId") Long parentId,
-			@Param("statuses") Collection<BookingStatus> statuses, Pageable pageable);
+			@Param("statuses") Collection<BookingStatus> statuses, @Param("serviceTypeCode") String serviceTypeCode, Pageable pageable);
 
 	// B2/H2 detail — same fetch-join shape as the list query, scoped to one booking + its owning parent.
 	@Query("""
 			SELECT b FROM Booking b
 			LEFT JOIN FETCH b.nanny JOIN FETCH b.serviceType
-			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.address
+			LEFT JOIN FETCH b.child LEFT JOIN FETCH b.elder LEFT JOIN FETCH b.address
 			WHERE b.id = :id AND b.parent.id = :parentId
 			""")
 	Optional<Booking> findDetailByIdAndParentId(@Param("id") Long id, @Param("parentId") Long parentId);
@@ -68,6 +75,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	// C6's child-unlink guard: block removing a child from a non-terminal booking.
 	boolean existsByChildIdAndStatusIn(Long childId, Collection<BookingStatus> statuses);
+
+	// Same guard as above, for soft-deleting an elder (ElderServiceImpl#remove).
+	boolean existsByElderIdAndStatusIn(Long elderId, Collection<BookingStatus> statuses);
 
 	// A6 delete-account guard: the block message tells the parent how many bookings to resolve first.
 	long countByParentIdAndStatusIn(Long parentId, Collection<BookingStatus> statuses);
@@ -173,6 +183,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 			JOIN FETCH p.user
 			JOIN FETCH b.serviceType
 			LEFT JOIN FETCH b.child
+			LEFT JOIN FETCH b.elder
 			LEFT JOIN FETCH b.address
 			WHERE b.id = :id
 			""")

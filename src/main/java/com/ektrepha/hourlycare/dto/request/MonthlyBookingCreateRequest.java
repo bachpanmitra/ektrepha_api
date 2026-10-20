@@ -18,5 +18,8 @@ public record MonthlyBookingCreateRequest(
 		@NotEmpty Set<DayOfWeek> daysOfWeek,
 		@NotNull LocalTime dailyStartTime,
 		@NotNull LocalTime dailyEndTime,
-		@Size(max = 500) String careNotes) {
+		@Size(max = 500) String careNotes,
+		// Elder Care — see AvailabilityCheckRequest's matching fields.
+		String serviceTypeCode,
+		Long elderId) {
 }

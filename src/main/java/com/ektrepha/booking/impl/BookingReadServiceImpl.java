@@ -20,6 +20,7 @@ import com.ektrepha.booking.dto.response.BookingCardResponse;
 import com.ektrepha.booking.dto.response.BookingDetailResponse;
 import com.ektrepha.booking.dto.response.BookingListResponse;
 import com.ektrepha.booking.dto.response.ChildSummary;
+import com.ektrepha.booking.dto.response.ElderBookingSummary;
 import com.ektrepha.booking.dto.response.NannySummary;
 import com.ektrepha.booking.dto.response.ReviewSummaryResponse;
 import com.ektrepha.booking.service.BookingReadService;
@@ -29,6 +30,7 @@ import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
+import com.ektrepha.model.Elder;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
@@ -36,6 +38,7 @@ import com.ektrepha.model.Review;
 import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 import com.ektrepha.repository.BookingRepository;
+import com.ektrepha.repository.ParentElderRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.ReviewRepository;
 
@@ -58,10 +61,11 @@ public class BookingReadServiceImpl implements BookingReadService {
 	private final BookingRepository bookingRepository;
 	private final ReviewRepository reviewRepository;
 	private final AddressResponseMapper addressResponseMapper;
+	private final ParentElderRepository parentElderRepository;
 
 	@Override
 	@Transactional(readOnly = true)
-	public BookingListResponse list(Long userId, String scope, int page, int pageSize) {
+	public BookingListResponse list(Long userId, String scope, int page, int pageSize, String serviceTypeCode) {
 		Set<BookingStatus> statuses = resolveStatuses(scope);
 		// No parent row yet (P1/P2 not completed) — B1/H1 must render as an empty state (PRD v2
 		// §4), not an error; a user with no parent row has no bookings either way.
@@ -78,7 +82,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 				? Sort.by("startTime").ascending().and(Sort.by("id").ascending())
 				: Sort.by("startTime").descending().and(Sort.by("id").descending());
 
-		Page<Booking> bookings = bookingRepository.findByParentIdAndStatusIn(parent.get().getId(), statuses, PageRequest.of(page, pageSize, sort));
+		Page<Booking> bookings = bookingRepository.findByParentIdAndStatusIn(parent.get().getId(), statuses, serviceTypeCode, PageRequest.of(page, pageSize, sort));
 
 		List<Long> nannyIds = bookings.getContent().stream()
 				.map(Booking::getNanny).filter(java.util.Objects::nonNull).map(Nanny::getId).distinct().toList();
@@ -123,7 +127,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 				availableActions(booking),
 				booking.getFrequency().name(),
 				totalOccurrences(booking),
-				PriceBreakdownResponse.from(booking).toLines());
+				PriceBreakdownResponse.from(booking).toLines(),
+				toElderBookingSummary(booking));
 	}
 
 	// null for a ONE_TIME booking (no series); otherwise how many bookings share its recurrence group.
@@ -227,7 +232,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 				booking.getTotalAmount(),
 				elapsedSeconds(booking),
 				reviewPending,
-				booking.getFrequency().name());
+				booking.getFrequency().name(),
+				toElderBookingSummary(booking));
 	}
 
 	private NannySummary toNannySummary(Nanny nanny, Object[] aggregate) {
@@ -248,6 +254,19 @@ public class BookingReadServiceImpl implements BookingReadService {
 			return null;
 		}
 		return new ChildSummary(child.getId(), child.getFirstName(), AgeDisplay.of(child.getDob(), LocalDate.now()));
+	}
+
+	// relationship lives on parent_elder (the parent<->elder link), not on the elders row itself
+	// booking.elder points straight at - one extra lookup to surface it on the booking response.
+	private ElderBookingSummary toElderBookingSummary(Booking booking) {
+		Elder elder = booking.getElder();
+		if (elder == null) {
+			return null;
+		}
+		String relationship = parentElderRepository.findByIdParentIdAndIdElderId(booking.getParent().getId(), elder.getId())
+				.map(link -> link.getRelationship() == null ? null : link.getRelationship().name())
+				.orElse(null);
+		return new ElderBookingSummary(elder.getId(), elder.getFirstName(), elder.getAge(), relationship, elder.getMobility().name());
 	}
 
 	private ReviewSummaryResponse toReviewSummary(Review review) {

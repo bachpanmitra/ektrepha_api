@@ -144,10 +144,14 @@ Dropped in migration 004's identity rewrite, recreated in migration 013 to back 
 `id`, `parent_id` (FK CASCADE), `label` SMALLINT (`1=HOME, 2=WORK, 3=OTHER`), `address_line1/2`, `landmark`, `access_notes`, `pincode` VARCHAR(6), `city`, `state`, `country` DEFAULT `'India'`, `lat`/`lng`, `is_primary`. GiST geo index.
 
 ### `booking`
-`id`, `parent_id` (FK), `nanny_id` (FK), `child_id` (nullable FK, added migration 018), `service_type_id` (FK → `service_types.id`, added migration 018), `address_id` (nullable FK), `start_time`/`end_time` TIMESTAMPTZ, `status` SMALLINT (`1=PENDING,2=CONFIRMED,3=IN_PROGRESS,4=COMPLETED,5=CANCELLED`), `cancelled_by` (FK → users), `cancellation_reason`, `total_amount`, `created_at`.
+`id`, `parent_id` (FK), `nanny_id` (FK), `child_id` (nullable FK, added migration 018), `elder_id` (nullable FK → `elders.id`, added migration 046), `service_type_id` (FK → `service_types.id`, added migration 018), `address_id` (nullable FK), `start_time`/`end_time` TIMESTAMPTZ, `status` SMALLINT (`1=PENDING,2=CONFIRMED,3=IN_PROGRESS,4=COMPLETED,5=CANCELLED`), `cancelled_by` (FK → users), `cancellation_reason`, `total_amount`, `created_at`.
 - Originally childcare-only (`child_id` required, no vertical column) even though `service_types` already listed `senior_care`/`pet_care`/`tutoring`/`housekeeping`/`adult_care`. Migration 018 added `service_type_id` (backfilled to `childcare` for all pre-existing rows) and relaxed `child_id` to nullable, since a non-childcare booking has no care-recipient to attach. "`child_id` required when `service_type_id` is childcare" is enforced at the app layer, not a DB constraint/trigger — that's deliberately deferred until bad rows are actually observed in practice.
+- `elder_id` is the `senior_care` counterpart of `child_id` — mutually exclusive with it, enforced by `chk_booking_child_xor_elder` (`child_id IS NULL OR elder_id IS NULL`) as well as the app layer (`HourlyCareServiceImpl#validateCareRecipient`).
 - **`no_overlapping_bookings`**: an `EXCLUDE USING gist` constraint preventing the same nanny from having two overlapping bookings while status is `PENDING`/`CONFIRMED`/`IN_PROGRESS`.
-- Indexes: `(nanny_id, start_time)`, `(parent_id, start_time)`, `(service_type_id)`.
+- Indexes: `(nanny_id, start_time)`, `(parent_id, start_time)`, `(service_type_id)`, `(elder_id)`.
+
+### `elders` / `parent_elder` (migration 046)
+`elders(id, first_name, last_name, age INT CHECK 40-120, gender, mobility VARCHAR(20) CHECK IN ('INDEPENDENT','NEEDS_SUPPORT','WHEELCHAIR','BEDRIDDEN'), conditions TEXT[], allergies TEXT[], medication_notes, preferred_language, emergency_contact_name/phone, doctor_name/phone, profile_photo_s3_key, meta_data JSONB, created_at, removed_at)` — Elder Care's care-recipient profile, structurally parallel to `children` but with a soft-delete column (`removed_at`) `children` doesn't have. `parent_elder(parent_id, elder_id, relationship VARCHAR(20) CHECK IN ('FATHER','MOTHER','GRANDFATHER','GRANDMOTHER','FATHER_IN_LAW','MOTHER_IN_LAW','OTHER'), is_primary_contact)`, composite PK — the senior_care counterpart of `parent_child`, same multi-guardian join-table shape. Unlike `parent_child.relationship` (SMALLINT, `NOT NULL`), `parent_elder.relationship` is literal VARCHAR and nullable, since `ElderInput` leaves it optional.
 
 ### `review`
 `id`, `booking_id` (UNIQUE FK), `parent_id` (FK), `nanny_id` (FK), `rating` SMALLINT CHECK 1–5, `comment`, `created_at`.
@@ -194,6 +198,9 @@ Current + historical demand readings: `zone_area_id`, `service_type_id`, `open_b
 
 ### `holiday_calendar`
 `id` BIGSERIAL PK (surrogate key added migration 020 — `holiday_date` alone used to be the PK, which couldn't hold two different regions' holidays landing on the same date), `holiday_date`, `name`, `region` VARCHAR NOT NULL DEFAULT `'ALL'` (`'ALL'` = national holiday), `is_active`. UNIQUE `(holiday_date, region)`. Static, ops-editable holiday list backing `day_type` resolution (`weekday`/`weekend`/`holiday`) in pricing rules — added because no external holiday API is wired in; seeded with 6 India public holidays for 2026 (all `region='ALL'`). Lookup is `WHERE holiday_date = ? AND region IN (?, 'ALL')`, region being the zone's `state` — so a state-specific holiday and a national one on the same date both resolve correctly.
+
+### Elder Care pricing/serviceability seed (migration 047)
+For every zone with an active `childcare` row in `zone_service_pricing`, a `senior_care` row is inserted copying every pricing column (plus its `dynamic_pricing_config` row, if any) — so senior_care launches priced identically to childcare everywhere childcare is already offered, with no code-level fallback. `serviceability_service_type` gets a matching `senior_care` row per zone, same `status` as that zone's childcare row. Also seeds 5 new `skill` rows ('Elder care', 'Dementia care', 'Mobility assistance', 'Medication management', 'Post-hospital care'). All inserts are `ON CONFLICT DO NOTHING` — a zone given its own distinct senior_care pricing later is never overwritten by a re-run.
 
 ---
 

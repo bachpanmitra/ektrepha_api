@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 46
+      author: ektrepha
+      description: Adds the elders/parent_elder tables (Elder Care profiles) and booking.elder_id
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/046-elder-care.sql
+            relativeToChangelogFile: false

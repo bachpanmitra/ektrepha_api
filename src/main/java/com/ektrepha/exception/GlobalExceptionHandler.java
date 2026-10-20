@@ -53,13 +53,13 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler({ ForbiddenChildAccessException.class, BookingContactNotAvailableException.class })
+	@ExceptionHandler({ ForbiddenChildAccessException.class, ForbiddenElderAccessException.class, BookingContactNotAvailableException.class })
 	public ResponseEntity<ErrorResponse> handleForbidden(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
 	}
 
 	@ExceptionHandler({ DuplicateReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class,
-			AddressInUseException.class, ChildInUseException.class, AccountHasActiveBookingsException.class,
+			AddressInUseException.class, ChildInUseException.class, ElderInUseException.class, AccountHasActiveBookingsException.class,
 			NannyUnavailableException.class, BookingNotCancellableException.class, CareUnavailableException.class,
 			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class,
 			RequestAlreadyDecidedException.class, SelfAccountLockoutException.class, BanEvasionDetectedException.class,
