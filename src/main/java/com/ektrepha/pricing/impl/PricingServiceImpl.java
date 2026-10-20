@@ -20,6 +20,7 @@ import com.ektrepha.model.PricingMode;
 import com.ektrepha.model.ServiceType;
 import com.ektrepha.model.ZonePricingRule;
 import com.ektrepha.model.ZoneServicePricing;
+import com.ektrepha.pricing.GstSplitUtil;
 import com.ektrepha.pricing.dto.request.PriceCalculationRequest;
 import com.ektrepha.pricing.dto.response.AppliedRuleResponse;
 import com.ektrepha.pricing.dto.response.DynamicPricingInfoResponse;
@@ -41,8 +42,6 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class PricingServiceImpl implements PricingService {
-
-	private static final int MONEY_SCALE = 2;
 
 	private final ZoneServicePricingRepository pricingRepository;
 	private final ServiceTypeRepository serviceTypeRepository;
@@ -99,18 +98,27 @@ public class PricingServiceImpl implements PricingService {
 			// Hard ceiling regardless of how many surge sources compose — see design doc's
 			// "surge pricing news story" guardrail.
 			combinedMultiplier = rawMultiplier.min(appProperties.pricing().combinedMultiplierCap());
-			baseRate = effectiveRate.multiply(combinedMultiplier).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-			subtotal = baseRate.multiply(hours).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+			baseRate = GstSplitUtil.scale(effectiveRate.multiply(combinedMultiplier));
+			subtotal = GstSplitUtil.scale(baseRate.multiply(hours));
 		}
 
-		BigDecimal platformFee = subtotal.multiply(pricing.getPlatformFeePct())
-				.divide(BigDecimal.valueOf(100), MONEY_SCALE, RoundingMode.HALF_UP);
-		BigDecimal total = subtotal.add(platformFee);
+		BigDecimal gstRatePct = appProperties.pricing().platformFeeGstPct();
+		// Dividing by 100 is always exact (never non-terminating), so the shared scale() helper
+		// alone handles the rounding here - no need for divide's own 3-arg (scale, mode) form.
+		BigDecimal platformFee = GstSplitUtil.scale(subtotal.multiply(pricing.getPlatformFeePct())
+				.divide(BigDecimal.valueOf(100)));
+		// app.pricing.platform-fee-gst-pct (18, matching SAC 999351). A FIRST5_FEE_WAIVER trial
+		// waives this along with platformFee itself (see com.ektrepha.trial) - re-applied by the
+		// caller below, since this method is parent-agnostic and has no notion of a trial.
+		BigDecimal platformFeeGst = GstSplitUtil.scale(platformFee.multiply(gstRatePct)
+				.divide(BigDecimal.valueOf(100)));
+		BigDecimal total = subtotal.add(platformFee).add(platformFeeGst);
 
 		AppliedRuleResponse appliedRule = rule != null ? new AppliedRuleResponse(rule.getDayType(), rule.getPriceMultiplier()) : null;
 
 		return new PriceQuoteResponse(baseRate, requestedMode, appliedRule, buildDynamicInfo(pricing),
-				combinedMultiplier, hours, subtotal, platformFee, total, pricing.getCurrency());
+				combinedMultiplier, hours, subtotal, platformFee, platformFeeGst, gstRatePct, total, pricing.getCurrency(),
+				false, false);
 	}
 
 	// Hourly, daily and monthly prices are all independently optional on a zone+service row (an
@@ -129,7 +137,9 @@ public class PricingServiceImpl implements PricingService {
 
 	private BigDecimal calculateHours(LocalTime start, LocalTime end) {
 		long minutes = Duration.between(start, end).toMinutes();
-		return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), MONEY_SCALE, RoundingMode.HALF_UP);
+		// minutes/60 isn't always exact (e.g. 50/60), so divide at higher precision first, then
+		// let the shared helper apply the final 2-decimal HALF_UP rounding everything else uses.
+		return GstSplitUtil.scale(BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 10, RoundingMode.HALF_UP));
 	}
 
 	private BigDecimal enforceMinimumHours(BigDecimal requestedHours, BigDecimal minBookingHours) {
@@ -148,7 +158,7 @@ public class PricingServiceImpl implements PricingService {
 				return clamp(mapping.get().getOwnRate(), pricing.getRateMin(), pricing.getRateMax());
 			}
 		}
-		return pricing.getRateMin().add(pricing.getRateMax()).divide(BigDecimal.valueOf(2), MONEY_SCALE, RoundingMode.HALF_UP);
+		return GstSplitUtil.scale(pricing.getRateMin().add(pricing.getRateMax()).divide(BigDecimal.valueOf(2)));
 	}
 
 	private BigDecimal clamp(BigDecimal value, BigDecimal min, BigDecimal max) {

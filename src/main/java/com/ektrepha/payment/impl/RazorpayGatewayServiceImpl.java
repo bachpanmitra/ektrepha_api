@@ -139,6 +139,38 @@ public class RazorpayGatewayServiceImpl implements PaymentGatewayService {
 		return anyFailed ? Optional.of(new GatewayPaymentStatus(null, false)) : Optional.empty();
 	}
 
+	@Override
+	public Optional<String> fetchPaymentFingerprint(String orderId) {
+		if (!configured()) {
+			return Optional.empty();
+		}
+
+		String credentials = Base64.getEncoder().encodeToString((keyId + ":" + keySecret).getBytes(StandardCharsets.UTF_8));
+		String body = restClient.get()
+				.uri("/orders/{orderId}/payments", orderId)
+				.header("Authorization", "Basic " + credentials)
+				.retrieve()
+				.body(String.class);
+
+		for (JsonNode item : parse(body).path("items")) {
+			if (!"captured".equals(item.path("status").asText(""))) {
+				continue;
+			}
+			String method = item.path("method").asText("");
+			String instrumentId = switch (method) {
+				case "card" -> item.path("card").path("id").asText(null);
+				case "upi" -> item.path("vpa").asText(null);
+				case "netbanking" -> item.path("bank").asText(null);
+				case "wallet" -> item.path("wallet").asText(null);
+				default -> null;
+			};
+			if (instrumentId != null) {
+				return Optional.of(method + ":" + instrumentId);
+			}
+		}
+		return Optional.empty();
+	}
+
 	private boolean configured() {
 		return keyId != null && !keyId.isBlank() && keySecret != null && !keySecret.isBlank();
 	}

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 43
+      author: ektrepha
+      description: Adds the FIRST5_FEE_WAIVER parent trial (5-day fee waiver), hourly-care price-lock quotes, and the booking columns that tie a booking back to the trial that discounted it
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/043-parent-trials.sql
+            relativeToChangelogFile: false

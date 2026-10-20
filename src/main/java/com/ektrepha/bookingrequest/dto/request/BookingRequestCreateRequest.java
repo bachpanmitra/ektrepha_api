@@ -6,6 +6,8 @@ import java.time.LocalTime;
 
 import com.ektrepha.model.BookingFrequency;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +20,7 @@ public record BookingRequestCreateRequest(
 		@NotNull LocalDate bookingDate,
 		@NotNull LocalTime startTime,
 		@NotNull LocalTime endTime,
-		BigDecimal quotedTotal,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal quotedTotal,
 		@NotNull BookingFrequency frequency,
 		@NotNull @Min(1) Integer childrenCount,
 		@Min(0) Integer childAgeYears,

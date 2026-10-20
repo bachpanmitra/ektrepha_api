@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ektrepha.activity.service.OrderActivityService;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
@@ -31,6 +32,8 @@ import com.ektrepha.payment.service.PaymentGatewayService;
 import com.ektrepha.pricing.service.PricingService;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
+import com.ektrepha.repository.GstStateCodeRepository;
+import com.ektrepha.repository.HourlyCareQuoteRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
@@ -39,6 +42,7 @@ import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
 import com.ektrepha.repository.UserRepository;
+import com.ektrepha.trial.service.TrialService;
 
 /**
  * Covers {@link HourlyCareServiceImpl#status}'s self-heal path for a booking stuck at
@@ -83,6 +87,14 @@ class HourlyCareServiceImplReconciliationTest {
 	private OrderActivityService orderActivityService;
 	@Mock
 	private UserRepository userRepository;
+	@Mock
+	private HourlyCareQuoteRepository hourlyCareQuoteRepository;
+	@Mock
+	private GstStateCodeRepository gstStateCodeRepository;
+	@Mock
+	private TrialService trialService;
+	@Mock
+	private AppProperties appProperties;
 
 	private HourlyCareServiceImpl service;
 	private Parent parent;
@@ -94,7 +106,7 @@ class HourlyCareServiceImplReconciliationTest {
 		service = new HourlyCareServiceImpl(parentRepository, bookingRepository, nannyRepository, serviceTypeRepository,
 				parentAddressRepository, parentChildRepository, serviceabilityPincodeRepository,
 				caregiverZoneMappingRepository, paymentTransactionRepository, paymentGatewayService, pricingService,
-				addressResponseMapper, orderActivityService, userRepository);
+				addressResponseMapper, orderActivityService, userRepository, hourlyCareQuoteRepository, gstStateCodeRepository, trialService, appProperties);
 
 		User user = User.builder().id(USER_ID).build();
 		parent = Parent.builder().id(1L).user(user).build();

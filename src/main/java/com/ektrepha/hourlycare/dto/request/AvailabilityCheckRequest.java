@@ -19,5 +19,13 @@ public record AvailabilityCheckRequest(
 		@NotNull Long addressId,
 		@NotNull Instant startTime,
 		@NotNull Instant endTime,
-		@NotNull PricingMode pricingMode) {
+		@NotNull PricingMode pricingMode,
+		/**
+		 * Advisory only, for client-side UI state (e.g. showing a "free trial" banner before the
+		 * price comes back) - never trusted for pricing. The server always re-derives trial
+		 * eligibility itself from this parent's own {@code ParentTrial} row (see
+		 * {@code HourlyCareServiceImpl#applyDailyCareTrial}), since a client-sent boolean is
+		 * trivially spoofable. Null/omitted is treated the same as false - it's simply ignored.
+		 */
+		Boolean isTrialPeriod) {
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 44
+      author: ektrepha
+      description: Persists the subtotal/platform-fee/GST breakdown on booking and payment_transaction, not just the net amount
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/044-payment-gst-breakdown.sql
+            relativeToChangelogFile: false

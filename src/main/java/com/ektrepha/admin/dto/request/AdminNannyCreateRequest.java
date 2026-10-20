@@ -3,6 +3,8 @@ package com.ektrepha.admin.dto.request;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
@@ -25,8 +27,8 @@ public record AdminNannyCreateRequest(
 		@NotNull @Past LocalDate dob,
 		String educationLevel,
 		Integer yearsExperience,
-		BigDecimal hourlyRate,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal hourlyRate,
 		Long zoneAreaId,
 		Long serviceTypeId,
-		BigDecimal ownRate) {
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal ownRate) {
 }

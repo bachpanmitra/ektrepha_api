@@ -76,6 +76,11 @@ app:
     # Global recompute cadence for DemandSnapshotRecomputeJob — every enabled zone x service-type
     # shares this one cadence rather than each row's own dynamic_pricing_config.recompute_interval_mins.
     demand-recompute-interval-ms: ${PRICING_DEMAND_RECOMPUTE_INTERVAL_MS:600000}
+    # GST on the platform fee, as a percentage. SAC 999351 (child day-care services) is rated at
+    # 18% — see GST_State_Codes.xlsx / GstSplitUtil for the CGST+SGST/UTGST vs IGST split this feeds.
+    platform-fee-gst-pct: ${PRICING_PLATFORM_FEE_GST_PCT:18}
+    # This business's GST-registration state, for the CGST+SGST vs IGST split (see AppProperties.Pricing).
+    business-state: ${PRICING_BUSINESS_STATE:Karnataka}
   serviceability:
     # A coordinate search matching a zone further than this is treated as not serviceable,
     # rather than silently returning whatever the geographically nearest (but distant) zone is.
@@ -116,3 +121,20 @@ app:
     key-secret: ${RAZORPAY_KEY_SECRET:}
     webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
     base-url: ${RAZORPAY_BASE_URL:https://api.razorpay.com/v1}
+  # FIRST5_FEE_WAIVER new-parent free-hours trial (see com.ektrepha.trial). enabled defaults to
+  # false — the whole feature is off until explicitly turned on. window-minutes is in minutes (not
+  # hours) so QA can set it down to 30 for testing even though the product default is 120h = 7200
+  # min. free-hours-cap is a cumulative usage counter (not a per-booking limit) — every booking
+  # made while the trial is ACTIVE is 100% free regardless of length; override it down (e.g. to 1)
+  # for a dev/QA run. hash-salt must be a real secret (env var) in any environment that enables this.
+  trial:
+    enabled: ${TRIAL_FIRST5_ENABLED:false}
+    window-minutes: ${TRIAL_WINDOW_MINUTES:7200}
+    free-hours-cap: ${TRIAL_FREE_HOURS_CAP:16}
+    care-date-limit-days: ${TRIAL_CARE_DATE_LIMIT_DAYS:14}
+    quote-lock-minutes: ${TRIAL_QUOTE_LOCK_MINUTES:15}
+    hash-salt: ${TRIAL_HASH_SALT:dev-only-insecure-trial-salt-change-me}
+    # TrialExpiryJob / TrialNotificationJob — every 5 min by default, matching the spec's "every 5
+    # min" scheduled sweep.
+    expiry-cron: ${TRIAL_EXPIRY_CRON:0 */5 * * * *}
+    notification-cron: ${TRIAL_NOTIFICATION_CRON:0 */5 * * * *}

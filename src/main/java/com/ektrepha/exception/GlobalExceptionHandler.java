@@ -29,6 +29,18 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request);
 	}
 
+	// FIRST5_FEE_WAIVER trial — the only two exceptions in this handler that carry a machine-readable
+	// `code` for the app to branch on (re-quote on either).
+	@ExceptionHandler(QuoteExpiredException.class)
+	public ResponseEntity<ErrorResponse> handleQuoteExpired(QuoteExpiredException ex, HttpServletRequest request) {
+		return build(HttpStatus.CONFLICT, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(TrialRevokedException.class)
+	public ResponseEntity<ErrorResponse> handleTrialRevoked(TrialRevokedException ex, HttpServletRequest request) {
+		return build(HttpStatus.CONFLICT, ex.getMessage(), ex.code(), request);
+	}
+
 	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class, ParentNotFoundException.class,
 			ApprovalRequestNotFoundException.class, SosAlertNotFoundException.class, IncidentReportNotFoundException.class,
 			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class, ReviewNotFoundException.class })
@@ -169,7 +181,11 @@ public class GlobalExceptionHandler {
 	}
 
 	private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, HttpServletRequest request) {
-		ErrorResponse body = new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message, request.getRequestURI());
+		return build(status, message, null, request);
+	}
+
+	private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, String code, HttpServletRequest request) {
+		ErrorResponse body = new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message, request.getRequestURI(), code);
 		return ResponseEntity.status(status).body(body);
 	}
 

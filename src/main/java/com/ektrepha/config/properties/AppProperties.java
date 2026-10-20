@@ -33,7 +33,8 @@ public record AppProperties(
 		@Valid @NotNull MobileOtp mobileOtp,
 		@Valid @NotNull Sms sms,
 		@Valid @NotNull OlaMaps olaMaps,
-		@Valid @NotNull Razorpay razorpay) {
+		@Valid @NotNull Razorpay razorpay,
+		@Valid @NotNull Trial trial) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -89,7 +90,18 @@ public record AppProperties(
 	}
 
 	public record Pricing(
-			@NotNull @Positive BigDecimal combinedMultiplierCap) {
+			@NotNull @Positive BigDecimal combinedMultiplierCap,
+			// GST charged on the platform fee, as a percentage - 18, matching SAC 999351 (child
+			// day-care services). Every quote's platformFeeGst line (PricingServiceImpl#calculate)
+			// reflects it; a FIRST5_FEE_WAIVER trial waives this along with the platform fee itself
+			// (see com.ektrepha.trial).
+			@NotNull BigDecimal platformFeeGstPct,
+			// This business's own GST-registration state - the booking's care-address state is
+			// compared against this to split platformFeeGstPaise into CGST+SGST (same state, split
+			// evenly) vs IGST (different state, charged whole) at booking-creation time (see
+			// HourlyCareServiceImpl#splitGst). Defaults to Karnataka, matching every zone this app
+			// currently serves - override once the business is registered in more than one state.
+			@NotBlank String businessState) {
 	}
 
 	public record Serviceability(
@@ -208,5 +220,28 @@ public record AppProperties(
 			String keySecret,
 			String webhookSecret,
 			@NotBlank String baseUrl) {
+	}
+
+	/**
+	 * FIRST5_FEE_WAIVER — the new-parent free-hours trial (see {@code com.ektrepha.trial}).
+	 * {@code enabled} gates the whole feature off by default; {@code windowMinutes} is in minutes
+	 * (not hours) so QA can configure it down to 30 for testing, even though the product default is
+	 * 120h (7200 min). While the trial is ACTIVE every eligible booking has its caregiver rate +
+	 * platform fee waived in full regardless of the booking's own length — GST is the only thing
+	 * the parent still pays. {@code freeHoursCap}
+	 * is a cumulative usage counter, not a per-booking limit: it only governs when the trial ends
+	 * (once a confirmed booking's hours push the running total to/past this cap), never whether or
+	 * how much of any single booking is charged. Product default 16h; a dev/QA run may override it
+	 * down to e.g. 1h, the same way {@code windowMinutes} is overridden. {@code hashSalt} must be a
+	 * real secret in every environment that has {@code enabled: true} — every phone/device/
+	 * payment-instrument hash this feature computes is salted with it.
+	 */
+	public record Trial(
+			@DefaultValue("false") boolean enabled,
+			@NotNull @Positive Long windowMinutes,
+			@NotNull @Positive BigDecimal freeHoursCap,
+			@NotNull @Positive Integer careDateLimitDays,
+			@NotNull @Positive Integer quoteLockMinutes,
+			@NotBlank String hashSalt) {
 	}
 }

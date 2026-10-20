@@ -65,7 +65,7 @@ public class AdminNannyController {
 	}
 
 	@PatchMapping("/{id}")
-	public ResponseEntity<AdminNannyDetailResponse> update(@PathVariable Long id, @RequestBody AdminNannyUpdateRequest request) {
+	public ResponseEntity<AdminNannyDetailResponse> update(@PathVariable Long id, @Valid @RequestBody AdminNannyUpdateRequest request) {
 		return ResponseEntity.ok(adminNannyService.update(id, request));
 	}
 

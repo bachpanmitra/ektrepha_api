@@ -29,4 +29,14 @@ public interface PaymentGatewayService {
 	 */
 	Optional<GatewayPaymentStatus> findLatestPayment(String orderId);
 
+	/**
+	 * A stable identifier for the payment instrument used on the latest captured payment against
+	 * {@code orderId} — the tokenized card id for a card payment, the VPA for UPI, the bank code for
+	 * netbanking, or the wallet name for a wallet payment (Razorpay has no single literal
+	 * "fingerprint" field the way some gateways do). Used by {@code com.ektrepha.trial} to detect
+	 * the same payment instrument being reused across more than one parent's trial. Callers must
+	 * hash the result before storing/comparing it — never persisted or logged in the clear.
+	 */
+	Optional<String> fetchPaymentFingerprint(String orderId);
+
 }

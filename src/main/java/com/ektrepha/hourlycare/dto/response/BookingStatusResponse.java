@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.parent.dto.response.AddressResponse;
+import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 
 /** Booking status screen: "Payment received" / "Assigning your caregiver" / "Care scheduled". */
 public record BookingStatusResponse(
@@ -16,5 +17,6 @@ public record BookingStatusResponse(
 		Instant startTime,
 		Instant endTime,
 		AddressResponse address,
-		List<BookingProgressStep> progress) {
+		List<BookingProgressStep> progress,
+		PriceBreakdownResponse priceBreakdown) {
 }

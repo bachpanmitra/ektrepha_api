@@ -12,6 +12,7 @@ import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.CaregiverAssignmentResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
+import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
 import com.ektrepha.hourlycare.dto.response.PaymentInitiateResponse;
@@ -23,6 +24,10 @@ public interface HourlyCareService {
 
 	// Same inputs as checkAvailability, minus the capacity check - just the price.
 	PriceQuoteResponse getPrice(Long userId, AvailabilityCheckRequest request);
+
+	// Locks today's price (including any FIRST5_FEE_WAIVER trial discount) for app.trial.quote-lock-minutes
+	// (default 15) behind a quoteId createBooking can honor. Same inputs as checkAvailability/getPrice.
+	HourlyCareQuoteResponse quote(Long userId, AvailabilityCheckRequest request);
 
 	HourlyCareBookingResponse createBooking(Long userId, HourlyCareBookingCreateRequest request);
 

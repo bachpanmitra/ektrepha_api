@@ -58,7 +58,7 @@ app:
     fixed-otp:
       enabled: ${MOBILE_OTP_FIXED_ENABLED:true}
       code: ${MOBILE_OTP_FIXED_CODE:123456}
-      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999,+919000000002}
+      allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999,+919000000002, +919153766118,+918002638272, +918002638271}
   # Real Razorpay TEST-mode credentials (see com.ektrepha.payment) — order creation and webhook
   # signature verification were both verified end-to-end against these on 2026-09-26. Test-mode
   # only, no real money moves, but still a real account credential — rotate in the Razorpay
@@ -74,6 +74,18 @@ app:
     seed-admin: ${STARTUP_SEED_ADMIN:true}
     seed-admin-email: ${SEED_ADMIN_EMAIL:admin@ektrepha.local}
     seed-admin-password: ${SEED_ADMIN_PASSWORD:ChangeMe123!}
+  # FIRST5_FEE_WAIVER (see com.ektrepha.trial) — defaulted to enabled here even for dev. This repo
+  # has no dedicated `test` Spring profile, so every @SpringBootTest also runs against "dev"
+  # (application.yml's own hardcoded spring.profiles.active); enabling it here previously broke
+  # two unrelated tests' cleanup (AuthControllerApiTest/MobileOtpReviewAccountApiTest delete a
+  # freshly-created test user; onFirstOtpVerification had by then given that user a parent_trials
+  # row, and the delete had no cascade for it). parent_trials.parent_id now has
+  # ON DELETE CASCADE (migration 043), so that failure mode is gone. Override via
+  # TRIAL_FIRST5_ENABLED=false (and TRIAL_WINDOW_MINUTES=60, PRICING_PLATFORM_FEE_GST_PCT=18 to see
+  # other dev-only overrides below) if you need the feature off for a specific run.
+  trial:
+    enabled: ${TRIAL_FIRST5_ENABLED:true}
+    window-minutes: ${TRIAL_WINDOW_MINUTES:7200}
 
 management:
   endpoints:

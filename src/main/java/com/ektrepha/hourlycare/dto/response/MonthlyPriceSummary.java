@@ -11,6 +11,8 @@ public record MonthlyPriceSummary(
 		int occurrenceCount,
 		BigDecimal subtotal,
 		BigDecimal platformFee,
+		/** GST on {@link #platformFee}, per {@code app.pricing.platform-fee-gst-pct} - already folded into {@link #total}, broken out here so the client can show it as its own line item. */
+		BigDecimal platformFeeGst,
 		BigDecimal total,
 		String currency) {
 }

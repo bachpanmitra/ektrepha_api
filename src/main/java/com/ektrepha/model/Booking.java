@@ -2,6 +2,7 @@ package com.ektrepha.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -100,6 +101,53 @@ public class Booking {
 
 	@Column(name = "checked_out_at")
 	private Instant checkedOutAt;
+
+	/** The FIRST5_FEE_WAIVER trial that discounted this booking, if any — see {@link ParentTrial}. Null for every booking that never touched a trial. */
+	@Column(name = "trial_id")
+	private UUID trialId;
+
+	/** How much of {@link #totalAmount} was waived by {@link #trialId}, in paise — 0 when trialId is null. */
+	@Column(name = "trial_discount_paise", nullable = false)
+	@Builder.Default
+	private long trialDiscountPaise = 0L;
+
+	/**
+	 * The pricing breakdown this booking was charged at, in paise — persisted at creation time since
+	 * it's the only point every pricing input (zone, date, mode) is known. 0 on an occurrence a
+	 * monthly series doesn't actually bill (see HourlyCareServiceImpl#createMonthlyBooking).
+	 */
+	@Column(name = "subtotal_paise", nullable = false)
+	@Builder.Default
+	private long subtotalPaise = 0L;
+
+	@Column(name = "platform_fee_paise", nullable = false)
+	@Builder.Default
+	private long platformFeePaise = 0L;
+
+	@Column(name = "platform_fee_gst_paise", nullable = false)
+	@Builder.Default
+	private long platformFeeGstPaise = 0L;
+
+	/**
+	 * {@link #platformFeeGstPaise} split by state (see {@code GstSplitUtil}) — CGST+SGST or
+	 * CGST+UTGST (split evenly) for an intra-state booking, IGST (the whole amount) for inter-state.
+	 * Exactly one of (cgst+sgst), (cgst+utgst), or igst is ever non-zero.
+	 */
+	@Column(name = "cgst_paise", nullable = false)
+	@Builder.Default
+	private long cgstPaise = 0L;
+
+	@Column(name = "sgst_paise", nullable = false)
+	@Builder.Default
+	private long sgstPaise = 0L;
+
+	@Column(name = "utgst_paise", nullable = false)
+	@Builder.Default
+	private long utgstPaise = 0L;
+
+	@Column(name = "igst_paise", nullable = false)
+	@Builder.Default
+	private long igstPaise = 0L;
 
 	@PrePersist
 	void onCreate() {

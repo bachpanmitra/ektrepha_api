@@ -59,6 +59,41 @@ public class PaymentTransaction {
 	@Column(name = "gateway_payment_id", length = 100)
 	private String gatewayPaymentId;
 
+	/**
+	 * This payment attempt's own GST/invoice breakdown, in paise — copied from the booking(s) it's
+	 * paying for at initiate time (summed across a monthly series), so this row is a self-contained
+	 * record even if pricing moves before a later attempt. 0+0+0 and amount=0 together mean a
+	 * FIRST5_FEE_WAIVER trial waived the booking in full — not that nothing was priced.
+	 */
+	@Column(name = "subtotal_paise", nullable = false)
+	@Builder.Default
+	private long subtotalPaise = 0L;
+
+	@Column(name = "platform_fee_paise", nullable = false)
+	@Builder.Default
+	private long platformFeePaise = 0L;
+
+	@Column(name = "platform_fee_gst_paise", nullable = false)
+	@Builder.Default
+	private long platformFeeGstPaise = 0L;
+
+	/** {@link #platformFeeGstPaise} split by state — see {@link Booking#getCgstPaise()}. */
+	@Column(name = "cgst_paise", nullable = false)
+	@Builder.Default
+	private long cgstPaise = 0L;
+
+	@Column(name = "sgst_paise", nullable = false)
+	@Builder.Default
+	private long sgstPaise = 0L;
+
+	@Column(name = "utgst_paise", nullable = false)
+	@Builder.Default
+	private long utgstPaise = 0L;
+
+	@Column(name = "igst_paise", nullable = false)
+	@Builder.Default
+	private long igstPaise = 0L;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 

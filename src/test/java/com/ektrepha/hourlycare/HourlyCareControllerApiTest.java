@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,8 @@ import com.ektrepha.repository.ZoneServicePricingRepository;
 @Transactional
 class HourlyCareControllerApiTest {
 
+	private static final ZoneId INDIA_ZONE = ZoneId.of("Asia/Kolkata");
+
 	@Autowired
 	private WebApplicationContext webApplicationContext;
 	@Autowired
@@ -106,9 +109,19 @@ class HourlyCareControllerApiTest {
 	private ServiceType childcare;
 	private ZoneArea zone;
 	private String pincode;
+	private Instant start;
+	private Instant end;
 
 	@BeforeEach
 	void setUp() {
+		// A fixed 10:00-14:00 IST window on a future date, not Instant.now()-derived - the
+		// PricingServiceImpl#calculate day-boundary check compares LocalTime-of-day, so a window
+		// that happens to straddle midnight IST fails with a false "endTime must be after
+		// startTime" regardless of this feature (see HourlyCareTrialQuoteApiTest's own fixture).
+		LocalDate futureDate = LocalDate.now(INDIA_ZONE).plusDays(7);
+		start = futureDate.atTime(10, 0).atZone(INDIA_ZONE).toInstant();
+		end = futureDate.atTime(14, 0).atZone(INDIA_ZONE).toInstant();
+
 		mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
 				.apply(SecurityMockMvcConfigurers.springSecurity())
 				.build();
@@ -177,8 +190,6 @@ class HourlyCareControllerApiTest {
 		createMappedNanny();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
@@ -196,8 +207,6 @@ class HourlyCareControllerApiTest {
 		// ops assigns a caregiver after the fact regardless (see availability_withNoMappedCaregiver_stillReturnsQuote).
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 
 		mockMvc.perform(post("/api/v1/hourly-care/price").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
@@ -214,8 +223,6 @@ class HourlyCareControllerApiTest {
 		Parent parent = createParent();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON)
@@ -232,8 +239,6 @@ class HourlyCareControllerApiTest {
 		Nanny nanny = createMappedNanny();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 		var parentAuth = user(parent.getUser().getId().toString()).roles("PARENT");
 
 		// Reserve.
@@ -288,8 +293,6 @@ class HourlyCareControllerApiTest {
 		Nanny replacement = createMappedNanny();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 		var parentAuth = user(parent.getUser().getId().toString()).roles("PARENT");
 
 		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
@@ -346,8 +349,6 @@ class HourlyCareControllerApiTest {
 		createMappedNanny();
 		ParentAddress address = createAddress(parent);
 		Children child = createChild(parent);
-		Instant start = Instant.now().plusSeconds(7 * 86400);
-		Instant end = start.plusSeconds(4 * 3600);
 		var parentAuth = user(parent.getUser().getId().toString()).roles("PARENT");
 
 		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)

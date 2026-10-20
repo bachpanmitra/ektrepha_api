@@ -83,3 +83,9 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/041-monthly-pricing-mode.yaml
   - include:
       file: classpath:db/changelog/changes/042-booking-cancellation-log.yaml
+  - include:
+      file: classpath:db/changelog/changes/043-parent-trials.yaml
+  - include:
+      file: classpath:db/changelog/changes/044-payment-gst-breakdown.yaml
+  - include:
+      file: classpath:db/changelog/changes/045-gst-state-codes.yaml

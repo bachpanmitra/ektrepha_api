@@ -25,6 +25,7 @@ import com.ektrepha.booking.service.BookingReadService;
 import com.ektrepha.booking.service.BookingWriteService;
 import com.ektrepha.cancellation.service.BookingCancellationLogService;
 import com.ektrepha.child.AgeDisplay;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.BookingContactNotAvailableException;
 import com.ektrepha.exception.BookingNotCancellableException;
 import com.ektrepha.exception.BookingNotFoundException;
@@ -40,6 +41,7 @@ import com.ektrepha.model.BookingCancellationReasonCode;
 import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
+import com.ektrepha.model.GstStateCode;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.OrderActivityActorType;
@@ -50,11 +52,13 @@ import com.ektrepha.model.PricingMode;
 import com.ektrepha.model.ServiceType;
 import com.ektrepha.parent.dto.response.AddressResponse;
 import com.ektrepha.parent.impl.AddressResponseMapper;
+import com.ektrepha.pricing.GstSplitUtil;
 import com.ektrepha.pricing.dto.request.PriceCalculationRequest;
 import com.ektrepha.pricing.dto.response.PriceQuoteResponse;
 import com.ektrepha.pricing.service.PricingService;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
+import com.ektrepha.repository.GstStateCodeRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
@@ -98,6 +102,8 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 	private final AddressResponseMapper addressResponseMapper;
 	private final BookingReadService bookingReadService;
 	private final BookingCancellationLogService bookingCancellationLogService;
+	private final AppProperties appProperties;
+	private final GstStateCodeRepository gstStateCodeRepository;
 
 	@Override
 	@Transactional
@@ -158,6 +164,10 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 			Instant end = windows.get(i)[1];
 			PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), nanny.getId(), start, end);
 			BigDecimal occurrenceAmount = quote.total();
+			long subtotalPaise = GstSplitUtil.toPaise(quote.subtotal());
+			long feePaise = GstSplitUtil.toPaise(quote.platformFee());
+			long gstPaise = GstSplitUtil.toPaise(quote.platformFeeGst());
+			GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
 
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(nanny).child(child).serviceType(serviceType).address(address)
@@ -166,6 +176,13 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 					.totalAmount(occurrenceAmount)
 					.frequency(frequency)
 					.recurrenceGroupId(recurrenceGroupId)
+					.subtotalPaise(subtotalPaise)
+					.platformFeePaise(feePaise)
+					.platformFeeGstPaise(gstPaise)
+					.cgstPaise(gstSplit.cgstPaise())
+					.sgstPaise(gstSplit.sgstPaise())
+					.utgstPaise(gstSplit.utgstPaise())
+					.igstPaise(gstSplit.igstPaise())
 					.build();
 
 			try {
@@ -376,6 +393,13 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
 		LocalTime endLocalTime = LocalTime.from(endTime.atZone(INDIA_ZONE));
 		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, serviceTypeCode, bookingDate, startLocalTime, endLocalTime, nannyId, PricingMode.RANGE));
+	}
+
+	private GstSplitUtil.GstSplit splitGst(long gstPaise, String careAddressState) {
+		String businessState = appProperties.pricing().businessState();
+		boolean businessStateUsesUtgst = gstStateCodeRepository.findByStateNameIgnoreCase(businessState)
+				.map(GstStateCode::isUsesUtgst).orElse(false);
+		return GstSplitUtil.split(gstPaise, careAddressState, businessState, businessStateUsesUtgst);
 	}
 
 	// Re-anchors a past booking's time-of-day onto today's date, for a same-slot price estimate.

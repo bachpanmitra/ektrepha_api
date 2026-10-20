@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -22,9 +24,9 @@ public record NannySearchRequest(
 		@NotNull Instant windowStart,
 		@NotNull Instant windowEnd,
 		@NotNull Long childId,
-		BigDecimal minPrice,
-		BigDecimal maxPrice,
-		BigDecimal budget,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal minPrice,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal maxPrice,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal budget,
 		Integer minYearsExperience,
 		String educationLevel,
 		List<Long> languageIds,

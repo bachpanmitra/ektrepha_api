@@ -34,6 +34,7 @@ import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.Review;
 import com.ektrepha.parent.impl.AddressResponseMapper;
+import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.ReviewRepository;
@@ -121,7 +122,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 				review,
 				availableActions(booking),
 				booking.getFrequency().name(),
-				totalOccurrences(booking));
+				totalOccurrences(booking),
+				PriceBreakdownResponse.from(booking).toLines());
 	}
 
 	// null for a ONE_TIME booking (no series); otherwise how many bookings share its recurrence group.

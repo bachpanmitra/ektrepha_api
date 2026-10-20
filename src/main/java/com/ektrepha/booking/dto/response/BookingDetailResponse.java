@@ -5,11 +5,12 @@ import java.time.Instant;
 import java.util.List;
 
 import com.ektrepha.parent.dto.response.AddressResponse;
+import com.ektrepha.pricing.dto.response.PriceBreakdownLineResponse;
 
 /**
- * {@code totalAmount} is the only money figure available — there is no itemized base/surge/platform-fee
- * breakdown here because no payment_transaction model exists yet (PRD "PRD API Design Spec" conflict #4,
- * out of scope for this build pass). Showing a fabricated breakdown would be worse than showing none.
+ * {@code priceBreakdown} is the itemized subtotal/platform-fee/GST breakdown behind
+ * {@code totalAmount} - a flat, ordered list of labeled lines (zero-amount lines omitted),
+ * matching {@code screens/bookings.tsx}'s PaymentCard contract exactly.
  */
 public record BookingDetailResponse(
 		Long id,
@@ -32,5 +33,6 @@ public record BookingDetailResponse(
 		// ONE_TIME/REPEAT_DAILY/REPEAT_WEEKLY/REPEAT_MONTHLY.
 		String frequency,
 		// Total occurrences in this booking's recurring series, or null for a ONE_TIME booking.
-		Integer totalOccurrences) {
+		Integer totalOccurrences,
+		List<PriceBreakdownLineResponse> priceBreakdown) {
 }

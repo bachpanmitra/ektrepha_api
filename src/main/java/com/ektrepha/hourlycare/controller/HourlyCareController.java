@@ -20,6 +20,7 @@ import com.ektrepha.hourlycare.dto.request.PaymentInitiateRequest;
 import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
+import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
 import com.ektrepha.hourlycare.dto.response.PaymentInitiateResponse;
@@ -50,6 +51,14 @@ public class HourlyCareController {
 	@PreAuthorize("hasRole('PARENT')")
 	public ResponseEntity<PriceQuoteResponse> getPrice(Authentication authentication, @Valid @RequestBody AvailabilityCheckRequest request) {
 		return ResponseEntity.ok(hourlyCareService.getPrice(userId(authentication), request));
+	}
+
+	// Locks today's price (including any FIRST5_FEE_WAIVER trial discount) behind a quoteId -
+	// createBooking honors it via that quoteId for app.trial.quote-lock-minutes (default 15).
+	@PostMapping("/bookings/quote")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<HourlyCareQuoteResponse> quote(Authentication authentication, @Valid @RequestBody AvailabilityCheckRequest request) {
+		return ResponseEntity.ok(hourlyCareService.quote(userId(authentication), request));
 	}
 
 	// Review screen's "Continue to payment" - reserves the slot as AWAITING_PAYMENT.

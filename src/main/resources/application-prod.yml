@@ -41,6 +41,11 @@ app:
     key-id: ${RAZORPAY_KEY_ID}
     key-secret: ${RAZORPAY_KEY_SECRET}
     webhook-secret: ${RAZORPAY_WEBHOOK_SECRET}
+  # Required here (no default) unlike the base app.trial.hash-salt block's dev-only placeholder -
+  # every phone/device/payment-fingerprint hash this feature computes is salted with it, so prod
+  # must never fall back to a value checked into source control.
+  trial:
+    hash-salt: ${TRIAL_HASH_SALT}
   mobile-otp:
     # fixed-otp must never be enabled in prod — MobileOtpFixedCodeGuard fails startup if it ever is,
     # on top of this hardcoded false (no MOBILE_OTP_FIXED_ENABLED env var can override it here).

@@ -2,6 +2,7 @@ package com.ektrepha.hourlycare.impl;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.child.AgeDisplay;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.BookingNotAwaitingAssignmentException;
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.BookingNotReassignableException;
@@ -28,6 +31,7 @@ import com.ektrepha.exception.NannyUnavailableException;
 import com.ektrepha.exception.NotServiceableException;
 import com.ektrepha.exception.ParentAddressNotFoundException;
 import com.ektrepha.exception.PaymentStateException;
+import com.ektrepha.exception.QuoteExpiredException;
 import com.ektrepha.exception.ServiceTypeNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.hourlycare.dto.request.AssignCaregiverRequest;
@@ -43,6 +47,8 @@ import com.ektrepha.hourlycare.dto.response.BookingProgressStep;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.CaregiverAssignmentResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
+import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteLineItem;
+import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyPriceSummary;
@@ -52,6 +58,8 @@ import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
+import com.ektrepha.model.GstStateCode;
+import com.ektrepha.model.HourlyCareQuote;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
@@ -68,11 +76,15 @@ import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.payment.dto.GatewayOrder;
 import com.ektrepha.payment.dto.GatewayPaymentStatus;
 import com.ektrepha.payment.service.PaymentGatewayService;
+import com.ektrepha.pricing.GstSplitUtil;
 import com.ektrepha.pricing.dto.request.PriceCalculationRequest;
+import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 import com.ektrepha.pricing.dto.response.PriceQuoteResponse;
 import com.ektrepha.pricing.service.PricingService;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
+import com.ektrepha.repository.GstStateCodeRepository;
+import com.ektrepha.repository.HourlyCareQuoteRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
@@ -81,6 +93,8 @@ import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
 import com.ektrepha.repository.UserRepository;
+import com.ektrepha.trial.MoneyUtil;
+import com.ektrepha.trial.service.TrialService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -117,6 +131,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private final AddressResponseMapper addressResponseMapper;
 	private final OrderActivityService orderActivityService;
 	private final UserRepository userRepository;
+	private final HourlyCareQuoteRepository hourlyCareQuoteRepository;
+	private final GstStateCodeRepository gstStateCodeRepository;
+	private final TrialService trialService;
+	private final AppProperties appProperties;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -132,6 +150,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		// manually, capacity or not (see createBooking).
 		Long zoneAreaId = resolveZoneAreaId(address);
 		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+		quote = applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode());
 		return new AvailabilityResponse(true, quote, null);
 	}
 
@@ -145,7 +164,93 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		return quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+		return applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode());
+	}
+
+	// Details screen's live price estimate (checkAvailability/getPrice) is otherwise parent- and
+	// trial-agnostic (see PricingServiceImpl#calculate) - this re-derives trial eligibility here,
+	// server-side, from this parent's own ParentTrial row, so the Details screen never shows a
+	// stale full price while Checkout's locked quote (see #quote) shows the discounted one.
+	// request.isTrialPeriod() is NEVER consulted - a client-sent flag is trivially spoofable.
+	// FIXED (Daily care) only - RANGE (Hourly) and MONTHLY are excluded entirely from the trial.
+	private PriceQuoteResponse applyDailyCareTrial(PriceQuoteResponse quote, Long parentId, Instant careStartTime, PricingMode mode) {
+		if (mode != PricingMode.FIXED) {
+			return quote;
+		}
+		long subtotalPaise = MoneyUtil.toPaise(quote.subtotal());
+		long feePaise = MoneyUtil.toPaise(quote.platformFee());
+		long gstPaise = MoneyUtil.toPaise(quote.platformFeeGst());
+		LocalDate careDate = LocalDate.ofInstant(careStartTime, INDIA_ZONE);
+		boolean trialApplies = trialService.evaluateForQuote(parentId, subtotalPaise, feePaise, gstPaise, careDate).isPresent();
+		if (!trialApplies) {
+			return quote;
+		}
+		// Caregiver rate + platform fee waived - GST is the only thing still charged.
+		return new PriceQuoteResponse(quote.baseRate(), quote.pricingMode(), quote.appliedRule(), quote.dynamicPricing(),
+				quote.combinedMultiplier(), quote.hours(), GstSplitUtil.ZERO, GstSplitUtil.ZERO, quote.platformFeeGst(),
+				quote.gstRatePct(), quote.platformFeeGst(), quote.currency(), true, true);
+	}
+
+	// Details/Review screen's locked-price quote - same inputs as getPrice, but persists the result
+	// (including any FIRST5_FEE_WAIVER trial discount) behind a quoteId createBooking can honor for
+	// app.trial.quote-lock-minutes (default 15), so the discount agreed here survives unchanged
+	// through to payment even if the trial's own counters/caps move in between.
+	@Override
+	@Transactional
+	public HourlyCareQuoteResponse quote(Long userId, AvailabilityCheckRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		resolveChild(parent, request.childId());
+		requireOneOffMode(request.pricingMode());
+
+		Long zoneAreaId = resolveZoneAreaId(address);
+		PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+
+		long subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
+		long feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
+		long gstPaise = MoneyUtil.toPaise(priceQuote.platformFeeGst());
+		long fullPayablePaise = subtotalPaise + feePaise + gstPaise;
+
+		LocalDate careDate = LocalDate.ofInstant(request.startTime(), INDIA_ZONE);
+		// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Hourly (RANGE) and Monthly are
+		// excluded entirely (Monthly's own createMonthlyBooking/quoteSeries never evaluate a trial).
+		Optional<TrialService.TrialQuoteApplication> trialApplication = request.pricingMode() == PricingMode.FIXED
+				? trialService.evaluateForQuote(parent.getId(), subtotalPaise, feePaise, gstPaise, careDate)
+				: Optional.empty();
+		UUID trialId = trialApplication.map(TrialService.TrialQuoteApplication::trialId).orElse(null);
+		long discountPaise = trialApplication.map(TrialService.TrialQuoteApplication::discountPaise).orElse(0L);
+		long payablePaise = fullPayablePaise - discountPaise;
+
+		Instant now = Instant.now();
+		HourlyCareQuote quoteRow = HourlyCareQuote.builder()
+				.parentId(parent.getId())
+				.zoneAreaId(zoneAreaId)
+				.addressId(address.getId())
+				.childId(request.childId())
+				.pricingMode(request.pricingMode())
+				.startTime(request.startTime())
+				.endTime(request.endTime())
+				.subtotalPaise(subtotalPaise)
+				.platformFeePaise(feePaise)
+				.platformFeeGstPaise(gstPaise)
+				.trialId(trialId)
+				.trialDiscountPaise(discountPaise)
+				.payablePaise(payablePaise)
+				.fullPayablePaise(fullPayablePaise)
+				.currency(priceQuote.currency())
+				.expiresAt(now.plus(Duration.ofMinutes(appProperties.trial().quoteLockMinutes())))
+				.build();
+		quoteRow = hourlyCareQuoteRepository.save(quoteRow);
+
+		List<HourlyCareQuoteLineItem> lineItems = new ArrayList<>();
+		lineItems.add(new HourlyCareQuoteLineItem("PLATFORM_FEE", feePaise));
+		lineItems.add(new HourlyCareQuoteLineItem("PLATFORM_FEE_GST", gstPaise));
+		if (discountPaise > 0) {
+			lineItems.add(new HourlyCareQuoteLineItem("TRIAL_DISCOUNT", -discountPaise));
+		}
+
+		return new HourlyCareQuoteResponse(quoteRow.getId(), quoteRow.getExpiresAt(), now, lineItems, payablePaise, fullPayablePaise, priceQuote.currency());
 	}
 
 	@Override
@@ -159,23 +264,91 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		// No caregiver-capacity gate - the reservation always succeeds; ops assigns a caregiver
-		// afterward regardless of capacity (see assignCaregiver, HourlyCareAdminController).
-		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 
+		BigDecimal totalAmount;
+		UUID trialId = null;
+		long trialDiscountPaise = 0L;
+		long subtotalPaise;
+		long feePaise;
+		long gstPaise;
+
+		if (request.quoteId() != null) {
+			HourlyCareQuote quote = resolveOwnQuote(parent.getId(), request);
+			if (quote.getTrialId() != null) {
+				// The one abuse signal (duplicate care address) this flow can still catch before any
+				// payment order exists - see TrialService#guardAddressOrRevoke. Throws
+				// TrialRevokedException (409) if caught, aborting this reservation entirely before
+				// any charge; the app re-quotes (no longer discounted) and retries.
+				trialService.guardAddressOrRevoke(quote.getTrialId(), addressHashKey(address));
+				trialId = quote.getTrialId();
+				trialDiscountPaise = quote.getTrialDiscountPaise();
+			}
+			totalAmount = MoneyUtil.toRupees(quote.getPayablePaise());
+			subtotalPaise = quote.getSubtotalPaise();
+			feePaise = quote.getPlatformFeePaise();
+			gstPaise = quote.getPlatformFeeGstPaise();
+			quote.setUsedAt(Instant.now());
+			hourlyCareQuoteRepository.save(quote);
+		} else {
+			// No caregiver-capacity gate - the reservation always succeeds; ops assigns a caregiver
+			// afterward regardless of capacity (see assignCaregiver, HourlyCareAdminController).
+			PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+			totalAmount = priceQuote.total();
+			subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
+			feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
+			gstPaise = MoneyUtil.toPaise(priceQuote.platformFeeGst());
+		}
+
+		GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
 		Booking booking = Booking.builder()
 				.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
 				.startTime(request.startTime()).endTime(request.endTime())
 				.status(BookingStatus.AWAITING_PAYMENT)
-				.totalAmount(quote.total())
+				.totalAmount(totalAmount)
 				.frequency(BookingFrequency.ONE_TIME)
 				.careNotes(request.careNotes())
+				.trialId(trialId)
+				.trialDiscountPaise(trialDiscountPaise)
+				.subtotalPaise(subtotalPaise)
+				.platformFeePaise(feePaise)
+				.platformFeeGstPaise(gstPaise)
+				.cgstPaise(gstSplit.cgstPaise())
+				.sgstPaise(gstSplit.sgstPaise())
+				.utgstPaise(gstSplit.utgstPaise())
+				.igstPaise(gstSplit.igstPaise())
 				.build();
 		booking = bookingRepository.save(booking);
 		orderActivityService.log(booking, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null);
 
 		log.info("Hourly-care booking reserved: id={}, parentId={}, amount={}", booking.getId(), parent.getId(), booking.getTotalAmount());
 		return toBookingResponse(booking);
+	}
+
+	// createBooking's quoteId path - loads the quote, confirms it's this parent's own, still unused,
+	// not expired, and actually matches the booking params being reserved (no swapping a cheaper/
+	// discounted quote onto different params).
+	private HourlyCareQuote resolveOwnQuote(Long parentId, HourlyCareBookingCreateRequest request) {
+		HourlyCareQuote quote = hourlyCareQuoteRepository.findById(request.quoteId())
+				.orElseThrow(() -> new QuoteExpiredException("This quote is no longer valid"));
+		boolean matches = quote.getParentId().equals(parentId)
+				&& quote.getAddressId().equals(request.addressId())
+				&& quote.getStartTime().equals(request.startTime())
+				&& quote.getEndTime().equals(request.endTime())
+				&& quote.getPricingMode() == request.pricingMode();
+		if (!matches) {
+			throw new QuoteExpiredException("This quote does not match this booking");
+		}
+		if (quote.getUsedAt() != null || quote.getExpiresAt().isBefore(Instant.now())) {
+			throw new QuoteExpiredException("This quote has expired");
+		}
+		return quote;
+	}
+
+	// A normalized key for the care address a trial discount is being applied to - deliberately
+	// just the address line + pincode (not addressId itself), so the same real-world address can't
+	// dodge the abuse check by being saved as two different ParentAddress rows.
+	private String addressHashKey(ParentAddress address) {
+		return address.getAddressLine1().trim().toLowerCase() + "|" + address.getPincode();
 	}
 
 	// Monthly care: same "team assigns, pay first" shape as createBooking above, but reserves one
@@ -224,7 +397,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		Long zoneAreaId = resolveZoneAreaId(address);
 		Booking anchor = null;
 		Long recurrenceGroupId = null;
-		BigDecimal seriesTotal = BigDecimal.ZERO;
+		BigDecimal seriesTotal = GstSplitUtil.ZERO;
 		// Monthly care always bills the zone's flat MONTHLY retainer exactly once for the whole
 		// series, regardless of how many calendar months the date range touches - quotePrice()
 		// returns the full flat rate on every call since it has no notion of "already billed", so
@@ -237,11 +410,25 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			Instant end = date.atTime(request.dailyEndTime()).atZone(INDIA_ZONE).toInstant();
 			PriceQuoteResponse quote = quotePrice(zoneAreaId, PricingMode.MONTHLY, start, end);
 			boolean chargeThisOccurrence = !monthlyChargeApplied;
-			BigDecimal occurrenceAmount = chargeThisOccurrence ? quote.total() : BigDecimal.ZERO;
+
+			BigDecimal occurrenceAmount = GstSplitUtil.ZERO;
+			long occurrenceSubtotalPaise = 0L;
+			long occurrenceFeePaise = 0L;
+			long occurrenceGstPaise = 0L;
+
 			if (chargeThisOccurrence) {
 				monthlyChargeApplied = true;
+				occurrenceSubtotalPaise = MoneyUtil.toPaise(quote.subtotal());
+				occurrenceFeePaise = MoneyUtil.toPaise(quote.platformFee());
+				occurrenceGstPaise = MoneyUtil.toPaise(quote.platformFeeGst());
+				long fullPayablePaise = occurrenceSubtotalPaise + occurrenceFeePaise + occurrenceGstPaise;
+
+				// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Monthly is excluded
+				// entirely, same as Hourly (RANGE), so there's no trial to evaluate here.
+				occurrenceAmount = MoneyUtil.toRupees(fullPayablePaise);
 			}
 
+			GstSplitUtil.GstSplit occurrenceGstSplit = splitGst(occurrenceGstPaise, address.getState());
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
 					.startTime(start).endTime(end)
@@ -250,6 +437,13 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 					.frequency(BookingFrequency.REPEAT_MONTHLY)
 					.recurrenceGroupId(recurrenceGroupId)
 					.careNotes(request.careNotes())
+					.subtotalPaise(occurrenceSubtotalPaise)
+					.platformFeePaise(occurrenceFeePaise)
+					.platformFeeGstPaise(occurrenceGstPaise)
+					.cgstPaise(occurrenceGstSplit.cgstPaise())
+					.sgstPaise(occurrenceGstSplit.sgstPaise())
+					.utgstPaise(occurrenceGstSplit.utgstPaise())
+					.igstPaise(occurrenceGstSplit.igstPaise())
 					.build();
 			booking = bookingRepository.save(booking);
 			orderActivityService.log(booking, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null);
@@ -265,7 +459,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		log.info("Monthly-care series reserved: anchorId={}, parentId={}, occurrences={}, amount={}",
 				anchor.getId(), parent.getId(), dates.size(), seriesTotal);
-		return new MonthlyBookingResponse(anchor.getId(), anchor.getStatus().name(), request.startDate(), request.endDate(), dates.size(), seriesTotal);
+		return new MonthlyBookingResponse(anchor.getId(), anchor.getStatus().name(), request.startDate(), request.endDate(), dates.size(), seriesTotal,
+				PriceBreakdownResponse.from(anchor));
 	}
 
 	@Override
@@ -277,16 +472,42 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		}
 
 		// A monthly-care series charges once for every occurrence together — ONE_TIME hourly/daily
-		// care has no recurrenceGroupId and this is just booking.getTotalAmount(), unchanged.
-		BigDecimal amount = booking.getRecurrenceGroupId() == null
-				? booking.getTotalAmount()
-				: bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId()).stream()
-						.map(Booking::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+		// care has no recurrenceGroupId and this is just the one booking's own figures, unchanged.
+		List<Booking> series = booking.getRecurrenceGroupId() == null
+				? List.of(booking)
+				: bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId());
+		BigDecimal amount = series.stream().map(Booking::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+		long subtotalPaise = series.stream().mapToLong(Booking::getSubtotalPaise).sum();
+		long feePaise = series.stream().mapToLong(Booking::getPlatformFeePaise).sum();
+		long gstPaise = series.stream().mapToLong(Booking::getPlatformFeeGstPaise).sum();
+		long cgstPaise = series.stream().mapToLong(Booking::getCgstPaise).sum();
+		long sgstPaise = series.stream().mapToLong(Booking::getSgstPaise).sum();
+		long utgstPaise = series.stream().mapToLong(Booking::getUtgstPaise).sum();
+		long igstPaise = series.stream().mapToLong(Booking::getIgstPaise).sum();
 
 		PaymentTransaction transaction = PaymentTransaction.builder()
 				.booking(booking).amount(amount).method(request.method()).status(PaymentStatus.INITIATED)
+				.subtotalPaise(subtotalPaise).platformFeePaise(feePaise).platformFeeGstPaise(gstPaise)
+				.cgstPaise(cgstPaise).sgstPaise(sgstPaise).utgstPaise(utgstPaise).igstPaise(igstPaise)
 				.build();
 		transaction = paymentTransactionRepository.save(transaction);
+
+		// A FIRST5_FEE_WAIVER trial can waive a booking down to ₹0 - Razorpay rejects orders below
+		// its own minimum amount, so there's no real charge to collect. Settle it immediately instead
+		// of ever calling out to the gateway; a null orderId tells the client to skip Checkout.
+		if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+			transaction.setStatus(PaymentStatus.SUCCESS);
+			transaction = paymentTransactionRepository.save(transaction);
+			activateBookingOrSeries(booking);
+			orderActivityService.log(booking, OrderActivityType.PAYMENT_SUCCEEDED, OrderActivityActorType.SYSTEM, null, null,
+					Map.of("reason", "trial_fully_waived"));
+			if (booking.getTrialId() != null) {
+				trialService.settleBookingCheckout(booking, null);
+			}
+			log.info("Hourly-care payment skipped (trial fully waived): bookingId={}, paymentId={}", booking.getId(), transaction.getId());
+			return new PaymentInitiateResponse(transaction.getId(), booking.getId(), transaction.getAmount(),
+					transaction.getMethod().name(), transaction.getStatus().name(), null, null);
+		}
 
 		GatewayOrder order = paymentGatewayService.createOrder(transaction.getAmount(), "txn_" + transaction.getId());
 		transaction.setProviderReference(order.orderId());
@@ -294,6 +515,19 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		return new PaymentInitiateResponse(transaction.getId(), booking.getId(), transaction.getAmount(),
 				transaction.getMethod().name(), transaction.getStatus().name(), order.orderId(), order.keyId());
+	}
+
+	// Shared by initiatePayment's zero-amount fast path and confirmPayment's real one - a monthly
+	// series moves every occurrence to ASSIGNING_CAREGIVER together, not just the anchor row.
+	private void activateBookingOrSeries(Booking booking) {
+		if (booking.getRecurrenceGroupId() == null) {
+			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
+			bookingRepository.save(booking);
+		} else {
+			List<Booking> series = bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId());
+			series.forEach(b -> b.setStatus(BookingStatus.ASSIGNING_CAREGIVER));
+			bookingRepository.saveAll(series);
+		}
 	}
 
 	@Override
@@ -327,13 +561,13 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		// One payment settles the whole monthly-care series — every occurrence moves to
 		// ASSIGNING_CAREGIVER together, not just the anchor row the transaction is attached to.
-		if (booking.getRecurrenceGroupId() == null) {
-			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
-			bookingRepository.save(booking);
-		} else {
-			List<Booking> series = bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId());
-			series.forEach(b -> b.setStatus(BookingStatus.ASSIGNING_CAREGIVER));
-			bookingRepository.saveAll(series);
+		activateBookingOrSeries(booking);
+
+		// This is this flow's actual "checkout completed" moment (money has just moved) - the right
+		// place for FIRST5_FEE_WAIVER's cap-increment/abuse-check bookkeeping, not raw booking
+		// creation. No-ops if this booking never carried a trial discount.
+		if (booking.getTrialId() != null) {
+			trialService.settleBookingCheckout(booking, transaction.getProviderReference());
 		}
 
 		log.info("Hourly-care payment confirmed: bookingId={}, paymentId={}, amount={}", booking.getId(), transaction.getId(), transaction.getAmount());
@@ -391,6 +625,9 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			paymentTransactionRepository.save(transaction);
 			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
 			bookingRepository.save(booking);
+			if (booking.getTrialId() != null) {
+				trialService.settleBookingCheckout(booking, transaction.getProviderReference());
+			}
 			orderActivityService.log(booking, OrderActivityType.PAYMENT_SUCCEEDED, OrderActivityActorType.SYSTEM, null, null,
 					Map.of("referenceId", result.paymentId(), "method", transaction.getMethod().name(), "source", "reconciled"));
 			log.info("Reconciled stuck hourly-care payment via Razorpay lookup: bookingId={}, paymentId={}", booking.getId(), transaction.getId());
@@ -522,6 +759,13 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.orElseThrow(() -> new NotServiceableException("This address is not in a serviceable zone"));
 	}
 
+	private GstSplitUtil.GstSplit splitGst(long gstPaise, String careAddressState) {
+		String businessState = appProperties.pricing().businessState();
+		boolean businessStateUsesUtgst = gstStateCodeRepository.findByStateNameIgnoreCase(businessState)
+				.map(GstStateCode::isUsesUtgst).orElse(false);
+		return GstSplitUtil.split(gstPaise, careAddressState, businessState, businessStateUsesUtgst);
+	}
+
 	private PriceQuoteResponse quotePrice(Long zoneAreaId, PricingMode mode, Instant startTime, Instant endTime) {
 		LocalDate bookingDate = LocalDate.ofInstant(startTime, INDIA_ZONE);
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
@@ -564,10 +808,17 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		return dates;
 	}
 
+	// `total` reflects any live FIRST5_FEE_WAIVER discount (same eligibility call
+	// createMonthlyBooking will make moments later) so this preview never shows a different price
+	// than what actually gets charged — `platformFee` itself stays the full, undiscounted fee
+	// (what it means everywhere else this response type is used); there's no per-line discount
+	// field here the way the Daily/Hourly quote has one, since Monthly has no separate locked-quote
+	// step for a client UI to render it against yet.
 	private MonthlyPriceSummary quoteSeries(Long zoneAreaId, List<LocalDate> dates, LocalTime dailyStartTime, LocalTime dailyEndTime) {
-		BigDecimal subtotal = BigDecimal.ZERO;
-		BigDecimal platformFee = BigDecimal.ZERO;
-		BigDecimal total = BigDecimal.ZERO;
+		BigDecimal subtotal = GstSplitUtil.ZERO;
+		BigDecimal platformFee = GstSplitUtil.ZERO;
+		BigDecimal platformFeeGst = GstSplitUtil.ZERO;
+		BigDecimal total = GstSplitUtil.ZERO;
 		String currency = null;
 		// Mirrors createMonthlyBooking()'s flat-rate handling: PricingMode.MONTHLY bills exactly
 		// once for the whole series, so this preview must match - not once per occurrence day, and
@@ -582,12 +833,15 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			if (!chargeThisOccurrence) {
 				continue;
 			}
+			// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Monthly is excluded entirely,
+			// same as Hourly (RANGE), so this preview is never discounted.
 			monthlyChargeApplied = true;
 			subtotal = subtotal.add(quote.subtotal());
 			platformFee = platformFee.add(quote.platformFee());
+			platformFeeGst = platformFeeGst.add(quote.platformFeeGst());
 			total = total.add(quote.total());
 		}
-		return new MonthlyPriceSummary(dates.size(), subtotal, platformFee, total, currency);
+		return new MonthlyPriceSummary(dates.size(), subtotal, platformFee, platformFeeGst, total, currency);
 	}
 
 	private Booking resolveOwnBooking(Long userId, Long bookingId) {
@@ -603,7 +857,8 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	}
 
 	private HourlyCareBookingResponse toBookingResponse(Booking booking) {
-		return new HourlyCareBookingResponse(booking.getId(), booking.getStatus().name(), booking.getStartTime(), booking.getEndTime(), booking.getTotalAmount());
+		return new HourlyCareBookingResponse(booking.getId(), booking.getStatus().name(), booking.getStartTime(), booking.getEndTime(), booking.getTotalAmount(),
+				PriceBreakdownResponse.from(booking));
 	}
 
 	private BookingStatusResponse toStatusResponse(Booking booking) {
@@ -614,7 +869,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.map(PaymentTransaction::getAmount).orElse(null);
 
 		return new BookingStatusResponse(booking.getId(), booking.getStatus().name(), amountPaid, child,
-				booking.getStartTime(), booking.getEndTime(), address, progressFor(booking.getStatus()));
+				booking.getStartTime(), booking.getEndTime(), address, progressFor(booking.getStatus()), PriceBreakdownResponse.from(booking));
 	}
 
 	// Matches the Booking status screen's exact three steps regardless of how far along the

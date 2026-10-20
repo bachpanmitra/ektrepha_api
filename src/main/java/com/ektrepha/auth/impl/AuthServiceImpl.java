@@ -71,6 +71,7 @@ import com.ektrepha.auth.security.GoogleIdTokenVerifierService.GoogleIdentity;
 import com.ektrepha.auth.security.JwtService;
 import com.ektrepha.config.constants.SecurityConstants;
 import com.ektrepha.config.properties.AppProperties;
+import com.ektrepha.trial.service.TrialService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -96,6 +97,7 @@ public class AuthServiceImpl implements AuthService {
 	private final FirebaseTokenVerifierService firebaseTokenVerifierService;
 	private final AppProperties appProperties;
 	private final PlatformTransactionManager transactionManager;
+	private final TrialService trialService;
 
 	// ---------------------------------------------------------------- Google
 
@@ -211,6 +213,9 @@ public class AuthServiceImpl implements AuthService {
 		boolean isNewUser = user == null;
 		if (isNewUser) {
 			user = createMobileUser(phoneNumber);
+			// FIRST5_FEE_WAIVER trial eligibility — only ever evaluated on this phone's first
+			// successful OTP verification. No-ops if app.trial.enabled=false.
+			trialService.onFirstOtpVerification(user, request.deviceId());
 		} else {
 			if (!user.isActive() || user.getStatus() != UserStatus.ACTIVE) {
 				log.warn("Mobile OTP login blocked: userId={} is not active (status={})", user.getId(), user.getStatus());

@@ -12,6 +12,7 @@ import com.ektrepha.parent.dto.response.ParentProfileResponse;
 import com.ektrepha.parent.service.ParentProfileService;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentRepository;
+import com.ektrepha.trial.service.TrialService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,14 +23,16 @@ public class ParentProfileServiceImpl implements ParentProfileService {
 	private final ParentRepository parentRepository;
 	private final ParentAddressRepository parentAddressRepository;
 	private final ParentResolver parentResolver;
+	private final TrialService trialService;
 
 	@Override
 	@Transactional(readOnly = true)
 	public ParentProfileResponse get(Long userId) {
 		return parentRepository.findByUserId(userId)
 				.map(this::toResponse)
-				// P1 must still render (as "Complete your profile") for a user with no parent row yet.
-				.orElseGet(() -> new ParentProfileResponse(null, null, null, null, null, null));
+				// P1 must still render (as "Complete your profile") for a user with no parent row yet
+				// — no parent row means no trial either.
+				.orElseGet(() -> new ParentProfileResponse(null, null, null, null, null, null, null));
 	}
 
 	// Upserts — the first call for a given user creates the row (PUT semantics owned by the API,
@@ -52,7 +55,8 @@ public class ParentProfileServiceImpl implements ParentProfileService {
 				parent.getLastName(),
 				parent.getProfilePhotoS3Key(),
 				primary.map(ParentAddress::getCity).orElse(null),
-				primary.map(ParentAddress::getState).orElse(null));
+				primary.map(ParentAddress::getState).orElse(null),
+				trialService.snapshotFor(parent.getId()));
 	}
 
 }

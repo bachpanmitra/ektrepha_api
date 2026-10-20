@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 45
+      author: ektrepha
+      description: Adds the gst_state_codes reference table (State vs UTGST-using UT) and the booking/payment_transaction utgst_paise column
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/045-gst-state-codes.sql
+            relativeToChangelogFile: false
