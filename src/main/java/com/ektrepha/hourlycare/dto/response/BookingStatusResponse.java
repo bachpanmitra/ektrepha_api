@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 
 import com.ektrepha.booking.dto.response.ChildSummary;
+import com.ektrepha.booking.dto.response.ElderBookingSummary;
 import com.ektrepha.parent.dto.response.AddressResponse;
 import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 
@@ -18,5 +19,7 @@ public record BookingStatusResponse(
 		Instant endTime,
 		AddressResponse address,
 		List<BookingProgressStep> progress,
-		PriceBreakdownResponse priceBreakdown) {
+		PriceBreakdownResponse priceBreakdown,
+		// Elder Care counterpart of child above - null for a childcare booking.
+		ElderBookingSummary elder) {
 }

@@ -32,9 +32,10 @@ public class BookingReadController {
 	public ResponseEntity<BookingListResponse> list(Authentication authentication,
 			@RequestParam String scope,
 			@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "20") int pageSize) {
+			@RequestParam(defaultValue = "20") int pageSize,
+			@RequestParam(required = false) String serviceTypeCode) {
 		Long userId = Long.valueOf(authentication.getName());
-		return ResponseEntity.ok(bookingReadService.list(userId, scope, page, pageSize));
+		return ResponseEntity.ok(bookingReadService.list(userId, scope, page, pageSize, serviceTypeCode));
 	}
 
 	@GetMapping("/{id}")

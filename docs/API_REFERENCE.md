@@ -111,6 +111,26 @@ Categories: `BOOKING_CONFIRMATION`, `NANNY_EN_ROUTE`, `CARE_START_END` (non-nego
 
 A request for a child not linked to the caller returns **403**, not 404 — don't special-case 404 for "not my child," it won't happen.
 
+## Elder Profiles (`/api/v1/parents/me/elders`)
+
+Elder Care's care-recipient profile — the senior_care counterpart of Child Profiles above, same multi-guardian shape (a `parent_elder` join table, not a direct owner FK).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/elders` | List: `{id, firstName, lastName, photoUrl, age, gender, relationship, mobility, conditions}`. Soft-deleted elders never appear here |
+| GET | `/elders/{id}` | Full detail: list fields + `{allergies, medicationNotes, preferredLanguage, emergencyContactName, emergencyContactPhone, doctorName, doctorPhone}` |
+| POST | `/elders` | `{firstName, lastName?, age, gender?, relationship?, mobility, conditions?, allergies?, medicationNotes?, preferredLanguage?, emergencyContactName?, emergencyContactPhone?, doctorName?, doctorPhone?}`. `age` must be 40–120. First elder for a parent auto-becomes the primary contact (not surfaced in the response, same as the internal-only bookkeeping on Child Profiles) |
+| PUT | `/elders/{id}` | Full update, same body shape as POST |
+| DELETE | `/elders/{id}` | Soft delete (sets `removedAt` server-side) — 409 if a non-terminal booking references this elder |
+
+`relationship` is one of `FATHER, MOTHER, GRANDFATHER, GRANDMOTHER, FATHER_IN_LAW, MOTHER_IN_LAW, OTHER` (optional). `mobility` is one of `INDEPENDENT, NEEDS_SUPPORT, WHEELCHAIR, BEDRIDDEN` (required). A request for an elder not linked to the caller returns **403**, same convention as Child Profiles.
+
+### Elder Care bookings (`/api/v1/hourly-care/**`)
+
+The existing Hourly/Daily/Monthly care endpoints (availability, price, quote, bookings, monthly/availability, monthly/bookings) now take two additional **optional** fields, appended at the end of each request body: `serviceTypeCode` (`"childcare"` or `"senior_care"` — omit/null for `"childcare"`, today's behavior) and `elderId`. For `senior_care`, `elderId` is required and `childId` must be omitted; for `childcare`, `elderId` must be omitted. A mismatched combination is a 400. Senior care prices identically to childcare in every zone that offers it, and is excluded from the FIRST5_FEE_WAIVER free-trial — that trial never widened past childcare.
+
+Every booking status/card/detail response (`BookingStatusResponse`, `BookingCardResponse`, `BookingDetailResponse`) now carries an `elder: {id, firstName, age, relationship, mobility}` field alongside the existing `child` field — `null` for a childcare booking. `GET /bookings` also accepts an optional `?serviceTypeCode=` filter.
+
 ## Bookings (`/api/v1/bookings`)
 
 ### Reads

@@ -20,5 +20,8 @@ public record MonthlyAvailabilityCheckRequest(
 		@NotNull LocalDate endDate,
 		@NotEmpty Set<DayOfWeek> daysOfWeek,
 		@NotNull LocalTime dailyStartTime,
-		@NotNull LocalTime dailyEndTime) {
+		@NotNull LocalTime dailyEndTime,
+		// Elder Care — see AvailabilityCheckRequest's matching fields.
+		String serviceTypeCode,
+		Long elderId) {
 }

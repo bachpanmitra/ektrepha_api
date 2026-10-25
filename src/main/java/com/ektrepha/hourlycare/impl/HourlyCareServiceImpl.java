@@ -20,12 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.booking.dto.response.ChildSummary;
+import com.ektrepha.booking.dto.response.ElderBookingSummary;
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.BookingNotAwaitingAssignmentException;
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.BookingNotReassignableException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
+import com.ektrepha.exception.ForbiddenElderAccessException;
 import com.ektrepha.exception.NannyNotFoundException;
 import com.ektrepha.exception.NannyUnavailableException;
 import com.ektrepha.exception.NotServiceableException;
@@ -58,6 +60,7 @@ import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Children;
+import com.ektrepha.model.Elder;
 import com.ektrepha.model.GstStateCode;
 import com.ektrepha.model.HourlyCareQuote;
 import com.ektrepha.model.Nanny;
@@ -66,6 +69,7 @@ import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
 import com.ektrepha.model.ParentChild;
+import com.ektrepha.model.ParentElder;
 import com.ektrepha.model.PaymentStatus;
 import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.model.PricingMode;
@@ -88,6 +92,7 @@ import com.ektrepha.repository.HourlyCareQuoteRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
+import com.ektrepha.repository.ParentElderRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
@@ -116,6 +121,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 	private static final ZoneId INDIA_ZONE = ZoneId.of("Asia/Kolkata");
 	private static final String CHILDCARE_CODE = "childcare";
+	private static final String SENIOR_CARE_CODE = "senior_care";
 
 	private final ParentRepository parentRepository;
 	private final BookingRepository bookingRepository;
@@ -123,6 +129,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private final ServiceTypeRepository serviceTypeRepository;
 	private final ParentAddressRepository parentAddressRepository;
 	private final ParentChildRepository parentChildRepository;
+	private final ParentElderRepository parentElderRepository;
 	private final ServiceabilityPincodeRepository serviceabilityPincodeRepository;
 	private final CaregiverZoneMappingRepository caregiverZoneMappingRepository;
 	private final PaymentTransactionRepository paymentTransactionRepository;
@@ -141,16 +148,18 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public AvailabilityResponse checkAvailability(Long userId, AvailabilityCheckRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		resolveChild(parent, request.childId());
-		resolveServiceType();
+		resolveElder(parent, request.elderId());
 		validateWindow(request.startTime(), request.endTime());
 
 		requireOneOffMode(request.pricingMode());
 		// No caregiver-capacity gate - ops handles caregiver assignment for every reservation
 		// manually, capacity or not (see createBooking).
 		Long zoneAreaId = resolveZoneAreaId(address);
-		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
-		quote = applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode());
+		PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), request.pricingMode(), request.startTime(), request.endTime());
+		quote = applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode(), serviceType.getCode());
 		return new AvailabilityResponse(true, quote, null);
 	}
 
@@ -159,13 +168,16 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public PriceQuoteResponse getPrice(Long userId, AvailabilityCheckRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		resolveChild(parent, request.childId());
+		resolveElder(parent, request.elderId());
 //		validateWindow(request.startTime(), request.endTime());
 		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		PriceQuoteResponse quote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
-		return applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode());
+		PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), request.pricingMode(), request.startTime(), request.endTime());
+		return applyDailyCareTrial(quote, parent.getId(), request.startTime(), request.pricingMode(), serviceType.getCode());
 	}
 
 	// Details screen's live price estimate (checkAvailability/getPrice) is otherwise parent- and
@@ -174,8 +186,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	// stale full price while Checkout's locked quote (see #quote) shows the discounted one.
 	// request.isTrialPeriod() is NEVER consulted - a client-sent flag is trivially spoofable.
 	// FIXED (Daily care) only - RANGE (Hourly) and MONTHLY are excluded entirely from the trial.
-	private PriceQuoteResponse applyDailyCareTrial(PriceQuoteResponse quote, Long parentId, Instant careStartTime, PricingMode mode) {
-		if (mode != PricingMode.FIXED) {
+	// childcare only - senior_care must never start or use FIRST5_FEE_WAIVER (don't widen an
+	// existing trial to a vertical it was never designed for).
+	private PriceQuoteResponse applyDailyCareTrial(PriceQuoteResponse quote, Long parentId, Instant careStartTime, PricingMode mode, String serviceTypeCode) {
+		if (mode != PricingMode.FIXED || !CHILDCARE_CODE.equals(serviceTypeCode)) {
 			return quote;
 		}
 		long subtotalPaise = MoneyUtil.toPaise(quote.subtotal());
@@ -201,11 +215,14 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public HourlyCareQuoteResponse quote(Long userId, AvailabilityCheckRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		resolveChild(parent, request.childId());
+		resolveElder(parent, request.elderId());
 		requireOneOffMode(request.pricingMode());
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+		PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, serviceType.getCode(), request.pricingMode(), request.startTime(), request.endTime());
 
 		long subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
 		long feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
@@ -213,9 +230,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		long fullPayablePaise = subtotalPaise + feePaise + gstPaise;
 
 		LocalDate careDate = LocalDate.ofInstant(request.startTime(), INDIA_ZONE);
-		// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Hourly (RANGE) and Monthly are
-		// excluded entirely (Monthly's own createMonthlyBooking/quoteSeries never evaluate a trial).
-		Optional<TrialService.TrialQuoteApplication> trialApplication = request.pricingMode() == PricingMode.FIXED
+		// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) on childcare - Hourly (RANGE), Monthly
+		// (excluded entirely - see createMonthlyBooking/quoteSeries), and senior_care never evaluate
+		// a trial (don't widen an existing trial to a vertical it was never designed for).
+		Optional<TrialService.TrialQuoteApplication> trialApplication = request.pricingMode() == PricingMode.FIXED && CHILDCARE_CODE.equals(serviceType.getCode())
 				? trialService.evaluateForQuote(parent.getId(), subtotalPaise, feePaise, gstPaise, careDate)
 				: Optional.empty();
 		UUID trialId = trialApplication.map(TrialService.TrialQuoteApplication::trialId).orElse(null);
@@ -258,8 +276,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public HourlyCareBookingResponse createBooking(Long userId, HourlyCareBookingCreateRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		Children child = resolveChild(parent, request.childId());
-		ServiceType serviceType = resolveServiceType();
+		Elder elder = resolveElder(parent, request.elderId());
 //		validateWindow(request.startTime(), request.endTime());
 		requireOneOffMode(request.pricingMode());
 
@@ -292,7 +312,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		} else {
 			// No caregiver-capacity gate - the reservation always succeeds; ops assigns a caregiver
 			// afterward regardless of capacity (see assignCaregiver, HourlyCareAdminController).
-			PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
+			PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, serviceType.getCode(), request.pricingMode(), request.startTime(), request.endTime());
 			totalAmount = priceQuote.total();
 			subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
 			feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
@@ -301,7 +321,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
 		Booking booking = Booking.builder()
-				.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
+				.parent(parent).nanny(null).child(child).elder(elder).serviceType(serviceType).address(address)
 				.startTime(request.startTime()).endTime(request.endTime())
 				.status(BookingStatus.AWAITING_PAYMENT)
 				.totalAmount(totalAmount)
@@ -361,8 +381,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public MonthlyAvailabilityResponse checkMonthlyAvailability(Long userId, MonthlyAvailabilityCheckRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		resolveChild(parent, request.childId());
-		resolveServiceType();
+		resolveElder(parent, request.elderId());
 		validateDailyWindow(request.dailyStartTime(), request.dailyEndTime());
 
 		List<LocalDate> dates = occurrenceDates(request.startDate(), request.endDate(), request.daysOfWeek());
@@ -374,7 +396,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		}
 
 		Long zoneAreaId = resolveZoneAreaId(address);
-		return new MonthlyAvailabilityResponse(true, quoteSeries(zoneAreaId, dates, request.dailyStartTime(), request.dailyEndTime()), null);
+		return new MonthlyAvailabilityResponse(true, quoteSeries(zoneAreaId, serviceType.getCode(), dates, request.dailyStartTime(), request.dailyEndTime()), null);
 	}
 
 	@Override
@@ -382,8 +404,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	public MonthlyBookingResponse createMonthlyBooking(Long userId, MonthlyBookingCreateRequest request) {
 		Parent parent = resolveParent(userId);
 		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
 		Children child = resolveChild(parent, request.childId());
-		ServiceType serviceType = resolveServiceType();
+		Elder elder = resolveElder(parent, request.elderId());
 		validateDailyWindow(request.dailyStartTime(), request.dailyEndTime());
 
 		List<LocalDate> dates = occurrenceDates(request.startDate(), request.endDate(), request.daysOfWeek());
@@ -408,7 +432,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		for (LocalDate date : dates) {
 			Instant start = date.atTime(request.dailyStartTime()).atZone(INDIA_ZONE).toInstant();
 			Instant end = date.atTime(request.dailyEndTime()).atZone(INDIA_ZONE).toInstant();
-			PriceQuoteResponse quote = quotePrice(zoneAreaId, PricingMode.MONTHLY, start, end);
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), PricingMode.MONTHLY, start, end);
 			boolean chargeThisOccurrence = !monthlyChargeApplied;
 
 			BigDecimal occurrenceAmount = GstSplitUtil.ZERO;
@@ -430,7 +454,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 			GstSplitUtil.GstSplit occurrenceGstSplit = splitGst(occurrenceGstPaise, address.getState());
 			Booking booking = Booking.builder()
-					.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
+					.parent(parent).nanny(null).child(child).elder(elder).serviceType(serviceType).address(address)
 					.startTime(start).endTime(end)
 					.status(BookingStatus.AWAITING_PAYMENT)
 					.totalAmount(occurrenceAmount)
@@ -742,9 +766,45 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		return link.getChild();
 	}
 
-	private ServiceType resolveServiceType() {
-		return serviceTypeRepository.findByCode(CHILDCARE_CODE)
-				.orElseThrow(() -> new ServiceTypeNotFoundException("No service type with code " + CHILDCARE_CODE));
+	// Elder Care counterpart of resolveChild above, via parent_elder instead of parent_child -
+	// null unless serviceTypeCode resolved to senior_care (validateCareRecipient enforces elderId
+	// is null for childcare, so this is only ever called with a non-null id on that vertical).
+	private Elder resolveElder(Parent parent, Long elderId) {
+		if (elderId == null) {
+			return null;
+		}
+		ParentElder link = parentElderRepository.findByIdParentIdAndIdElderId(parent.getId(), elderId)
+				.orElseThrow(() -> new ForbiddenElderAccessException("elderId does not belong to the requesting parent"));
+		return link.getElder();
+	}
+
+	// null/blank -> "childcare" (exactly today's behaviour, before serviceTypeCode existed) - only
+	// "childcare" and "senior_care" are allowed, anything else is a 400.
+	private ServiceType resolveServiceType(String code) {
+		String resolvedCode = (code == null || code.isBlank()) ? CHILDCARE_CODE : code;
+		if (!CHILDCARE_CODE.equals(resolvedCode) && !SENIOR_CARE_CODE.equals(resolvedCode)) {
+			throw new IllegalArgumentException("serviceTypeCode must be 'childcare' or 'senior_care'");
+		}
+		return serviceTypeRepository.findByCode(resolvedCode)
+				.orElseThrow(() -> new ServiceTypeNotFoundException("No service type with code " + resolvedCode));
+	}
+
+	// childcare -> elderId must be absent (childId stays optional, unchanged); senior_care ->
+	// elderId is required and childId must be absent. Checked against the raw request ids (before
+	// ownership resolution) so a malformed combination 400s rather than first 403ing/looking anything up.
+	private void validateCareRecipient(String serviceTypeCode, Long childId, Long elderId) {
+		if (CHILDCARE_CODE.equals(serviceTypeCode)) {
+			if (elderId != null) {
+				throw new IllegalArgumentException("elderId must not be provided for childcare bookings");
+			}
+		} else if (SENIOR_CARE_CODE.equals(serviceTypeCode)) {
+			if (elderId == null) {
+				throw new IllegalArgumentException("elderId is required for senior_care bookings");
+			}
+			if (childId != null) {
+				throw new IllegalArgumentException("childId must not be provided for senior_care bookings");
+			}
+		}
 	}
 
 	private void validateWindow(Instant startTime, Instant endTime) {
@@ -766,12 +826,12 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		return GstSplitUtil.split(gstPaise, careAddressState, businessState, businessStateUsesUtgst);
 	}
 
-	private PriceQuoteResponse quotePrice(Long zoneAreaId, PricingMode mode, Instant startTime, Instant endTime) {
+	private PriceQuoteResponse quotePrice(Long zoneAreaId, String serviceTypeCode, PricingMode mode, Instant startTime, Instant endTime) {
 		LocalDate bookingDate = LocalDate.ofInstant(startTime, INDIA_ZONE);
 		LocalTime startLocalTime = LocalTime.from(startTime.atZone(INDIA_ZONE));
 		LocalTime endLocalTime = LocalTime.from(endTime.atZone(INDIA_ZONE));
 		// caregiverId=null - managed-model midpoint rate, since no nanny is picked yet.
-		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, CHILDCARE_CODE, bookingDate, startLocalTime, endLocalTime, null, mode));
+		return pricingService.calculate(new PriceCalculationRequest(zoneAreaId, serviceTypeCode, bookingDate, startLocalTime, endLocalTime, null, mode));
 	}
 
 	// The one-off Hourly/Daily care screens only ever offer RANGE or FIXED - MONTHLY is exclusively
@@ -814,7 +874,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	// (what it means everywhere else this response type is used); there's no per-line discount
 	// field here the way the Daily/Hourly quote has one, since Monthly has no separate locked-quote
 	// step for a client UI to render it against yet.
-	private MonthlyPriceSummary quoteSeries(Long zoneAreaId, List<LocalDate> dates, LocalTime dailyStartTime, LocalTime dailyEndTime) {
+	private MonthlyPriceSummary quoteSeries(Long zoneAreaId, String serviceTypeCode, List<LocalDate> dates, LocalTime dailyStartTime, LocalTime dailyEndTime) {
 		BigDecimal subtotal = GstSplitUtil.ZERO;
 		BigDecimal platformFee = GstSplitUtil.ZERO;
 		BigDecimal platformFeeGst = GstSplitUtil.ZERO;
@@ -827,7 +887,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		for (LocalDate date : dates) {
 			Instant start = date.atTime(dailyStartTime).atZone(INDIA_ZONE).toInstant();
 			Instant end = date.atTime(dailyEndTime).atZone(INDIA_ZONE).toInstant();
-			PriceQuoteResponse quote = quotePrice(zoneAreaId, PricingMode.MONTHLY, start, end);
+			PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceTypeCode, PricingMode.MONTHLY, start, end);
 			boolean chargeThisOccurrence = !monthlyChargeApplied;
 			currency = quote.currency();
 			if (!chargeThisOccurrence) {
@@ -864,12 +924,26 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private BookingStatusResponse toStatusResponse(Booking booking) {
 		ChildSummary child = booking.getChild() == null ? null
 				: new ChildSummary(booking.getChild().getId(), booking.getChild().getFirstName(), AgeDisplay.of(booking.getChild().getDob(), LocalDate.now()));
+		ElderBookingSummary elder = toElderBookingSummary(booking);
 		AddressResponse address = booking.getAddress() == null ? null : addressResponseMapper.toResponse(booking.getAddress());
 		BigDecimal amountPaid = paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByIdDesc(booking.getId(), PaymentStatus.SUCCESS)
 				.map(PaymentTransaction::getAmount).orElse(null);
 
 		return new BookingStatusResponse(booking.getId(), booking.getStatus().name(), amountPaid, child,
-				booking.getStartTime(), booking.getEndTime(), address, progressFor(booking.getStatus()), PriceBreakdownResponse.from(booking));
+				booking.getStartTime(), booking.getEndTime(), address, progressFor(booking.getStatus()), PriceBreakdownResponse.from(booking), elder);
+	}
+
+	// relationship lives on parent_elder (the parent<->elder link), not on the elders row itself
+	// booking.elder points straight at - one extra lookup to surface it on the booking response.
+	private ElderBookingSummary toElderBookingSummary(Booking booking) {
+		Elder elder = booking.getElder();
+		if (elder == null) {
+			return null;
+		}
+		String relationship = parentElderRepository.findByIdParentIdAndIdElderId(booking.getParent().getId(), elder.getId())
+				.map(link -> link.getRelationship() == null ? null : link.getRelationship().name())
+				.orElse(null);
+		return new ElderBookingSummary(elder.getId(), elder.getFirstName(), elder.getAge(), relationship, elder.getMobility().name());
 	}
 
 	// Matches the Booking status screen's exact three steps regardless of how far along the

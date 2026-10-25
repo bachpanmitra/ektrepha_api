@@ -89,3 +89,7 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/044-payment-gst-breakdown.yaml
   - include:
       file: classpath:db/changelog/changes/045-gst-state-codes.yaml
+  - include:
+      file: classpath:db/changelog/changes/046-elder-care.yaml
+  - include:
+      file: classpath:db/changelog/changes/047-senior-care-pricing.yaml
