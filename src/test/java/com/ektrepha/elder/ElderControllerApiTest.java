@@ -175,14 +175,17 @@ class ElderControllerApiTest {
 						+ "{\"foodType\":\"VEGETARIAN\",\"dietNeeds\":[\"SOFT_FOOD\",\"LOW_SALT\"],\"whoCooks\":\"CAREGIVER\","
 						+ "\"foodsToAvoid\":\"sweets\",\"waterReminder\":true,\"howToGetIn\":\"Flat 2B, watchman knows\","
 						+ "\"preferredHospital\":\"Apollo\",\"whereThingsKept\":\"Medicines in the kitchen drawer\","
-						+ "\"homeSafety\":[\"NIGHT_LIGHT\"]}}"))
+						+ "\"homeSafety\":[\"NIGHT_LIGHT\"],\"caregiverGenderPreference\":\"FEMALE\","
+						+ "\"caregiverMustBeAbleTo\":[\"LIFT_AND_MOVE\",\"CHECK_VITALS\"]}}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.carePreferences.foodType", is("VEGETARIAN")))
 				.andExpect(jsonPath("$.carePreferences.dietNeeds", hasSize(2)))
 				.andExpect(jsonPath("$.carePreferences.whoCooks", is("CAREGIVER")))
 				.andExpect(jsonPath("$.carePreferences.waterReminder", is(true)))
 				.andExpect(jsonPath("$.carePreferences.howToGetIn", is("Flat 2B, watchman knows")))
-				.andExpect(jsonPath("$.carePreferences.homeSafety", hasSize(1)));
+				.andExpect(jsonPath("$.carePreferences.homeSafety", hasSize(1)))
+				.andExpect(jsonPath("$.carePreferences.caregiverGenderPreference", is("FEMALE")))
+				.andExpect(jsonPath("$.carePreferences.caregiverMustBeAbleTo", hasSize(2)));
 	}
 
 	@Test
