@@ -2,6 +2,7 @@ package com.ektrepha.elder.dto.request;
 
 import java.util.List;
 
+import com.ektrepha.elder.dto.ElderCarePreferences;
 import com.ektrepha.model.ElderMobility;
 import com.ektrepha.model.ElderRelationship;
 
@@ -25,5 +26,6 @@ public record ElderUpsertRequest(
 		@Size(max = 100) String emergencyContactName,
 		@Size(max = 20) String emergencyContactPhone,
 		@Size(max = 100) String doctorName,
-		@Size(max = 20) String doctorPhone) {
+		@Size(max = 20) String doctorPhone,
+		ElderCarePreferences carePreferences) {
 }

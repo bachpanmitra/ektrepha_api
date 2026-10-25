@@ -2,6 +2,8 @@ package com.ektrepha.elder.dto.response;
 
 import java.util.List;
 
+import com.ektrepha.elder.dto.ElderCarePreferences;
+
 public record ElderDetailResponse(
 		Long id,
 		String firstName,
@@ -18,5 +20,6 @@ public record ElderDetailResponse(
 		String emergencyContactName,
 		String emergencyContactPhone,
 		String doctorName,
-		String doctorPhone) {
+		String doctorPhone,
+		ElderCarePreferences carePreferences) {
 }

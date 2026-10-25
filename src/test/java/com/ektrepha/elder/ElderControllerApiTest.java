@@ -162,6 +162,40 @@ class ElderControllerApiTest {
 		Assertions.assertThat(link.isPrimaryContact()).isTrue();
 	}
 
+	// Meals & diet / Home & emergency setup (M7/M8) — round-trips through elders.meta_data as JSON
+	// (see ElderServiceImpl#writeCarePreferences/readCarePreferences), so this is really a test of
+	// that (de)serialization, not of any new column.
+	@Test
+	void createElder_withCarePreferences_roundTripsThroughMetaData() throws Exception {
+		Parent parent = createParent();
+
+		mockMvc.perform(post("/api/v1/parents/me/elders").with(user(parent.getUser().getId().toString()).roles("PARENT"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"firstName\":\"Ramesh\",\"age\":68,\"mobility\":\"INDEPENDENT\",\"carePreferences\":"
+						+ "{\"foodType\":\"VEGETARIAN\",\"dietNeeds\":[\"SOFT_FOOD\",\"LOW_SALT\"],\"whoCooks\":\"CAREGIVER\","
+						+ "\"foodsToAvoid\":\"sweets\",\"waterReminder\":true,\"howToGetIn\":\"Flat 2B, watchman knows\","
+						+ "\"preferredHospital\":\"Apollo\",\"whereThingsKept\":\"Medicines in the kitchen drawer\","
+						+ "\"homeSafety\":[\"NIGHT_LIGHT\"]}}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.carePreferences.foodType", is("VEGETARIAN")))
+				.andExpect(jsonPath("$.carePreferences.dietNeeds", hasSize(2)))
+				.andExpect(jsonPath("$.carePreferences.whoCooks", is("CAREGIVER")))
+				.andExpect(jsonPath("$.carePreferences.waterReminder", is(true)))
+				.andExpect(jsonPath("$.carePreferences.howToGetIn", is("Flat 2B, watchman knows")))
+				.andExpect(jsonPath("$.carePreferences.homeSafety", hasSize(1)));
+	}
+
+	@Test
+	void createElder_withoutCarePreferences_returnsNullNotError() throws Exception {
+		Parent parent = createParent();
+
+		mockMvc.perform(post("/api/v1/parents/me/elders").with(user(parent.getUser().getId().toString()).roles("PARENT"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"firstName\":\"Sarla\",\"age\":65,\"mobility\":\"INDEPENDENT\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.carePreferences").doesNotExist());
+	}
+
 	@Test
 	void createElder_ageBelowMinimum_isBadRequest() throws Exception {
 		Parent parent = createParent();

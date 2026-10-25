@@ -9,6 +9,10 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import com.ektrepha.elder.dto.ElderCarePreferences;
 import com.ektrepha.elder.dto.request.ElderUpsertRequest;
 import com.ektrepha.elder.dto.response.ElderDetailResponse;
 import com.ektrepha.elder.dto.response.ElderSummaryResponse;
@@ -29,10 +33,12 @@ import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.storage.S3PhotoUrlService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /** Elder Care's profile CRUD — mirrors {@code ChildServiceImpl}'s shape via the {@code parent_elder} join table instead of {@code parent_child}. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ElderServiceImpl implements ElderService {
 
 	// A booking in any of these statuses still needs the elder attached to it — mirrors ChildServiceImpl#NON_TERMINAL.
@@ -45,6 +51,10 @@ public class ElderServiceImpl implements ElderService {
 	private final ParentElderRepository parentElderRepository;
 	private final BookingRepository bookingRepository;
 	private final S3PhotoUrlService s3PhotoUrlService;
+	// No com.fasterxml.jackson.databind.ObjectMapper bean is registered in this app (see
+	// ChildServiceImpl's identical field) — a plain local instance is enough for this internal
+	// JSONB blob, which has no date/naming-strategy needs.
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Override
 	@Transactional(readOnly = true)
@@ -90,6 +100,7 @@ public class ElderServiceImpl implements ElderService {
 				.emergencyContactPhone(request.emergencyContactPhone())
 				.doctorName(request.doctorName())
 				.doctorPhone(request.doctorPhone())
+				.metaData(writeCarePreferences(request.carePreferences()))
 				.build());
 
 		ParentElder link = parentElderRepository.save(ParentElder.builder()
@@ -122,6 +133,7 @@ public class ElderServiceImpl implements ElderService {
 		elder.setEmergencyContactPhone(request.emergencyContactPhone());
 		elder.setDoctorName(request.doctorName());
 		elder.setDoctorPhone(request.doctorPhone());
+		elder.setMetaData(writeCarePreferences(request.carePreferences()));
 		elderRepository.save(elder);
 
 		link.setRelationship(request.relationship());
@@ -190,7 +202,37 @@ public class ElderServiceImpl implements ElderService {
 				elder.getEmergencyContactName(),
 				elder.getEmergencyContactPhone(),
 				elder.getDoctorName(),
-				elder.getDoctorPhone());
+				elder.getDoctorPhone(),
+				readCarePreferences(elder.getMetaData()));
+	}
+
+	// elders.meta_data stores ElderCarePreferences (M7/M8) as a plain JSON object - there's nothing
+	// else in it today, so no merge-with-existing-keys logic is needed; a save always writes the
+	// caller's whole ElderCarePreferences (or null to clear it) as the entire column.
+	private String writeCarePreferences(ElderCarePreferences prefs) {
+		if (prefs == null) {
+			return null;
+		}
+		try {
+			return objectMapper.writeValueAsString(prefs);
+		} catch (JsonProcessingException e) {
+			log.error("Could not serialize ElderCarePreferences", e);
+			return null;
+		}
+	}
+
+	// Null/blank/unparseable all read back as "not filled in yet" rather than a 500 - this is
+	// optional profile depth, never something a booking flow depends on.
+	private ElderCarePreferences readCarePreferences(String metaData) {
+		if (metaData == null || metaData.isBlank()) {
+			return null;
+		}
+		try {
+			return objectMapper.readValue(metaData, ElderCarePreferences.class);
+		} catch (JsonProcessingException e) {
+			log.warn("Could not parse elder.meta_data as ElderCarePreferences", e);
+			return null;
+		}
 	}
 
 }
