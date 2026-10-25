@@ -165,9 +165,10 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 			PriceQuoteResponse quote = quotePrice(zoneAreaId, serviceType.getCode(), nanny.getId(), start, end);
 			BigDecimal occurrenceAmount = quote.total();
 			long subtotalPaise = GstSplitUtil.toPaise(quote.subtotal());
+			long careGstPaise = GstSplitUtil.toPaise(quote.careGst());
 			long feePaise = GstSplitUtil.toPaise(quote.platformFee());
 			long gstPaise = GstSplitUtil.toPaise(quote.platformFeeGst());
-			GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
+			GstSplitUtil.GstSplit gstSplit = splitGst(careGstPaise + gstPaise, address.getState());
 
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(nanny).child(child).serviceType(serviceType).address(address)
@@ -177,6 +178,7 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 					.frequency(frequency)
 					.recurrenceGroupId(recurrenceGroupId)
 					.subtotalPaise(subtotalPaise)
+					.careGstPaise(careGstPaise)
 					.platformFeePaise(feePaise)
 					.platformFeeGstPaise(gstPaise)
 					.cgstPaise(gstSplit.cgstPaise())

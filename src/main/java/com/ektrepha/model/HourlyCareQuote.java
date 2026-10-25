@@ -58,6 +58,11 @@ public class HourlyCareQuote {
 	@Column(name = "subtotal_paise", nullable = false)
 	private long subtotalPaise;
 
+	/** GST on {@link #subtotalPaise} - same rate as {@link #platformFeeGstPaise}. Added 2026. */
+	@Column(name = "care_gst_paise", nullable = false)
+	@Builder.Default
+	private long careGstPaise = 0L;
+
 	@Column(name = "platform_fee_paise", nullable = false)
 	private long platformFeePaise;
 

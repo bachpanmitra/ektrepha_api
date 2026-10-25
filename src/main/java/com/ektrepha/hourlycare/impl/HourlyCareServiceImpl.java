@@ -180,16 +180,20 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		}
 		long subtotalPaise = MoneyUtil.toPaise(quote.subtotal());
 		long feePaise = MoneyUtil.toPaise(quote.platformFee());
+		// Trial eligibility is evaluated against the fee's own GST only, same as before careGst
+		// existed - careGst isn't part of what a FIRST5_FEE_WAIVER trial waives or caps against.
 		long gstPaise = MoneyUtil.toPaise(quote.platformFeeGst());
 		LocalDate careDate = LocalDate.ofInstant(careStartTime, INDIA_ZONE);
 		boolean trialApplies = trialService.evaluateForQuote(parentId, subtotalPaise, feePaise, gstPaise, careDate).isPresent();
 		if (!trialApplies) {
 			return quote;
 		}
-		// Caregiver rate + platform fee waived - GST is the only thing still charged.
+		// Caregiver rate + platform fee waived - both GST lines (care and platform-fee) are still
+		// charged, same existing precedent as platformFeeGst alone used to be before careGst existed.
+		BigDecimal gstTotal = quote.careGst().add(quote.platformFeeGst());
 		return new PriceQuoteResponse(quote.baseRate(), quote.pricingMode(), quote.appliedRule(), quote.dynamicPricing(),
-				quote.combinedMultiplier(), quote.hours(), GstSplitUtil.ZERO, GstSplitUtil.ZERO, quote.platformFeeGst(),
-				quote.gstRatePct(), quote.platformFeeGst(), quote.currency(), true, true);
+				quote.combinedMultiplier(), quote.hours(), GstSplitUtil.ZERO, quote.careGst(), GstSplitUtil.ZERO, quote.platformFeeGst(),
+				quote.gstRatePct(), gstTotal, quote.currency(), true, true);
 	}
 
 	// Details/Review screen's locked-price quote - same inputs as getPrice, but persists the result
@@ -208,13 +212,16 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 
 		long subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
+		long careGstPaise = MoneyUtil.toPaise(priceQuote.careGst());
 		long feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
 		long gstPaise = MoneyUtil.toPaise(priceQuote.platformFeeGst());
-		long fullPayablePaise = subtotalPaise + feePaise + gstPaise;
+		long fullPayablePaise = subtotalPaise + careGstPaise + feePaise + gstPaise;
 
 		LocalDate careDate = LocalDate.ofInstant(request.startTime(), INDIA_ZONE);
 		// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Hourly (RANGE) and Monthly are
 		// excluded entirely (Monthly's own createMonthlyBooking/quoteSeries never evaluate a trial).
+		// Trial eligibility/capping is still evaluated against the platform-fee GST only - careGst
+		// isn't part of what the trial waives (see applyDailyCareTrial).
 		Optional<TrialService.TrialQuoteApplication> trialApplication = request.pricingMode() == PricingMode.FIXED
 				? trialService.evaluateForQuote(parent.getId(), subtotalPaise, feePaise, gstPaise, careDate)
 				: Optional.empty();
@@ -232,6 +239,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.startTime(request.startTime())
 				.endTime(request.endTime())
 				.subtotalPaise(subtotalPaise)
+				.careGstPaise(careGstPaise)
 				.platformFeePaise(feePaise)
 				.platformFeeGstPaise(gstPaise)
 				.trialId(trialId)
@@ -244,6 +252,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		quoteRow = hourlyCareQuoteRepository.save(quoteRow);
 
 		List<HourlyCareQuoteLineItem> lineItems = new ArrayList<>();
+		lineItems.add(new HourlyCareQuoteLineItem("CARE_GST", careGstPaise));
 		lineItems.add(new HourlyCareQuoteLineItem("PLATFORM_FEE", feePaise));
 		lineItems.add(new HourlyCareQuoteLineItem("PLATFORM_FEE_GST", gstPaise));
 		if (discountPaise > 0) {
@@ -269,6 +278,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		UUID trialId = null;
 		long trialDiscountPaise = 0L;
 		long subtotalPaise;
+		long careGstPaise;
 		long feePaise;
 		long gstPaise;
 
@@ -285,6 +295,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			}
 			totalAmount = MoneyUtil.toRupees(quote.getPayablePaise());
 			subtotalPaise = quote.getSubtotalPaise();
+			careGstPaise = quote.getCareGstPaise();
 			feePaise = quote.getPlatformFeePaise();
 			gstPaise = quote.getPlatformFeeGstPaise();
 			quote.setUsedAt(Instant.now());
@@ -295,11 +306,12 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			PriceQuoteResponse priceQuote = quotePrice(zoneAreaId, request.pricingMode(), request.startTime(), request.endTime());
 			totalAmount = priceQuote.total();
 			subtotalPaise = MoneyUtil.toPaise(priceQuote.subtotal());
+			careGstPaise = MoneyUtil.toPaise(priceQuote.careGst());
 			feePaise = MoneyUtil.toPaise(priceQuote.platformFee());
 			gstPaise = MoneyUtil.toPaise(priceQuote.platformFeeGst());
 		}
 
-		GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
+		GstSplitUtil.GstSplit gstSplit = splitGst(careGstPaise + gstPaise, address.getState());
 		Booking booking = Booking.builder()
 				.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
 				.startTime(request.startTime()).endTime(request.endTime())
@@ -310,6 +322,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				.trialId(trialId)
 				.trialDiscountPaise(trialDiscountPaise)
 				.subtotalPaise(subtotalPaise)
+				.careGstPaise(careGstPaise)
 				.platformFeePaise(feePaise)
 				.platformFeeGstPaise(gstPaise)
 				.cgstPaise(gstSplit.cgstPaise())
@@ -413,22 +426,24 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 			BigDecimal occurrenceAmount = GstSplitUtil.ZERO;
 			long occurrenceSubtotalPaise = 0L;
+			long occurrenceCareGstPaise = 0L;
 			long occurrenceFeePaise = 0L;
 			long occurrenceGstPaise = 0L;
 
 			if (chargeThisOccurrence) {
 				monthlyChargeApplied = true;
 				occurrenceSubtotalPaise = MoneyUtil.toPaise(quote.subtotal());
+				occurrenceCareGstPaise = MoneyUtil.toPaise(quote.careGst());
 				occurrenceFeePaise = MoneyUtil.toPaise(quote.platformFee());
 				occurrenceGstPaise = MoneyUtil.toPaise(quote.platformFeeGst());
-				long fullPayablePaise = occurrenceSubtotalPaise + occurrenceFeePaise + occurrenceGstPaise;
+				long fullPayablePaise = occurrenceSubtotalPaise + occurrenceCareGstPaise + occurrenceFeePaise + occurrenceGstPaise;
 
 				// FIRST5_FEE_WAIVER only applies to Daily care (FIXED) - Monthly is excluded
 				// entirely, same as Hourly (RANGE), so there's no trial to evaluate here.
 				occurrenceAmount = MoneyUtil.toRupees(fullPayablePaise);
 			}
 
-			GstSplitUtil.GstSplit occurrenceGstSplit = splitGst(occurrenceGstPaise, address.getState());
+			GstSplitUtil.GstSplit occurrenceGstSplit = splitGst(occurrenceCareGstPaise + occurrenceGstPaise, address.getState());
 			Booking booking = Booking.builder()
 					.parent(parent).nanny(null).child(child).serviceType(serviceType).address(address)
 					.startTime(start).endTime(end)
@@ -438,6 +453,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 					.recurrenceGroupId(recurrenceGroupId)
 					.careNotes(request.careNotes())
 					.subtotalPaise(occurrenceSubtotalPaise)
+					.careGstPaise(occurrenceCareGstPaise)
 					.platformFeePaise(occurrenceFeePaise)
 					.platformFeeGstPaise(occurrenceGstPaise)
 					.cgstPaise(occurrenceGstSplit.cgstPaise())
@@ -478,6 +494,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				: bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId());
 		BigDecimal amount = series.stream().map(Booking::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 		long subtotalPaise = series.stream().mapToLong(Booking::getSubtotalPaise).sum();
+		long careGstPaise = series.stream().mapToLong(Booking::getCareGstPaise).sum();
 		long feePaise = series.stream().mapToLong(Booking::getPlatformFeePaise).sum();
 		long gstPaise = series.stream().mapToLong(Booking::getPlatformFeeGstPaise).sum();
 		long cgstPaise = series.stream().mapToLong(Booking::getCgstPaise).sum();
@@ -487,7 +504,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		PaymentTransaction transaction = PaymentTransaction.builder()
 				.booking(booking).amount(amount).method(request.method()).status(PaymentStatus.INITIATED)
-				.subtotalPaise(subtotalPaise).platformFeePaise(feePaise).platformFeeGstPaise(gstPaise)
+				.subtotalPaise(subtotalPaise).careGstPaise(careGstPaise).platformFeePaise(feePaise).platformFeeGstPaise(gstPaise)
 				.cgstPaise(cgstPaise).sgstPaise(sgstPaise).utgstPaise(utgstPaise).igstPaise(igstPaise)
 				.build();
 		transaction = paymentTransactionRepository.save(transaction);
@@ -816,6 +833,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	// step for a client UI to render it against yet.
 	private MonthlyPriceSummary quoteSeries(Long zoneAreaId, List<LocalDate> dates, LocalTime dailyStartTime, LocalTime dailyEndTime) {
 		BigDecimal subtotal = GstSplitUtil.ZERO;
+		BigDecimal careGst = GstSplitUtil.ZERO;
 		BigDecimal platformFee = GstSplitUtil.ZERO;
 		BigDecimal platformFeeGst = GstSplitUtil.ZERO;
 		BigDecimal total = GstSplitUtil.ZERO;
@@ -837,11 +855,12 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			// same as Hourly (RANGE), so this preview is never discounted.
 			monthlyChargeApplied = true;
 			subtotal = subtotal.add(quote.subtotal());
+			careGst = careGst.add(quote.careGst());
 			platformFee = platformFee.add(quote.platformFee());
 			platformFeeGst = platformFeeGst.add(quote.platformFeeGst());
 			total = total.add(quote.total());
 		}
-		return new MonthlyPriceSummary(dates.size(), subtotal, platformFee, platformFeeGst, total, currency);
+		return new MonthlyPriceSummary(dates.size(), subtotal, careGst, platformFee, platformFeeGst, total, currency);
 	}
 
 	private Booking resolveOwnBooking(Long userId, Long bookingId) {

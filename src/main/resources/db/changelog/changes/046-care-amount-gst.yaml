@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 46
+      author: ektrepha
+      description: Adds care_gst_paise (GST on the care amount, same rate as platform_fee_gst_paise) to hourly_care_quote, booking, and payment_transaction
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/046-care-amount-gst.sql
+            relativeToChangelogFile: false

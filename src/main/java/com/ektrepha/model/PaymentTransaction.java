@@ -69,6 +69,11 @@ public class PaymentTransaction {
 	@Builder.Default
 	private long subtotalPaise = 0L;
 
+	/** GST on {@link #subtotalPaise} - same rate as {@link #platformFeeGstPaise}. Added 2026. */
+	@Column(name = "care_gst_paise", nullable = false)
+	@Builder.Default
+	private long careGstPaise = 0L;
+
 	@Column(name = "platform_fee_paise", nullable = false)
 	@Builder.Default
 	private long platformFeePaise = 0L;
@@ -77,7 +82,7 @@ public class PaymentTransaction {
 	@Builder.Default
 	private long platformFeeGstPaise = 0L;
 
-	/** {@link #platformFeeGstPaise} split by state — see {@link Booking#getCgstPaise()}. */
+	/** {@link #careGstPaise} + {@link #platformFeeGstPaise}, split by state — see {@link Booking#getCgstPaise()}. */
 	@Column(name = "cgst_paise", nullable = false)
 	@Builder.Default
 	private long cgstPaise = 0L;

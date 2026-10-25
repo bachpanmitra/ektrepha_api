@@ -107,7 +107,8 @@ class PricingServiceTest {
 
 	// The design doc's own worked example (pre-GST): base_rate 300 (midpoint of 200-400... here
 	// 250-350), weekend x1.5 -> 450, x4h -> subtotal 1800, 5% platform fee -> 90, so 1890 before GST;
-	// with app.pricing.platform-fee-gst-pct now 18%, GST adds 16.20 (18% of the 90 fee) on top.
+	// with app.pricing.platform-fee-gst-pct now 18%, GST adds 16.20 (18% of the 90 fee) on the fee
+	// and 324.00 (18% of the 1800 subtotal) on the care amount itself, so 1800+324+90+16.20=2230.20.
 	@Test
 	void weekendRule_appliesMultiplierAndMatchesDesignDocExample() {
 		ZoneServicePricing pricing = savePricing(PricingMode.RANGE, null, new BigDecimal("250"), new BigDecimal("350"), BigDecimal.ONE, new BigDecimal("5"));
@@ -124,9 +125,10 @@ class PricingServiceTest {
 		assertThat(quote.appliedRule().dayType()).isEqualTo(DayType.WEEKEND);
 		assertThat(quote.combinedMultiplier()).isEqualByComparingTo("1.50");
 		assertThat(quote.subtotal()).isEqualByComparingTo("1800.00");
+		assertThat(quote.careGst()).isEqualByComparingTo("324.00");
 		assertThat(quote.platformFee()).isEqualByComparingTo("90.00");
 		assertThat(quote.platformFeeGst()).isEqualByComparingTo("16.20");
-		assertThat(quote.total()).isEqualByComparingTo("1906.20");
+		assertThat(quote.total()).isEqualByComparingTo("2230.20");
 	}
 
 	@Test
@@ -165,9 +167,10 @@ class PricingServiceTest {
 		assertThat(quote.pricingMode()).isEqualTo(PricingMode.MONTHLY);
 		assertThat(quote.baseRate()).isEqualByComparingTo("25000");
 		assertThat(quote.subtotal()).isEqualByComparingTo("25000");
+		assertThat(quote.careGst()).isEqualByComparingTo("4500.00");
 		assertThat(quote.platformFee()).isEqualByComparingTo("2500.00");
 		assertThat(quote.platformFeeGst()).isEqualByComparingTo("450.00");
-		assertThat(quote.total()).isEqualByComparingTo("27950.00");
+		assertThat(quote.total()).isEqualByComparingTo("32450.00");
 		assertThat(quote.combinedMultiplier()).isNull();
 		assertThat(quote.appliedRule()).isNull();
 	}

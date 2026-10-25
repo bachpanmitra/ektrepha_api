@@ -120,6 +120,11 @@ public class Booking {
 	@Builder.Default
 	private long subtotalPaise = 0L;
 
+	/** GST on {@link #subtotalPaise} - same rate as {@link #platformFeeGstPaise}. Added 2026. */
+	@Column(name = "care_gst_paise", nullable = false)
+	@Builder.Default
+	private long careGstPaise = 0L;
+
 	@Column(name = "platform_fee_paise", nullable = false)
 	@Builder.Default
 	private long platformFeePaise = 0L;
@@ -129,9 +134,10 @@ public class Booking {
 	private long platformFeeGstPaise = 0L;
 
 	/**
-	 * {@link #platformFeeGstPaise} split by state (see {@code GstSplitUtil}) — CGST+SGST or
-	 * CGST+UTGST (split evenly) for an intra-state booking, IGST (the whole amount) for inter-state.
-	 * Exactly one of (cgst+sgst), (cgst+utgst), or igst is ever non-zero.
+	 * {@link #careGstPaise} + {@link #platformFeeGstPaise} (every GST this booking carries), split by
+	 * state (see {@code GstSplitUtil}) — CGST+SGST or CGST+UTGST (split evenly) for an intra-state
+	 * booking, IGST (the whole amount) for inter-state. Exactly one of (cgst+sgst), (cgst+utgst), or
+	 * igst is ever non-zero.
 	 */
 	@Column(name = "cgst_paise", nullable = false)
 	@Builder.Default

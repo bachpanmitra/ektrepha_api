@@ -12,10 +12,17 @@ public record PriceQuoteResponse(
 		BigDecimal combinedMultiplier,
 		BigDecimal hours,
 		BigDecimal subtotal,
+		/**
+		 * GST charged on {@link #subtotal} (the care amount itself) — same rate as
+		 * {@link #platformFeeGst} ({@code app.pricing.platform-fee-gst-pct}), confirmed by the
+		 * business to apply to the care amount as well, not just the platform fee. Added 2026 —
+		 * bookings/quotes persisted before this never had a care-amount GST line at all.
+		 */
+		BigDecimal careGst,
 		BigDecimal platformFee,
 		/** GST charged on {@link #platformFee}, per {@code app.pricing.platform-fee-gst-pct} — 0 until that's configured non-zero. */
 		BigDecimal platformFeeGst,
-		/** The configured rate {@link #platformFeeGst} was computed at, as a percentage (e.g. 18 = 18%) — {@code app.pricing.platform-fee-gst-pct}, parent-agnostic (same value regardless of trial). */
+		/** The configured rate both {@link #careGst} and {@link #platformFeeGst} are computed at, as a percentage (e.g. 18 = 18%) — {@code app.pricing.platform-fee-gst-pct}, parent-agnostic (same value regardless of trial). */
 		BigDecimal gstRatePct,
 		BigDecimal total,
 		String currency,

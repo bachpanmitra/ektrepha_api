@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 public record MonthlyPriceSummary(
 		int occurrenceCount,
 		BigDecimal subtotal,
+		/** GST on {@link #subtotal} (the care amount), same rate as {@link #platformFeeGst} - already folded into {@link #total}, broken out here so the client can show it as its own line item. */
+		BigDecimal careGst,
 		BigDecimal platformFee,
 		/** GST on {@link #platformFee}, per {@code app.pricing.platform-fee-gst-pct} - already folded into {@link #total}, broken out here so the client can show it as its own line item. */
 		BigDecimal platformFeeGst,

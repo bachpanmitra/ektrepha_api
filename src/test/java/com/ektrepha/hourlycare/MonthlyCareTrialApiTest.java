@@ -178,13 +178,15 @@ class MonthlyCareTrialApiTest {
 		Parent parent = createParent();
 		ParentAddress address = createAddress(parent);
 
-		// monthlyPrice 5000, fee 10% = 500, gst 18% of the fee = 90 -> total 5590, billed once for the series.
+		// monthlyPrice 5000, fee 10% = 500, gst 18% of the fee = 90, gst 18% of the subtotal (care
+		// GST) = 900 -> total 6490, billed once for the series.
 		mockMvc.perform(post("/api/v1/hourly-care/monthly/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(requestBody(address)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.summary.occurrenceCount").value(3))
 				.andExpect(jsonPath("$.summary.platformFee").value(500.00))
-				.andExpect(jsonPath("$.summary.total").value(5590.00));
+				.andExpect(jsonPath("$.summary.careGst").value(900.00))
+				.andExpect(jsonPath("$.summary.total").value(6490.00));
 	}
 
 	@Test
@@ -198,7 +200,7 @@ class MonthlyCareTrialApiTest {
 				.contentType(MediaType.APPLICATION_JSON).content(requestBody(address)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.summary.platformFee").value(500.00))
-				.andExpect(jsonPath("$.summary.total").value(5590.00));
+				.andExpect(jsonPath("$.summary.total").value(6490.00));
 	}
 
 	@Test
@@ -213,14 +215,14 @@ class MonthlyCareTrialApiTest {
 				.contentType(MediaType.APPLICATION_JSON).content(requestBody(address)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.occurrenceCount").value(3))
-				.andExpect(jsonPath("$.totalAmount").value(5590.00))
+				.andExpect(jsonPath("$.totalAmount").value(6490.00))
 				.andReturn().getResponse().getContentAsString();
 		long anchorId = ((Number) com.jayway.jsonpath.JsonPath.read(response, "$.id")).longValue();
 
 		Booking anchor = bookingRepository.findById(anchorId).orElseThrow();
 		assertThat(anchor.getTrialId()).isNull();
 		assertThat(anchor.getTrialDiscountPaise()).isEqualTo(0L);
-		assertThat(anchor.getTotalAmount()).isEqualByComparingTo("5590.00");
+		assertThat(anchor.getTotalAmount()).isEqualByComparingTo("6490.00");
 
 		// The flat monthly retainer bills once for the whole series - every other occurrence stays
 		// at 0, same as before the trial-eligibility flip (never about the trial at all here).
@@ -247,7 +249,7 @@ class MonthlyCareTrialApiTest {
 				.andReturn().getResponse().getContentAsString();
 		long anchorId = ((Number) com.jayway.jsonpath.JsonPath.read(createResponse, "$.id")).longValue();
 
-		// This occurrence is never trial-waived (monthly is excluded entirely) - its 5590.00 total
+		// This occurrence is never trial-waived (monthly is excluded entirely) - its 6490.00 total
 		// is above Razorpay's minimum, so initiatePayment creates a real order and confirmPayment
 		// is still required, same as any paid booking.
 		String initiateResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings/" + anchorId + "/payment").with(parentAuth)

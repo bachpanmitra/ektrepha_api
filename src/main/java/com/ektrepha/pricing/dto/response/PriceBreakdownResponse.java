@@ -15,30 +15,35 @@ import com.ektrepha.pricing.GstSplitUtil;
  */
 public record PriceBreakdownResponse(
 		BigDecimal subtotal,
+		/** GST on {@link #subtotal}, same rate as {@link #platformFeeGst}. Added 2026. */
+		BigDecimal careGst,
 		BigDecimal platformFee,
 		BigDecimal platformFeeGst,
+		// cgst/sgst/utgst/igst are the split of (careGst + platformFeeGst) together, not platformFeeGst alone.
 		BigDecimal cgst,
 		BigDecimal sgst,
 		BigDecimal utgst,
 		BigDecimal igst,
-		// Gross, pre-trial-discount (subtotal + platformFee + platformFeeGst) - what the client's
-		// own amountPaid/totalAmount nets against after trialDiscount is subtracted.
+		// Gross, pre-trial-discount (subtotal + careGst + platformFee + platformFeeGst) - what the
+		// client's own amountPaid/totalAmount nets against after trialDiscount is subtracted.
 		BigDecimal total,
 		BigDecimal trialDiscount) {
 
 	public static PriceBreakdownResponse from(Booking booking) {
 		BigDecimal subtotal = GstSplitUtil.toRupees(booking.getSubtotalPaise());
+		BigDecimal careGst = GstSplitUtil.toRupees(booking.getCareGstPaise());
 		BigDecimal platformFee = GstSplitUtil.toRupees(booking.getPlatformFeePaise());
 		BigDecimal platformFeeGst = GstSplitUtil.toRupees(booking.getPlatformFeeGstPaise());
 		return new PriceBreakdownResponse(
 				subtotal,
+				careGst,
 				platformFee,
 				platformFeeGst,
 				GstSplitUtil.toRupees(booking.getCgstPaise()),
 				GstSplitUtil.toRupees(booking.getSgstPaise()),
 				GstSplitUtil.toRupees(booking.getUtgstPaise()),
 				GstSplitUtil.toRupees(booking.getIgstPaise()),
-				subtotal.add(platformFee).add(platformFeeGst),
+				subtotal.add(careGst).add(platformFee).add(platformFeeGst),
 				GstSplitUtil.toRupees(booking.getTrialDiscountPaise()));
 	}
 

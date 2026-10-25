@@ -185,14 +185,14 @@ class HourlyCareTrialQuoteApiTest {
 		Parent parent = createParent();
 		ParentAddress address = createAddress(parent);
 
-		// rate 200/hr x 4hr = 800 subtotal, fee 10% = 80, gst 18% of the fee = 14.40. Full payable =
-		// 80000 + 8000 + 1440 = 89440 paise.
+		// rate 200/hr x 4hr = 800 subtotal, fee 10% = 80, gst 18% of the fee = 14.40, gst 18% of the
+		// subtotal (care GST) = 144.00. Full payable = 80000 + 14400 + 8000 + 1440 = 103840 paise.
 		mockMvc.perform(post("/api/v1/hourly-care/bookings/quote").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "RANGE")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.lineItems[?(@.type=='TRIAL_DISCOUNT')]").isEmpty())
-				.andExpect(jsonPath("$.payablePaise").value(89440))
-				.andExpect(jsonPath("$.fullPayablePaise").value(89440));
+				.andExpect(jsonPath("$.payablePaise").value(103840))
+				.andExpect(jsonPath("$.fullPayablePaise").value(103840));
 	}
 
 	@Test
@@ -201,16 +201,16 @@ class HourlyCareTrialQuoteApiTest {
 		ParentAddress address = createAddress(parent);
 		createActiveTrial(parent);
 
-		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52. Full payable = 71552 paise; the
-		// trial waives subtotal+fee (70400) but GST (1152) is never waived - it's the only thing
-		// the parent still pays.
+		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52, gst 18% of the subtotal (care GST)
+		// = 115.20. Full payable = 83072 paise; the trial waives subtotal+fee (70400) but neither
+		// GST line (12672 = 1152 + 11520) is ever waived - they're the only thing the parent still pays.
 		mockMvc.perform(post("/api/v1/hourly-care/bookings/quote").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "FIXED")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.lineItems", hasSize(3)))
+				.andExpect(jsonPath("$.lineItems", hasSize(4)))
 				.andExpect(jsonPath("$.lineItems[?(@.type=='TRIAL_DISCOUNT')].amountPaise").value(org.hamcrest.Matchers.contains(-70400)))
-				.andExpect(jsonPath("$.payablePaise").value(1152))
-				.andExpect(jsonPath("$.fullPayablePaise").value(71552));
+				.andExpect(jsonPath("$.payablePaise").value(12672))
+				.andExpect(jsonPath("$.fullPayablePaise").value(83072));
 	}
 
 	@Test
@@ -219,7 +219,7 @@ class HourlyCareTrialQuoteApiTest {
 		// longer than the cap but its subtotal+fee are still fully waived - the cap only governs
 		// whether the trial ends after settlement (see
 		// fullFlow_confirmPayment_settlesTrialUsageAndEndsOnCap), never whether/how much of any
-		// single booking is charged. GST (1152 paise) is never waived, cap or no cap.
+		// single booking is charged. GST (12672 paise, both lines) is never waived, cap or no cap.
 		Parent parent = createParent();
 		ParentAddress address = createAddress(parent);
 		createActiveTrial(parent);
@@ -227,7 +227,7 @@ class HourlyCareTrialQuoteApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/bookings/quote").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "FIXED")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.payablePaise").value(1152));
+				.andExpect(jsonPath("$.payablePaise").value(12672));
 	}
 
 	@Test
@@ -241,11 +241,11 @@ class HourlyCareTrialQuoteApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/bookings/quote").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "RANGE")))
 				.andExpect(status().isOk())
-				// rate 200/hr x 4hr = 800 subtotal, fee 10% = 80, gst 18% of the fee = 14.40. Full
-				// payable = 89440 paise.
+				// rate 200/hr x 4hr = 800 subtotal, fee 10% = 80, gst 18% of the fee = 14.40, gst 18%
+				// of the subtotal (care GST) = 144.00. Full payable = 103840 paise.
 				.andExpect(jsonPath("$.lineItems[?(@.type=='TRIAL_DISCOUNT')]").isEmpty())
-				.andExpect(jsonPath("$.payablePaise").value(89440))
-				.andExpect(jsonPath("$.fullPayablePaise").value(89440));
+				.andExpect(jsonPath("$.payablePaise").value(103840))
+				.andExpect(jsonPath("$.fullPayablePaise").value(103840));
 	}
 
 	@Test
@@ -265,11 +265,12 @@ class HourlyCareTrialQuoteApiTest {
 				+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end
 				+ "\",\"pricingMode\":\"FIXED\",\"quoteId\":\"" + quoteId + "\"}";
 
-		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52 - subtotal+fee waived, GST still charged.
+		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52, gst 18% of the subtotal (care GST)
+		// = 115.20 - subtotal+fee waived, both GST lines still charged (126.72 total).
 		mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
 				.contentType(MediaType.APPLICATION_JSON).content(createBody))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.totalAmount").value(11.52));
+				.andExpect(jsonPath("$.totalAmount").value(126.72));
 	}
 
 	@Test
@@ -350,16 +351,17 @@ class HourlyCareTrialQuoteApiTest {
 		ParentAddress address = createAddress(parent);
 		createActiveTrial(parent);
 
-		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52 - caregiver rate + fee waived;
-		// total = 11.52 (just the GST).
+		// fixPrice 640, fee 10% = 64, gst 18% of the fee = 11.52, gst 18% of the subtotal (care GST)
+		// = 115.20 - caregiver rate + fee waived, both GST lines still charged; total = 126.72.
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "FIXED")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.priceQuote.subtotal").value(0))
+				.andExpect(jsonPath("$.priceQuote.careGst").value(115.20))
 				.andExpect(jsonPath("$.priceQuote.platformFee").value(0))
 				.andExpect(jsonPath("$.priceQuote.platformFeeGst").value(11.52))
 				.andExpect(jsonPath("$.priceQuote.gstRatePct").value(18))
-				.andExpect(jsonPath("$.priceQuote.total").value(11.52))
+				.andExpect(jsonPath("$.priceQuote.total").value(126.72))
 				.andExpect(jsonPath("$.priceQuote.platformFeeWaived").value(true))
 				.andExpect(jsonPath("$.priceQuote.isTrialPeriod").value(true));
 	}
@@ -374,9 +376,10 @@ class HourlyCareTrialQuoteApiTest {
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "FIXED")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.priceQuote.subtotal").value(640.00))
+				.andExpect(jsonPath("$.priceQuote.careGst").value(115.20))
 				.andExpect(jsonPath("$.priceQuote.platformFee").value(64.00))
 				.andExpect(jsonPath("$.priceQuote.platformFeeGst").value(11.52))
-				.andExpect(jsonPath("$.priceQuote.total").value(715.52))
+				.andExpect(jsonPath("$.priceQuote.total").value(830.72))
 				.andExpect(jsonPath("$.priceQuote.platformFeeWaived").value(false))
 				.andExpect(jsonPath("$.priceQuote.isTrialPeriod").value(false));
 	}
@@ -395,7 +398,7 @@ class HourlyCareTrialQuoteApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(spoofedBody))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.priceQuote.total").value(715.52))
+				.andExpect(jsonPath("$.priceQuote.total").value(830.72))
 				.andExpect(jsonPath("$.priceQuote.isTrialPeriod").value(false));
 	}
 
@@ -413,7 +416,7 @@ class HourlyCareTrialQuoteApiTest {
 		mockMvc.perform(post("/api/v1/hourly-care/availability").with(user(parent.getUser().getId().toString()).roles("PARENT"))
 				.contentType(MediaType.APPLICATION_JSON).content(quoteBody(address, "FIXED")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.priceQuote.total").value(11.52))
+				.andExpect(jsonPath("$.priceQuote.total").value(126.72))
 				.andExpect(jsonPath("$.priceQuote.isTrialPeriod").value(true));
 	}
 

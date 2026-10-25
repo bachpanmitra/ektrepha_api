@@ -112,12 +112,15 @@ public class PricingServiceImpl implements PricingService {
 		// caller below, since this method is parent-agnostic and has no notion of a trial.
 		BigDecimal platformFeeGst = GstSplitUtil.scale(platformFee.multiply(gstRatePct)
 				.divide(BigDecimal.valueOf(100)));
-		BigDecimal total = subtotal.add(platformFee).add(platformFeeGst);
+		// Same rate as platformFeeGst, charged on the care amount itself (business-confirmed, 2026).
+		BigDecimal careGst = GstSplitUtil.scale(subtotal.multiply(gstRatePct)
+				.divide(BigDecimal.valueOf(100)));
+		BigDecimal total = subtotal.add(careGst).add(platformFee).add(platformFeeGst);
 
 		AppliedRuleResponse appliedRule = rule != null ? new AppliedRuleResponse(rule.getDayType(), rule.getPriceMultiplier()) : null;
 
 		return new PriceQuoteResponse(baseRate, requestedMode, appliedRule, buildDynamicInfo(pricing),
-				combinedMultiplier, hours, subtotal, platformFee, platformFeeGst, gstRatePct, total, pricing.getCurrency(),
+				combinedMultiplier, hours, subtotal, careGst, platformFee, platformFeeGst, gstRatePct, total, pricing.getCurrency(),
 				false, false);
 	}
 
