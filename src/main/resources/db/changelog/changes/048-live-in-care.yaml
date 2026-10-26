@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 48
+      author: ektrepha
+      description: Adds live-in care - zone_service_pricing.live_in_monthly_price, the live_in pricing mode, and the live_in_arrangement table
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/048-live-in-care.sql
+            relativeToChangelogFile: false

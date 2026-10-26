@@ -16,6 +16,7 @@ public record ZonePricingCreateRequest(
 		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal rateMax,
 		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal unitPrice,
 		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal monthlyPrice,
+		@DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal liveInMonthlyPrice,
 		String currency,
 		BigDecimal minBookingHours,
 		@DecimalMin("0.00") @Digits(integer = 3, fraction = 2) BigDecimal platformFeePct) {

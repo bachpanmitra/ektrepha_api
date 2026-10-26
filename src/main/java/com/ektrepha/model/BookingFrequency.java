@@ -8,7 +8,10 @@ public enum BookingFrequency implements CodedEnum {
 	// "Book every day" / "month base" recurring types (migration 030) — booking.recurrence_group_id
 	// ties the generated occurrences together.
 	REPEAT_DAILY(3),
-	REPEAT_MONTHLY(4);
+	REPEAT_MONTHLY(4),
+	// A live-in helper's stay (migration 048) - one row per on-duty day, tied together by
+	// recurrence_group_id the same way, with a LiveInArrangement on the anchor row.
+	LIVE_IN(5);
 
 	private final int code;
 

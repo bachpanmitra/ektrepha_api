@@ -69,9 +69,9 @@ public class PricingServiceImpl implements PricingService {
 
 		DayType dayType = dayTypeResolver.resolve(request.bookingDate(), pricing.getZoneArea().getState());
 		// Day-type/time rules are hourly-pricing machinery (a weekend or holiday window within a
-		// single day) and have no meaning for a flat monthly retainer, so a monthly request never
-		// looks one up — no rule ever applies to it.
-		ZonePricingRule rule = requestedMode != PricingMode.MONTHLY
+		// single day) and have no meaning for a flat monthly retainer (visiting or live-in), so a
+		// monthly request never looks one up — no rule ever applies to it.
+		ZonePricingRule rule = requestedMode != PricingMode.MONTHLY && requestedMode != PricingMode.LIVE_IN
 				? ruleRepository.findApplicableRules(pricing.getId(), dayType, request.startTime(), request.endTime()).stream().findFirst().orElse(null)
 				: null;
 
@@ -88,6 +88,11 @@ public class PricingServiceImpl implements PricingService {
 			// A flat recurring rate — independent of booking hours, day-type rules, and demand
 			// surge, none of which have meaning for a monthly retainer.
 			baseRate = pricing.getMonthlyPrice();
+			subtotal = baseRate;
+		} else if (requestedMode == PricingMode.LIVE_IN) {
+			// One month of a live-in helper - flat for the same reasons as MONTHLY above. A
+			// multi-month stay multiplies this per-month quote (HourlyCareServiceImpl#quoteLiveIn).
+			baseRate = pricing.getLiveInMonthlyPrice();
 			subtotal = baseRate;
 		} else {
 			BigDecimal effectiveRate = resolveEffectiveRate(request, pricing);
@@ -121,7 +126,7 @@ public class PricingServiceImpl implements PricingService {
 				false, false);
 	}
 
-	// Hourly, daily and monthly prices are all independently optional on a zone+service row (an
+	// Hourly, daily, monthly and live-in prices are all independently optional on a zone+service row (an
 	// admin configures whichever products that zone actually offers), so "not configured" needs its
 	// own clean error instead of surfacing as an NPE deep in the branch above.
 	private void requireModeConfigured(ZoneServicePricing pricing, PricingMode requestedMode) {
@@ -129,6 +134,7 @@ public class PricingServiceImpl implements PricingService {
 			case FIXED -> pricing.getFixPrice() != null;
 			case RANGE -> pricing.getRateMin() != null && pricing.getRateMax() != null;
 			case MONTHLY -> pricing.getMonthlyPrice() != null;
+			case LIVE_IN -> pricing.getLiveInMonthlyPrice() != null;
 		};
 		if (!configured) {
 			throw new NotServiceableException("This zone/service does not offer " + requestedMode.name().toLowerCase() + " pricing");

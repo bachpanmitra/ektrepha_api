@@ -63,7 +63,8 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		if (pricingRepository.existsByZoneAreaIdAndServiceTypeId(zoneId, serviceType.getId())) {
 			throw new DuplicateZonePricingException("Pricing is already configured for zone " + zoneId + " and service type " + serviceType.getId());
 		}
-		validatePricingFields(request.pricingMode(), request.fixPrice(), request.rateMin(), request.rateMax(), request.monthlyPrice());
+		validatePricingFields(request.pricingMode(), request.fixPrice(), request.rateMin(), request.rateMax(), request.monthlyPrice(),
+				request.liveInMonthlyPrice());
 
 		ZoneServicePricing pricing = ZoneServicePricing.builder()
 				.zoneArea(zone)
@@ -74,6 +75,7 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 				.rateMax(request.rateMax())
 				.unitPrice(request.unitPrice())
 				.monthlyPrice(request.monthlyPrice())
+				.liveInMonthlyPrice(request.liveInMonthlyPrice())
 				.currency(request.currency() != null ? request.currency() : "INR")
 				.minBookingHours(request.minBookingHours() != null ? request.minBookingHours() : BigDecimal.ONE)
 				.platformFeePct(request.platformFeePct() != null ? request.platformFeePct() : BigDecimal.ZERO)
@@ -89,7 +91,9 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 	public ZonePricingResponse update(Long pricingId, ZonePricingUpdateRequest request) {
 		ZoneServicePricing pricing = pricingRepository.findById(pricingId)
 				.orElseThrow(() -> new ZonePricingNotFoundException("No pricing row with id " + pricingId));
-		validatePricingFields(request.pricingMode(), request.fixPrice(), request.rateMin(), request.rateMax(), request.monthlyPrice());
+		BigDecimal liveInMonthlyPrice = request.liveInMonthlyPrice() != null ? request.liveInMonthlyPrice() : pricing.getLiveInMonthlyPrice();
+		validatePricingFields(request.pricingMode(), request.fixPrice(), request.rateMin(), request.rateMax(), request.monthlyPrice(),
+				liveInMonthlyPrice);
 
 		// Hourly (rateMin/rateMax), daily (fixPrice) and monthly (monthlyPrice) are independent
 		// products a zone+service can offer simultaneously - each booking screen asks for its own
@@ -101,6 +105,8 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		pricing.setRateMin(request.rateMin());
 		pricing.setRateMax(request.rateMax());
 		pricing.setMonthlyPrice(request.monthlyPrice());
+		// Live-in (migration 048) is the exception - see ZonePricingUpdateRequest#liveInMonthlyPrice.
+		pricing.setLiveInMonthlyPrice(liveInMonthlyPrice);
 		pricing.setUnitPrice(request.unitPrice());
 		if (request.currency() != null) {
 			pricing.setCurrency(request.currency());
@@ -134,10 +140,10 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		for (ZoneServicePricingBulkItem item : items) {
 			ZoneArea zone = zoneAreaRepository.findById(item.zoneId())
 					.orElseThrow(() -> new ZoneNotFoundException("No zone with id " + item.zoneId()));
-			validatePricingFields(item.pricingMode(), item.fixPrice(), item.rateMin(), item.rateMax(), item.monthlyPrice());
-
 			ZoneServicePricing pricing = pricingRepository.findByZoneAreaIdAndServiceTypeId(item.zoneId(), serviceTypeId)
 					.orElseGet(() -> ZoneServicePricing.builder().zoneArea(zone).serviceType(serviceType).active(true).build());
+			BigDecimal liveInMonthlyPrice = item.liveInMonthlyPrice() != null ? item.liveInMonthlyPrice() : pricing.getLiveInMonthlyPrice();
+			validatePricingFields(item.pricingMode(), item.fixPrice(), item.rateMin(), item.rateMax(), item.monthlyPrice(), liveInMonthlyPrice);
 
 			// See update()'s identical comment - hourly/daily/monthly are independent products, all
 			// written together rather than gated by a single active mode.
@@ -146,6 +152,7 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 			pricing.setRateMin(item.rateMin());
 			pricing.setRateMax(item.rateMax());
 			pricing.setMonthlyPrice(item.monthlyPrice());
+			pricing.setLiveInMonthlyPrice(liveInMonthlyPrice);
 			pricing.setUnitPrice(item.unitPrice());
 			pricing.setCurrency(item.currency() != null ? item.currency() : "INR");
 			pricing.setMinBookingHours(item.minBookingHours() != null ? item.minBookingHours() : BigDecimal.ONE);
@@ -175,22 +182,23 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		if (pricing == null) {
 			return new ZoneServicePricingRowResponse(
 					zone.getId(), zone.getName(), zone.getCity(), zone.getState(), zone.isActive(), sortedPincodes,
-					null, null, null, null, null, null, null, null, null, null, false);
+					null, null, null, null, null, null, null, null, null, null, null, false);
 		}
 		return new ZoneServicePricingRowResponse(
 				zone.getId(), zone.getName(), zone.getCity(), zone.getState(), zone.isActive(), sortedPincodes,
 				pricing.getId(), pricing.getPricingMode(), pricing.getFixPrice(), pricing.getRateMin(), pricing.getRateMax(),
-				pricing.getUnitPrice(), pricing.getMonthlyPrice(), pricing.getCurrency(), pricing.getMinBookingHours(),
+				pricing.getUnitPrice(), pricing.getMonthlyPrice(), pricing.getLiveInMonthlyPrice(), pricing.getCurrency(), pricing.getMinBookingHours(),
 				pricing.getPlatformFeePct(), pricing.isActive());
 	}
 
-	// Hourly, daily and monthly are independent products a zone+service can offer simultaneously -
+	// Hourly, daily, monthly and live-in are independent products a zone+service can offer simultaneously -
 	// any combination may be configured, or none at all. The one remaining required-ness is
 	// pricingMode itself: it names this row's primary/headline product (shown in admin summaries),
 	// so THAT product's own field must actually be populated - backstops the DB CHECK constraints
-	// (migration 008/041) with a clean 400 instead of a raw constraint-violation error from the
+	// (migration 008/041/048) with a clean 400 instead of a raw constraint-violation error from the
 	// flush. Whatever the other two products' fields hold is unrelated to this and never required.
-	private void validatePricingFields(PricingMode mode, BigDecimal fixPrice, BigDecimal rateMin, BigDecimal rateMax, BigDecimal monthlyPrice) {
+	private void validatePricingFields(PricingMode mode, BigDecimal fixPrice, BigDecimal rateMin, BigDecimal rateMax, BigDecimal monthlyPrice,
+			BigDecimal liveInMonthlyPrice) {
 		if ((rateMin == null) != (rateMax == null)) {
 			throw new IllegalArgumentException("rateMin and rateMax must be provided together");
 		}
@@ -206,6 +214,9 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		if (mode == PricingMode.MONTHLY && monthlyPrice == null) {
 			throw new IllegalArgumentException("monthlyPrice is required when pricingMode is MONTHLY");
 		}
+		if (mode == PricingMode.LIVE_IN && liveInMonthlyPrice == null) {
+			throw new IllegalArgumentException("liveInMonthlyPrice is required when pricingMode is LIVE_IN");
+		}
 	}
 
 	private void evictPricingCache(Long zoneAreaId, Long serviceTypeId) {
@@ -219,7 +230,8 @@ public class ZonePricingServiceImpl implements ZonePricingService {
 		return new ZonePricingResponse(
 				pricing.getId(), pricing.getZoneArea().getId(), pricing.getServiceType().getId(), pricing.getServiceType().getCode(),
 				pricing.getPricingMode(), pricing.getFixPrice(), pricing.getRateMin(), pricing.getRateMax(), pricing.getUnitPrice(),
-				pricing.getMonthlyPrice(), pricing.getCurrency(), pricing.getMinBookingHours(), pricing.getPlatformFeePct(), pricing.isActive());
+				pricing.getMonthlyPrice(), pricing.getLiveInMonthlyPrice(), pricing.getCurrency(), pricing.getMinBookingHours(), pricing.getPlatformFeePct(),
+				pricing.isActive());
 	}
 
 }

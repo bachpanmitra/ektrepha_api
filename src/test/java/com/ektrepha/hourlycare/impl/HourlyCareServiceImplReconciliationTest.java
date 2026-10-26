@@ -34,6 +34,7 @@ import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
 import com.ektrepha.repository.GstStateCodeRepository;
 import com.ektrepha.repository.HourlyCareQuoteRepository;
+import com.ektrepha.repository.LiveInArrangementRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
@@ -95,6 +96,8 @@ class HourlyCareServiceImplReconciliationTest {
 	@Mock
 	private GstStateCodeRepository gstStateCodeRepository;
 	@Mock
+	private LiveInArrangementRepository liveInArrangementRepository;
+	@Mock
 	private TrialService trialService;
 	@Mock
 	private AppProperties appProperties;
@@ -109,7 +112,8 @@ class HourlyCareServiceImplReconciliationTest {
 		service = new HourlyCareServiceImpl(parentRepository, bookingRepository, nannyRepository, serviceTypeRepository,
 				parentAddressRepository, parentChildRepository, parentElderRepository, serviceabilityPincodeRepository,
 				caregiverZoneMappingRepository, paymentTransactionRepository, paymentGatewayService, pricingService,
-				addressResponseMapper, orderActivityService, userRepository, hourlyCareQuoteRepository, gstStateCodeRepository, trialService, appProperties);
+				addressResponseMapper, orderActivityService, userRepository, hourlyCareQuoteRepository, gstStateCodeRepository, liveInArrangementRepository, trialService,
+				appProperties);
 
 		User user = User.builder().id(USER_ID).build();
 		parent = Parent.builder().id(1L).user(user).build();

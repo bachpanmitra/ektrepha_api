@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ektrepha.hourlycare.dto.request.AvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.HourlyCareBookingCreateRequest;
+import com.ektrepha.hourlycare.dto.request.LiveInAvailabilityCheckRequest;
+import com.ektrepha.hourlycare.dto.request.LiveInBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyAvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentConfirmRequest;
@@ -21,6 +23,8 @@ import com.ektrepha.hourlycare.dto.response.AvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.BookingStatusResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteResponse;
+import com.ektrepha.hourlycare.dto.response.LiveInAvailabilityResponse;
+import com.ektrepha.hourlycare.dto.response.LiveInBookingResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
 import com.ektrepha.hourlycare.dto.response.PaymentInitiateResponse;
@@ -82,6 +86,29 @@ public class HourlyCareController {
 	@PreAuthorize("hasRole('PARENT')")
 	public ResponseEntity<MonthlyBookingResponse> createMonthlyBooking(Authentication authentication, @Valid @RequestBody MonthlyBookingCreateRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(hourlyCareService.createMonthlyBooking(userId(authentication), request));
+	}
+
+	// Live-in care Details screen's "Check availability" - price for the whole stay (zone's live-in
+	// monthly rate x months), no persistence.
+	@PostMapping("/live-in/availability")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<LiveInAvailabilityResponse> checkLiveInAvailability(Authentication authentication, @Valid @RequestBody LiveInAvailabilityCheckRequest request) {
+		return ResponseEntity.ok(hourlyCareService.checkLiveInAvailability(userId(authentication), request));
+	}
+
+	// Live-in care Review screen's "Continue to payment" - reserves every on-duty day as
+	// AWAITING_PAYMENT. Its response id is paid via the same /bookings/{id}/payment below.
+	@PostMapping("/live-in/bookings")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<LiveInBookingResponse> createLiveInBooking(Authentication authentication, @Valid @RequestBody LiveInBookingCreateRequest request) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(hourlyCareService.createLiveInBooking(userId(authentication), request));
+	}
+
+	// The stay's terms + price, from any of its day ids.
+	@GetMapping("/live-in/bookings/{id}")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<LiveInBookingResponse> liveInBooking(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(hourlyCareService.liveInBooking(userId(authentication), id));
 	}
 
 	// Payment screen's method picker.

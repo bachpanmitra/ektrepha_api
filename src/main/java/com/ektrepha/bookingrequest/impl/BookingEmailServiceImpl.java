@@ -74,6 +74,7 @@ public class BookingEmailServiceImpl extends AbstractEmailSender implements Book
 			case REPEAT_DAILY -> "daily, repeating";
 			case REPEAT_WEEKLY -> "weekly, repeating";
 			case REPEAT_MONTHLY -> "monthly, repeating";
+			case LIVE_IN -> "live-in";
 		};
 	}
 

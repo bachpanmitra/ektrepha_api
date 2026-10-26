@@ -131,6 +131,23 @@ The existing Hourly/Daily/Monthly care endpoints (availability, price, quote, bo
 
 Every booking status/card/detail response (`BookingStatusResponse`, `BookingCardResponse`, `BookingDetailResponse`) now carries an `elder: {id, firstName, age, relationship, mobility}` field alongside the existing `child` field — `null` for a childcare booking. `GET /bookings` also accepts an optional `?serviceTypeCode=` filter.
 
+### Live-in care (`/api/v1/hourly-care/live-in/**`, role `PARENT`)
+
+An in-house helper who lives in the family's home to look after a child (`childcare`) or an elder (`senior_care`), booked in whole months (1–3). Same pay-first, team-assigns flow as Monthly care: reserve → pay → ops assigns a helper. `childId`/`elderId`/`serviceTypeCode` follow the Elder Care rules above.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/live-in/availability` | `{addressId, startDate, months, weeklyOffDay?, childId?, serviceTypeCode?, elderId?}` → `{available, summary: {months, startDate, endDate, onDutyDays, monthlyRate, subtotal, platformFee, platformFeeGst, total, currency}, unavailableReason}`. `available: false` when the zone has no live-in rate configured |
+| POST | `/live-in/bookings` | Above + `{dutyStartTime, dutyEndTime, accommodation: PRIVATE_ROOM\|SHARED_ROOM, mealsProvided, careNotes?}` → 201 `{id, status, onDutyDays, totalAmount, priceBreakdown, arrangement}`. Pay `id` via the existing `/bookings/{id}/payment`, poll it via `/bookings/{id}/status` |
+| GET | `/live-in/bookings/{id}` | The stay's terms and price, from any day id of the stay. 404 for a non-live-in booking |
+
+- **Price** = the zone's `liveInMonthlyPrice` × `months`, plus the usual platform fee + GST. The weekly off day does not reduce it. Not eligible for the FIRST5_FEE_WAIVER trial.
+- **Dates**: `endDate = startDate + months − 1 day` (a 1-month stay from 15 Jan runs to 14 Feb). `startDate` must not be in the past. `weeklyOffDay` is a `DayOfWeek` (`MONDAY`…`SUNDAY`), or null for no fixed weekly off.
+- **Storage**: one booking row per on-duty day (00:00–24:00 IST, `frequency: LIVE_IN`), linked by `recurrenceGroupId`. The whole stay is billed on the first (anchor) day; every other day carries 0.
+- **Ops** (`/api/v1/admin/hourly-care/bookings/{id}/assign` and `/reassign`, unchanged paths): assigning any day of a stay assigns that helper to every day still awaiting assignment (409 if they're booked elsewhere during the stay). Reassigning a day swaps that day and every later not-yet-started day; earlier days stay with the original helper.
+- **Pricing admin**: `liveInMonthlyPrice` is a new optional field on the zone pricing create/update/bulk requests and responses, and `LIVE_IN` is a new `pricingMode`. On update/bulk save, omitting `liveInMonthlyPrice` **keeps** the stored value, so older admin clients can't wipe it.
+- **Nanny app**: `GET /api/v1/nanny-bookings/today` and `/{id}` now also return `elder` and `liveIn: {startDate, endDate, months, weeklyOffDay, dutyStartTime, dutyEndTime, accommodation, mealsProvided}` (null on a visiting booking).
+
 ## Bookings (`/api/v1/bookings`)
 
 ### Reads

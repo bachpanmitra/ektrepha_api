@@ -26,7 +26,7 @@ class MoneyFieldValidationTest {
 	@Test
 	void zonePricingCreateRequest_negativePrice_isRejected() {
 		ZonePricingCreateRequest request = new ZonePricingCreateRequest(1L, PricingMode.FIXED,
-				new BigDecimal("-1.00"), null, null, null, null, "INR", null, null);
+				new BigDecimal("-1.00"), null, null, null, null, null, "INR", null, null);
 
 		Set<ConstraintViolation<ZonePricingCreateRequest>> violations = validator.validate(request);
 
@@ -37,7 +37,7 @@ class MoneyFieldValidationTest {
 	void zonePricingCreateRequest_tooManyIntegerDigits_isRejected() {
 		// @Digits(integer = 8, fraction = 2) - 9 integer digits is one too many.
 		ZonePricingCreateRequest request = new ZonePricingCreateRequest(1L, PricingMode.FIXED,
-				new BigDecimal("123456789.00"), null, null, null, null, "INR", null, null);
+				new BigDecimal("123456789.00"), null, null, null, null, null, "INR", null, null);
 
 		Set<ConstraintViolation<ZonePricingCreateRequest>> violations = validator.validate(request);
 
@@ -48,7 +48,7 @@ class MoneyFieldValidationTest {
 	void zonePricingCreateRequest_tooManyFractionDigits_isRejected() {
 		// @Digits(..., fraction = 2) - a third decimal place is rejected outright, not rounded.
 		ZonePricingCreateRequest request = new ZonePricingCreateRequest(1L, PricingMode.FIXED,
-				new BigDecimal("10.001"), null, null, null, null, "INR", null, null);
+				new BigDecimal("10.001"), null, null, null, null, null, "INR", null, null);
 
 		Set<ConstraintViolation<ZonePricingCreateRequest>> violations = validator.validate(request);
 
@@ -58,7 +58,7 @@ class MoneyFieldValidationTest {
 	@Test
 	void zonePricingCreateRequest_validPrice_passes() {
 		ZonePricingCreateRequest request = new ZonePricingCreateRequest(1L, PricingMode.FIXED,
-				new BigDecimal("999999.99"), null, null, null, null, "INR", null, null);
+				new BigDecimal("999999.99"), null, null, null, null, null, "INR", null, null);
 
 		Set<ConstraintViolation<ZonePricingCreateRequest>> violations = validator.validate(request);
 
@@ -70,7 +70,7 @@ class MoneyFieldValidationTest {
 		// Every money field here is optional (nullable) - @DecimalMin/@Digits must not reject a
 		// field that's simply omitted.
 		ZonePricingCreateRequest request = new ZonePricingCreateRequest(1L, PricingMode.FIXED,
-				null, null, null, null, null, "INR", null, null);
+				null, null, null, null, null, null, "INR", null, null);
 
 		Set<ConstraintViolation<ZonePricingCreateRequest>> violations = validator.validate(request);
 

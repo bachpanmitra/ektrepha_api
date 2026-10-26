@@ -15,6 +15,7 @@ public record ZonePricingResponse(
 		BigDecimal rateMax,
 		BigDecimal unitPrice,
 		BigDecimal monthlyPrice,
+		BigDecimal liveInMonthlyPrice,
 		String currency,
 		BigDecimal minBookingHours,
 		BigDecimal platformFeePct,

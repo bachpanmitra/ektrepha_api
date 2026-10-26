@@ -20,7 +20,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** One zone x service-type's price configuration - a flat price, a min/max hourly range, or a flat monthly rate. At most one row per (zone_area, service_type), enforced by a DB unique constraint. */
+/** One zone x service-type's price configuration - a flat price, a min/max hourly range, a flat monthly rate, or a flat monthly live-in rate. At most one row per (zone_area, service_type), enforced by a DB unique constraint. */
 @Entity
 @Table(name = "zone_service_pricing")
 @Getter
@@ -59,6 +59,10 @@ public class ZoneServicePricing {
 
 	@Column(name = "monthly_price", precision = 10, scale = 2)
 	private BigDecimal monthlyPrice;
+
+	/** A live-in helper's flat rate per month (migration 048) - independent of {@link #monthlyPrice}, the visiting monthly retainer. */
+	@Column(name = "live_in_monthly_price", precision = 10, scale = 2)
+	private BigDecimal liveInMonthlyPrice;
 
 	@Column(name = "currency", nullable = false, length = 3)
 	private String currency;

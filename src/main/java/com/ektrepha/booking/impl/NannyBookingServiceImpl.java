@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
 import com.ektrepha.booking.dto.response.ChildSummary;
+import com.ektrepha.booking.dto.response.ElderBookingSummary;
+import com.ektrepha.booking.dto.response.LiveInArrangementSummary;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
 import com.ektrepha.booking.service.NannyBookingService;
 import com.ektrepha.child.AgeDisplay;
@@ -17,11 +19,15 @@ import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.InvalidBookingTransitionException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.Booking;
+import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.Elder;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.repository.BookingRepository;
+import com.ektrepha.repository.LiveInArrangementRepository;
 import com.ektrepha.repository.NannyRepository;
+import com.ektrepha.repository.ParentElderRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +49,8 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 	private final NannyRepository nannyRepository;
 	private final BookingRepository bookingRepository;
 	private final AddressResponseMapper addressResponseMapper;
+	private final ParentElderRepository parentElderRepository;
+	private final LiveInArrangementRepository liveInArrangementRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -98,7 +106,27 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 				: new ChildSummary(booking.getChild().getId(), booking.getChild().getFirstName(),
 						AgeDisplay.of(booking.getChild().getDob(), LocalDate.now(INDIA_ZONE)));
 		return new NannyTodayBookingResponse(booking.getId(), booking.getStatus().name(), child, booking.getStartTime(), booking.getEndTime(),
-				addressResponseMapper.toResponse(booking.getAddress()), booking.getCareNotes());
+				addressResponseMapper.toResponse(booking.getAddress()), booking.getCareNotes(), toElderSummary(booking), toLiveInSummary(booking));
+	}
+
+	private ElderBookingSummary toElderSummary(Booking booking) {
+		Elder elder = booking.getElder();
+		if (elder == null) {
+			return null;
+		}
+		String relationship = parentElderRepository.findByIdParentIdAndIdElderId(booking.getParent().getId(), elder.getId())
+				.map(link -> link.getRelationship() == null ? null : link.getRelationship().name())
+				.orElse(null);
+		return new ElderBookingSummary(elder.getId(), elder.getFirstName(), elder.getAge(), relationship, elder.getMobility().name());
+	}
+
+	private LiveInArrangementSummary toLiveInSummary(Booking booking) {
+		if (booking.getFrequency() != BookingFrequency.LIVE_IN) {
+			return null;
+		}
+		return liveInArrangementRepository.findByAnchorBookingId(booking.getRecurrenceGroupId())
+				.map(LiveInArrangementSummary::from)
+				.orElse(null);
 	}
 
 	private Booking resolveOwnBooking(Long userId, Long bookingId) {

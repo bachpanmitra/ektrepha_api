@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.booking.dto.response.ElderBookingSummary;
+import com.ektrepha.booking.dto.response.LiveInArrangementSummary;
 import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.BookingNotAwaitingAssignmentException;
@@ -39,6 +40,8 @@ import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.hourlycare.dto.request.AssignCaregiverRequest;
 import com.ektrepha.hourlycare.dto.request.AvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.HourlyCareBookingCreateRequest;
+import com.ektrepha.hourlycare.dto.request.LiveInAvailabilityCheckRequest;
+import com.ektrepha.hourlycare.dto.request.LiveInBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyAvailabilityCheckRequest;
 import com.ektrepha.hourlycare.dto.request.MonthlyBookingCreateRequest;
 import com.ektrepha.hourlycare.dto.request.PaymentConfirmRequest;
@@ -51,6 +54,9 @@ import com.ektrepha.hourlycare.dto.response.CaregiverAssignmentResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareBookingResponse;
 import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteLineItem;
 import com.ektrepha.hourlycare.dto.response.HourlyCareQuoteResponse;
+import com.ektrepha.hourlycare.dto.response.LiveInAvailabilityResponse;
+import com.ektrepha.hourlycare.dto.response.LiveInBookingResponse;
+import com.ektrepha.hourlycare.dto.response.LiveInPriceSummary;
 import com.ektrepha.hourlycare.dto.response.MonthlyAvailabilityResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyBookingResponse;
 import com.ektrepha.hourlycare.dto.response.MonthlyPriceSummary;
@@ -63,6 +69,7 @@ import com.ektrepha.model.Children;
 import com.ektrepha.model.Elder;
 import com.ektrepha.model.GstStateCode;
 import com.ektrepha.model.HourlyCareQuote;
+import com.ektrepha.model.LiveInArrangement;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
@@ -89,6 +96,7 @@ import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
 import com.ektrepha.repository.GstStateCodeRepository;
 import com.ektrepha.repository.HourlyCareQuoteRepository;
+import com.ektrepha.repository.LiveInArrangementRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
@@ -140,6 +148,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private final UserRepository userRepository;
 	private final HourlyCareQuoteRepository hourlyCareQuoteRepository;
 	private final GstStateCodeRepository gstStateCodeRepository;
+	private final LiveInArrangementRepository liveInArrangementRepository;
 	private final TrialService trialService;
 	private final AppProperties appProperties;
 
@@ -487,6 +496,119 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 				PriceBreakdownResponse.from(anchor));
 	}
 
+	// Live-in care: the same "team assigns, pay first" series shape as monthly care above, but every
+	// calendar day of the stay except the weekly off day is an on-duty day, each one a full
+	// 00:00-24:00 IST booking row (the helper lives there - the no_overlapping_bookings constraint
+	// then blocks them for the whole stay). Priced per month, not per day.
+	@Override
+	@Transactional(readOnly = true)
+	public LiveInAvailabilityResponse checkLiveInAvailability(Long userId, LiveInAvailabilityCheckRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
+		resolveChild(parent, request.childId());
+		resolveElder(parent, request.elderId());
+		validateLiveInStartDate(request.startDate());
+
+		LocalDate endDate = liveInEndDate(request.startDate(), request.months());
+		int onDutyDays = liveInDutyDates(request.startDate(), endDate, request.weeklyOffDay()).size();
+		Long zoneAreaId = resolveZoneAreaId(address);
+		try {
+			return new LiveInAvailabilityResponse(true,
+					quoteLiveIn(zoneAreaId, serviceType.getCode(), request.startDate(), endDate, request.months(), onDutyDays), null);
+		} catch (NotServiceableException e) {
+			// The zone is serviceable, it just has no live-in rate configured yet.
+			return new LiveInAvailabilityResponse(false, null, "Live-in care is not available in this area yet");
+		}
+	}
+
+	@Override
+	@Transactional
+	public LiveInBookingResponse createLiveInBooking(Long userId, LiveInBookingCreateRequest request) {
+		Parent parent = resolveParent(userId);
+		ParentAddress address = resolveAddress(parent, request.addressId());
+		ServiceType serviceType = resolveServiceType(request.serviceTypeCode());
+		validateCareRecipient(serviceType.getCode(), request.childId(), request.elderId());
+		Children child = resolveChild(parent, request.childId());
+		Elder elder = resolveElder(parent, request.elderId());
+		validateLiveInStartDate(request.startDate());
+		if (!request.dutyEndTime().isAfter(request.dutyStartTime())) {
+			throw new IllegalArgumentException("dutyEndTime must be after dutyStartTime");
+		}
+
+		LocalDate endDate = liveInEndDate(request.startDate(), request.months());
+		List<LocalDate> dates = liveInDutyDates(request.startDate(), endDate, request.weeklyOffDay());
+		Long zoneAreaId = resolveZoneAreaId(address);
+		// Throws NotServiceableException if this zone has no live-in rate - the reservation fails
+		// rather than silently falling back to another product's price.
+		LiveInPriceSummary price = quoteLiveIn(zoneAreaId, serviceType.getCode(), request.startDate(), endDate, request.months(), dates.size());
+		long subtotalPaise = MoneyUtil.toPaise(price.subtotal());
+		long feePaise = MoneyUtil.toPaise(price.platformFee());
+		long gstPaise = MoneyUtil.toPaise(price.platformFeeGst());
+		GstSplitUtil.GstSplit gstSplit = splitGst(gstPaise, address.getState());
+
+		// The whole stay is billed on the anchor (first) day and every other day carries zero, the
+		// same "bill once" shape as createMonthlyBooking - initiatePayment sums the series either way.
+		Booking anchor = null;
+		for (LocalDate date : dates) {
+			boolean isAnchor = anchor == null;
+			Booking day = Booking.builder()
+					.parent(parent).nanny(null).child(child).elder(elder).serviceType(serviceType).address(address)
+					.startTime(date.atStartOfDay(INDIA_ZONE).toInstant())
+					.endTime(date.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant())
+					.status(BookingStatus.AWAITING_PAYMENT)
+					.totalAmount(isAnchor ? price.total() : GstSplitUtil.ZERO)
+					.frequency(BookingFrequency.LIVE_IN)
+					.recurrenceGroupId(isAnchor ? null : anchor.getId())
+					.careNotes(request.careNotes())
+					.subtotalPaise(isAnchor ? subtotalPaise : 0L)
+					.platformFeePaise(isAnchor ? feePaise : 0L)
+					.platformFeeGstPaise(isAnchor ? gstPaise : 0L)
+					.cgstPaise(isAnchor ? gstSplit.cgstPaise() : 0L)
+					.sgstPaise(isAnchor ? gstSplit.sgstPaise() : 0L)
+					.utgstPaise(isAnchor ? gstSplit.utgstPaise() : 0L)
+					.igstPaise(isAnchor ? gstSplit.igstPaise() : 0L)
+					.build();
+			day = bookingRepository.save(day);
+			if (isAnchor) {
+				day.setRecurrenceGroupId(day.getId());
+				anchor = bookingRepository.save(day);
+			}
+		}
+
+		LiveInArrangement arrangement = liveInArrangementRepository.save(LiveInArrangement.builder()
+				.anchorBooking(anchor)
+				.startDate(request.startDate())
+				.endDate(endDate)
+				.months(request.months())
+				.weeklyOffDay(request.weeklyOffDay())
+				.dutyStartTime(request.dutyStartTime())
+				.dutyEndTime(request.dutyEndTime())
+				.accommodation(request.accommodation())
+				.mealsProvided(request.mealsProvided())
+				.build());
+		// One activity row for the stay rather than one per day - ops reads the stay as one order.
+		orderActivityService.log(anchor, OrderActivityType.BOOKING_CREATED, OrderActivityActorType.PARENT, parent.getUser().getId(), null,
+				Map.of("careModel", "LIVE_IN", "onDutyDays", dates.size()));
+
+		log.info("Live-in stay reserved: anchorId={}, parentId={}, onDutyDays={}, amount={}", anchor.getId(), parent.getId(), dates.size(), price.total());
+		return toLiveInResponse(anchor, arrangement, dates.size());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public LiveInBookingResponse liveInBooking(Long userId, Long bookingId) {
+		Booking booking = resolveOwnBooking(userId, bookingId);
+		if (booking.getFrequency() != BookingFrequency.LIVE_IN) {
+			throw new BookingNotFoundException("No live-in booking found with id " + bookingId);
+		}
+		LiveInArrangement arrangement = liveInArrangementRepository.findByAnchorBookingId(booking.getRecurrenceGroupId())
+				.orElseThrow(() -> new BookingNotFoundException("No live-in booking found with id " + bookingId));
+		int onDutyDays = (int) bookingRepository.countByRecurrenceGroupId(booking.getRecurrenceGroupId());
+		return toLiveInResponse(arrangement.getAnchorBooking(), arrangement, onDutyDays);
+	}
+
 	@Override
 	@Transactional
 	public PaymentInitiateResponse initiatePayment(Long userId, Long bookingId, PaymentInitiateRequest request) {
@@ -647,8 +769,9 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 			transaction.setStatus(PaymentStatus.SUCCESS);
 			transaction.setGatewayPaymentId(result.paymentId());
 			paymentTransactionRepository.save(transaction);
-			booking.setStatus(BookingStatus.ASSIGNING_CAREGIVER);
-			bookingRepository.save(booking);
+			// Same series-wide settle as confirmPayment - a monthly/live-in series must not leave
+			// every day but the anchor stuck at AWAITING_PAYMENT.
+			activateBookingOrSeries(booking);
 			if (booking.getTrialId() != null) {
 				trialService.settleBookingCheckout(booking, transaction.getProviderReference());
 			}
@@ -679,6 +802,10 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		caregiverZoneMappingRepository.findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(nanny.getId(), zoneAreaId, booking.getServiceType().getId())
 				.orElseThrow(() -> new NannyUnavailableException("This caregiver does not serve this booking's zone/service"));
 
+		if (booking.getFrequency() == BookingFrequency.LIVE_IN) {
+			return assignLiveInStay(adminUserId, booking, nanny);
+		}
+
 		booking.setNanny(nanny);
 		booking.setStatus(BookingStatus.CONFIRMED);
 		try {
@@ -698,6 +825,31 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		log.info("Hourly-care booking assigned: id={}, nannyId={}", booking.getId(), nanny.getId());
 		return new CaregiverAssignmentResponse(booking.getId(), nanny.getId(), booking.getStatus().name());
+	}
+
+	// A live-in helper moves in for the whole stay, so ops assigns them once and every day still
+	// awaiting assignment gets them together (days already cancelled are left alone).
+	private CaregiverAssignmentResponse assignLiveInStay(Long adminUserId, Booking booking, Nanny nanny) {
+		List<Booking> days = bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId()).stream()
+				.filter(day -> day.getStatus() == BookingStatus.ASSIGNING_CAREGIVER)
+				.toList();
+		days.forEach(day -> {
+			day.setNanny(nanny);
+			day.setStatus(BookingStatus.CONFIRMED);
+		});
+		try {
+			// saveAllAndFlush for the same reason as assignCaregiver's saveAndFlush.
+			bookingRepository.saveAllAndFlush(days);
+		} catch (DataIntegrityViolationException e) {
+			throw new NannyUnavailableException("This caregiver already has a conflicting booking during this live-in stay");
+		}
+
+		String adminName = userRepository.findById(adminUserId).map(User::getName).orElse(null);
+		orderActivityService.log(booking, OrderActivityType.CAREGIVER_ASSIGNED, OrderActivityActorType.ADMIN, adminUserId, adminName,
+				Map.of("nannyId", nanny.getId(), "nannyName", nanny.getFirstName() + " " + nanny.getLastName(), "liveInDays", days.size()));
+
+		log.info("Live-in stay assigned: groupId={}, nannyId={}, days={}", booking.getRecurrenceGroupId(), nanny.getId(), days.size());
+		return new CaregiverAssignmentResponse(booking.getId(), nanny.getId(), BookingStatus.CONFIRMED.name());
 	}
 
 	@Override
@@ -726,9 +878,17 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		caregiverZoneMappingRepository.findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(newNanny.getId(), zoneAreaId, booking.getServiceType().getId())
 				.orElseThrow(() -> new NannyUnavailableException("This caregiver does not serve this booking's zone/service"));
 
-		booking.setNanny(newNanny);
+		// A live-in replacement takes over from this day for the rest of the stay - days the previous
+		// helper already started or finished stay theirs.
+		List<Booking> days = booking.getFrequency() != BookingFrequency.LIVE_IN ? List.of(booking)
+				: bookingRepository.findAllByRecurrenceGroupId(booking.getRecurrenceGroupId()).stream()
+						.filter(day -> day.getStatus() == BookingStatus.CONFIRMED && day.getCheckedInAt() == null
+								&& day.getNanny() != null && previousNanny.getId().equals(day.getNanny().getId())
+								&& !day.getStartTime().isBefore(booking.getStartTime()))
+						.toList();
+		days.forEach(day -> day.setNanny(newNanny));
 		try {
-			bookingRepository.saveAndFlush(booking);
+			bookingRepository.saveAllAndFlush(days);
 		} catch (DataIntegrityViolationException e) {
 			throw new NannyUnavailableException("This caregiver already has a conflicting booking for this window");
 		}
@@ -837,9 +997,45 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	// The one-off Hourly/Daily care screens only ever offer RANGE or FIXED - MONTHLY is exclusively
 	// screens/monthlyCare.tsx's own product (checkMonthlyAvailability/createMonthlyBooking above).
 	private void requireOneOffMode(PricingMode mode) {
-		if (mode == PricingMode.MONTHLY) {
-			throw new IllegalArgumentException("pricingMode must be RANGE or FIXED for this endpoint - use the monthly-care endpoints for MONTHLY");
+		if (mode == PricingMode.MONTHLY || mode == PricingMode.LIVE_IN) {
+			throw new IllegalArgumentException("pricingMode must be RANGE or FIXED for this endpoint - use the monthly-care or live-in endpoints for "
+					+ mode.name());
 		}
+	}
+
+	private void validateLiveInStartDate(LocalDate startDate) {
+		if (startDate.isBefore(LocalDate.now(INDIA_ZONE))) {
+			throw new IllegalArgumentException("startDate must not be in the past");
+		}
+	}
+
+	// Whole calendar months: a 1-month stay from 15 Jan runs to 14 Feb inclusive.
+	private LocalDate liveInEndDate(LocalDate startDate, int months) {
+		return startDate.plusMonths(months).minusDays(1);
+	}
+
+	private List<LocalDate> liveInDutyDates(LocalDate startDate, LocalDate endDate, DayOfWeek weeklyOffDay) {
+		List<LocalDate> dates = new ArrayList<>();
+		for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+			if (date.getDayOfWeek() != weeklyOffDay) {
+				dates.add(date);
+			}
+		}
+		return dates;
+	}
+
+	// The zone's live-in rate is per month, so one month is quoted and scaled by `months` - the
+	// weekly off day doesn't reduce it (it's part of the monthly arrangement). The quoted window is
+	// irrelevant to a LIVE_IN price; PricingService just needs a valid one.
+	private LiveInPriceSummary quoteLiveIn(Long zoneAreaId, String serviceTypeCode, LocalDate startDate, LocalDate endDate, int months, int onDutyDays) {
+		PriceQuoteResponse perMonth = pricingService.calculate(new PriceCalculationRequest(zoneAreaId, serviceTypeCode, startDate,
+				LocalTime.MIDNIGHT, LocalTime.of(23, 59), null, PricingMode.LIVE_IN));
+		BigDecimal multiplier = BigDecimal.valueOf(months);
+		BigDecimal subtotal = GstSplitUtil.scale(perMonth.subtotal().multiply(multiplier));
+		BigDecimal platformFee = GstSplitUtil.scale(perMonth.platformFee().multiply(multiplier));
+		BigDecimal platformFeeGst = GstSplitUtil.scale(perMonth.platformFeeGst().multiply(multiplier));
+		return new LiveInPriceSummary(months, startDate, endDate, onDutyDays, GstSplitUtil.scale(perMonth.baseRate()), subtotal, platformFee, platformFeeGst,
+				subtotal.add(platformFee).add(platformFeeGst), perMonth.currency());
 	}
 
 	// A generous but real cap - at 7 days/week this is ~5.7 months, comfortably past the "one
@@ -919,6 +1115,11 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 	private HourlyCareBookingResponse toBookingResponse(Booking booking) {
 		return new HourlyCareBookingResponse(booking.getId(), booking.getStatus().name(), booking.getStartTime(), booking.getEndTime(), booking.getTotalAmount(),
 				PriceBreakdownResponse.from(booking));
+	}
+
+	private LiveInBookingResponse toLiveInResponse(Booking anchor, LiveInArrangement arrangement, int onDutyDays) {
+		return new LiveInBookingResponse(anchor.getId(), anchor.getStatus().name(), onDutyDays, anchor.getTotalAmount(),
+				PriceBreakdownResponse.from(anchor), LiveInArrangementSummary.from(arrangement));
 	}
 
 	private BookingStatusResponse toStatusResponse(Booking booking) {

@@ -18,5 +18,10 @@ public record NannyTodayBookingResponse(
 		Instant startTime,
 		Instant endTime,
 		AddressResponse address,
-		String careNotes) {
+		String careNotes,
+		// Elder Care - the senior_care counterpart of child, mutually exclusive with it.
+		ElderBookingSummary elder,
+		// Non-null only on a day of a live-in stay - what the family provides and the helper's
+		// working hours. startTime/endTime are then the whole calendar day.
+		LiveInArrangementSummary liveIn) {
 }

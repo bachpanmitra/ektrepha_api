@@ -126,6 +126,33 @@ class AdminServiceTypeZonePricingApiTest {
 	}
 
 	@Test
+	void bulkUpsert_liveInPrice_isSavedAndKeptWhenLaterOmitted() throws Exception {
+		mockMvc.perform(put("/api/v1/admin/service-types/1/zone-pricing").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"items\":[{\"zoneId\":" + zone.getId() + ",\"pricingMode\":\"LIVE_IN\",\"liveInMonthlyPrice\":22000,\"minBookingHours\":1,\"platformFeePct\":10}]}"))
+				.andExpect(status().isOk());
+
+		// An admin client that doesn't know about liveInMonthlyPrice yet saves the row without it.
+		String body = mockMvc.perform(put("/api/v1/admin/service-types/1/zone-pricing").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"items\":[{\"zoneId\":" + zone.getId() + ",\"pricingMode\":\"MONTHLY\",\"monthlyPrice\":25000,\"minBookingHours\":1,\"platformFeePct\":10}]}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		JsonNode row = findRow(body, zone.getId());
+		assertThat(row.get("monthlyPrice").asInt()).isEqualTo(25000);
+		assertThat(row.get("liveInMonthlyPrice").asInt()).isEqualTo(22000);
+	}
+
+	@Test
+	void bulkUpsert_liveInModeMissingPrice_isBadRequest() throws Exception {
+		mockMvc.perform(put("/api/v1/admin/service-types/1/zone-pricing").with(user("1").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"items\":[{\"zoneId\":" + zone.getId() + ",\"pricingMode\":\"LIVE_IN\",\"minBookingHours\":1,\"platformFeePct\":10}]}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void bulkUpsert_monthlyModeMissingPrice_isBadRequest() throws Exception {
 		mockMvc.perform(put("/api/v1/admin/service-types/1/zone-pricing").with(user("1").roles("ADMIN"))
 				.contentType(MediaType.APPLICATION_JSON)
