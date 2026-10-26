@@ -166,7 +166,12 @@ class LiveInCareApiTest {
 	}
 
 	private Elder createElder(Parent parent) {
-		Elder elder = elderRepository.save(Elder.builder().firstName("Lakshmi").age(78).mobility(ElderMobility.WHEELCHAIR).build());
+		Elder elder = elderRepository.save(Elder.builder().firstName("Lakshmi").age(78).mobility(ElderMobility.WHEELCHAIR)
+				.conditions(List.of("Diabetes")).allergies(List.of("Penicillin")).medicationNotes("Metformin 8 AM and 8 PM")
+				.doctorName("Dr. Rao").doctorPhone("+919800000001")
+				.emergencyContactName("Ravi").emergencyContactPhone("+919800000002")
+				.metaData("{\"foodType\":\"VEGETARIAN\",\"dietNeeds\":[\"LOW_SUGAR\"],\"preferredHospital\":\"Manipal, Old Airport Rd\"}")
+				.build());
 		parentElderRepository.save(ParentElder.builder()
 				.id(new ParentElderId(parent.getId(), elder.getId())).parent(parent).elder(elder)
 				.relationship(ElderRelationship.GRANDMOTHER).primaryContact(true).build());
@@ -332,7 +337,16 @@ class LiveInCareApiTest {
 				.andExpect(jsonPath("$.liveIn.dutyEndTime", is("20:00:00")))
 				.andExpect(jsonPath("$.elder.firstName", is("Lakshmi")))
 				.andExpect(jsonPath("$.elder.relationship", is("GRANDMOTHER")))
-				.andExpect(jsonPath("$.careNotes", is("Needs help with evening walk")));
+				.andExpect(jsonPath("$.careNotes", is("Needs help with evening walk")))
+				// The care guide comes straight from the family's elder profile.
+				.andExpect(jsonPath("$.careGuide.conditions[0]", is("Diabetes")))
+				.andExpect(jsonPath("$.careGuide.allergies[0]", is("Penicillin")))
+				.andExpect(jsonPath("$.careGuide.mobility", is("WHEELCHAIR")))
+				.andExpect(jsonPath("$.careGuide.medicationNotes", is("Metformin 8 AM and 8 PM")))
+				.andExpect(jsonPath("$.careGuide.dietNeeds[0]", is("LOW_SUGAR")))
+				.andExpect(jsonPath("$.careGuide.doctorPhone", is("+919800000001")))
+				.andExpect(jsonPath("$.careGuide.preferredHospital", is("Manipal, Old Airport Rd")))
+				.andExpect(jsonPath("$.careGuide.routine", nullValue()));
 	}
 
 	@Test

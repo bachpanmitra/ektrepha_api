@@ -223,6 +223,11 @@ public class ElderServiceImpl implements ElderService {
 
 	// Null/blank/unparseable all read back as "not filled in yet" rather than a 500 - this is
 	// optional profile depth, never something a booking flow depends on.
+	@Override
+	public ElderCarePreferences carePreferencesOf(Elder elder) {
+		return readCarePreferences(elder.getMetaData());
+	}
+
 	private ElderCarePreferences readCarePreferences(String metaData) {
 		if (metaData == null || metaData.isBlank()) {
 			return null;

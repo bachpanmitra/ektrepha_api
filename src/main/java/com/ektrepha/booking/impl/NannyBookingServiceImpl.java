@@ -12,6 +12,11 @@ import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
 import com.ektrepha.booking.dto.response.ChildSummary;
 import com.ektrepha.booking.dto.response.ElderBookingSummary;
 import com.ektrepha.booking.dto.response.LiveInArrangementSummary;
+import com.ektrepha.booking.dto.response.NannyCareGuide;
+import com.ektrepha.child.dto.response.CareNotes;
+import com.ektrepha.child.service.ChildService;
+import com.ektrepha.elder.dto.ElderCarePreferences;
+import com.ektrepha.elder.service.ElderService;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
 import com.ektrepha.booking.service.NannyBookingService;
 import com.ektrepha.child.AgeDisplay;
@@ -51,6 +56,8 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 	private final AddressResponseMapper addressResponseMapper;
 	private final ParentElderRepository parentElderRepository;
 	private final LiveInArrangementRepository liveInArrangementRepository;
+	private final ChildService childService;
+	private final ElderService elderService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -106,7 +113,28 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 				: new ChildSummary(booking.getChild().getId(), booking.getChild().getFirstName(),
 						AgeDisplay.of(booking.getChild().getDob(), LocalDate.now(INDIA_ZONE)));
 		return new NannyTodayBookingResponse(booking.getId(), booking.getStatus().name(), child, booking.getStartTime(), booking.getEndTime(),
-				addressResponseMapper.toResponse(booking.getAddress()), booking.getCareNotes(), toElderSummary(booking), toLiveInSummary(booking));
+				addressResponseMapper.toResponse(booking.getAddress()), booking.getCareNotes(), toElderSummary(booking), toLiveInSummary(booking),
+				toCareGuide(booking));
+	}
+
+	private NannyCareGuide toCareGuide(Booking booking) {
+		if (booking.getChild() != null) {
+			CareNotes notes = childService.careNotesOf(booking.getChild());
+			return new NannyCareGuide(notes.allergies(), notes.medicalNotes(), notes.routine(), notes.comfort(), notes.doNot(),
+					null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+		}
+		Elder elder = booking.getElder();
+		if (elder == null) {
+			return null;
+		}
+		ElderCarePreferences prefs = elderService.carePreferencesOf(elder);
+		boolean hasPrefs = prefs != null;
+		return new NannyCareGuide(elder.getAllergies(), null, null, null, null,
+				elder.getConditions(), elder.getMobility().name(), elder.getMedicationNotes(), elder.getPreferredLanguage(),
+				hasPrefs ? prefs.foodType() : null, hasPrefs ? prefs.dietNeeds() : null, hasPrefs ? prefs.foodsToAvoid() : null,
+				hasPrefs ? prefs.whereThingsKept() : null, hasPrefs ? prefs.homeSafety() : null,
+				elder.getDoctorName(), elder.getDoctorPhone(), hasPrefs ? prefs.preferredHospital() : null,
+				elder.getEmergencyContactName(), elder.getEmergencyContactPhone(), hasPrefs ? prefs.howToGetIn() : null);
 	}
 
 	private ElderBookingSummary toElderSummary(Booking booking) {

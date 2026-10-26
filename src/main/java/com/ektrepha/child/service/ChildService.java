@@ -1,5 +1,8 @@
 package com.ektrepha.child.service;
 
+import com.ektrepha.child.dto.response.CareNotes;
+import com.ektrepha.model.Children;
+
 import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
@@ -27,5 +30,8 @@ public interface ChildService {
 	List<GuardianResponse> guardians(Long userId, Long childId);
 
 	void remove(Long userId, Long childId);
+
+	// Not parent-scoped - for showing an assigned caregiver the child they're booked to look after.
+	CareNotes careNotesOf(Children child);
 
 }

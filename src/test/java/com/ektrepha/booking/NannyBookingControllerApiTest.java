@@ -2,6 +2,7 @@ package com.ektrepha.booking;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -134,6 +135,24 @@ class NannyBookingControllerApiTest {
 		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/start").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status", is("IN_PROGRESS")));
+	}
+
+	@Test
+	void detail_childBooking_includesChildCareNotesAsCareGuide() throws Exception {
+		Parent parent = createParent();
+		Nanny nanny = createNanny();
+		Children child = createChild(parent);
+		child.setAllergies(java.util.List.of("Peanuts"));
+		child.setMetaData("{\"routine\":\"Nap 1-3 PM\",\"doNot\":\"No screen time after 7 PM\"}");
+		childrenRepository.save(child);
+		Booking booking = createBooking(parent, nanny, createAddress(parent), child, BookingStatus.CONFIRMED);
+
+		mockMvc.perform(get("/api/v1/nanny-bookings/" + booking.getId()).with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.careGuide.allergies[0]", is("Peanuts")))
+				.andExpect(jsonPath("$.careGuide.routine", is("Nap 1-3 PM")))
+				.andExpect(jsonPath("$.careGuide.doNot", is("No screen time after 7 PM")))
+				.andExpect(jsonPath("$.careGuide.conditions", org.hamcrest.Matchers.nullValue()));
 	}
 
 	@Test

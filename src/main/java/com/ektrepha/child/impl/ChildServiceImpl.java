@@ -289,6 +289,11 @@ public class ChildServiceImpl implements ChildService {
 	private record CareNotesMeta(String medicalNotes, String routine, String comfort, String doNot) {
 	}
 
+	@Override
+	public CareNotes careNotesOf(Children child) {
+		return readCareNotes(child);
+	}
+
 	private CareNotes readCareNotes(Children child) {
 		CareNotesMeta meta = parseMetaData(child.getMetaData());
 		return new CareNotes(child.getAllergies(), meta.medicalNotes(), meta.routine(), meta.comfort(), meta.doNot());

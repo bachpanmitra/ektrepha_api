@@ -23,5 +23,7 @@ public record NannyTodayBookingResponse(
 		ElderBookingSummary elder,
 		// Non-null only on a day of a live-in stay - what the family provides and the helper's
 		// working hours. startTime/endTime are then the whole calendar day.
-		LiveInArrangementSummary liveIn) {
+		LiveInArrangementSummary liveIn,
+		// The child's or elder's care notes, diet and emergency details - null if neither is set.
+		NannyCareGuide careGuide) {
 }
