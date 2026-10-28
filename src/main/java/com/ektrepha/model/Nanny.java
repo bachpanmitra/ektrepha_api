@@ -7,6 +7,8 @@ import java.time.Period;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -97,6 +99,16 @@ public class Nanny {
 	@Setter(AccessLevel.NONE)
 	@Column(name = "status_changed_at")
 	private Instant statusChangedAt;
+
+	/** The ops manager (an ADMIN user) who looks after this helper (migration 049). Null until one is assigned. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "manager_user_id")
+	private User manager;
+
+	@Column(name = "caregiver_role", nullable = false, length = 20)
+	@Enumerated(EnumType.STRING)
+	@Builder.Default
+	private CaregiverRole caregiverRole = CaregiverRole.NANNY;
 
 	/**
 	 * The automatic recompute path (document/reference/interview/training/code-of-conduct status

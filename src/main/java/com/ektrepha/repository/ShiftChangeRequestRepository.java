@@ -1,5 +1,6 @@
 package com.ektrepha.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -32,5 +33,9 @@ public interface ShiftChangeRequestRepository extends JpaRepository<ShiftChangeR
 	Page<ShiftChangeRequest> searchForAdmin(@Param("status") RequestStatus status, Pageable pageable);
 
 	long countByStatus(RequestStatus status);
+
+
+	// Ops approvals - a manager's team only.
+	List<ShiftChangeRequest> findByStatusAndNannyIdInOrderByCreatedAtAsc(RequestStatus status, Collection<Long> nannyIds);
 
 }

@@ -52,4 +52,13 @@ public interface NannyRepository extends JpaRepository<Nanny, Long> {
 	Page<Nanny> searchForAdmin(@Param("q") String q, @Param("verificationStatus") NannyVerificationStatus verificationStatus,
 			@Param("active") Boolean active, @Param("zoneAreaId") Long zoneAreaId, Pageable pageable);
 
+
+	// Ops manager team (migration 049) - every helper this manager looks after, with the user row
+	// (phone) fetched in the same query.
+	@Query("SELECT n FROM Nanny n JOIN FETCH n.user WHERE n.manager.id = :managerUserId ORDER BY n.firstName ASC")
+	List<Nanny> findTeamByManagerUserId(@Param("managerUserId") Long managerUserId);
+
+	@Query("SELECT n FROM Nanny n JOIN FETCH n.user WHERE n.id = :id AND n.manager.id = :managerUserId")
+	Optional<Nanny> findTeamMember(@Param("id") Long id, @Param("managerUserId") Long managerUserId);
+
 }

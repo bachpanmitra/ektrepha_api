@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 49
+      author: ektrepha
+      description: Adds nanny.manager_user_id (ops manager teams) and nanny.caregiver_role
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/049-ops-manager-team.sql
+            relativeToChangelogFile: false

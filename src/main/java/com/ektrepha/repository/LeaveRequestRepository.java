@@ -1,6 +1,7 @@
 package com.ektrepha.repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -37,5 +38,25 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 			ORDER BY n.firstName
 			""")
 	List<LeaveRequest> findApprovedCoveringDate(@Param("date") LocalDate date);
+
+
+	// Ops team board - which team members are on approved leave today.
+	@Query("""
+			SELECT lr FROM LeaveRequest lr
+			WHERE lr.status = com.ektrepha.model.RequestStatus.APPROVED AND lr.startDate <= :date AND lr.endDate >= :date
+			  AND lr.nanny.id IN :nannyIds
+			""")
+	List<LeaveRequest> findApprovedCoveringDateForNannies(@Param("date") LocalDate date, @Param("nannyIds") Collection<Long> nannyIds);
+
+	// Ops helper detail's "leave days this month" - approved leave overlapping [from, to].
+	@Query("""
+			SELECT lr FROM LeaveRequest lr
+			WHERE lr.nanny.id = :nannyId AND lr.status = com.ektrepha.model.RequestStatus.APPROVED
+			  AND lr.startDate <= :to AND lr.endDate >= :from
+			""")
+	List<LeaveRequest> findApprovedOverlapping(@Param("nannyId") Long nannyId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+	// Ops approvals - a manager's team only.
+	List<LeaveRequest> findByStatusAndNannyIdInOrderByCreatedAtAsc(RequestStatus status, Collection<Long> nannyIds);
 
 }

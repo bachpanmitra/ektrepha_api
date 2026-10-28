@@ -1,5 +1,6 @@
 package com.ektrepha.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,5 +18,9 @@ public interface SosAlertRepository extends JpaRepository<SosAlert, Long> {
 	List<SosAlert> findOpenForAdmin();
 
 	long countByResolvedAtIsNull();
+
+
+	// Ops team board - open SOS alerts raised by any member of a manager's team.
+	List<SosAlert> findByResolvedAtIsNullAndNannyIdIn(Collection<Long> nannyIds);
 
 }

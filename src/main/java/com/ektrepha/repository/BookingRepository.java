@@ -284,4 +284,30 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	long countLateOrNoCheckInToday(@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd,
 			@Param("now") Instant now, @Param("graceMinutes") int graceMinutes);
 
+
+	// Ops team board - every team member's bookings overlapping today in one query (no N+1 across a
+	// 40-helper team). Care recipient and address fetched for the board's detail line.
+	@Query("""
+			SELECT b FROM Booking b
+			LEFT JOIN FETCH b.child
+			LEFT JOIN FETCH b.elder
+			LEFT JOIN FETCH b.address
+			WHERE b.nanny.id IN :nannyIds AND b.status IN :statuses
+			  AND b.startTime < :dayEnd AND b.endTime > :dayStart
+			ORDER BY b.startTime ASC
+			""")
+	List<Booking> findByNannyIdsAndWindow(@Param("nannyIds") Collection<Long> nannyIds, @Param("statuses") Collection<BookingStatus> statuses,
+			@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
+
+	// "Day 8 of 30" on a live-in stay - how many of the series' days start on or before this one.
+	long countByRecurrenceGroupIdAndStartTimeLessThanEqual(Long recurrenceGroupId, Instant startTime);
+
+	// Ops helper detail's "days present this month" - distinct IST calendar days the helper checked
+	// in on. Native for the AT TIME ZONE date cast.
+	@Query(value = """
+			SELECT COUNT(DISTINCT CAST((b.checked_in_at AT TIME ZONE 'Asia/Kolkata') AS date)) FROM booking b
+			WHERE b.nanny_id = :nannyId AND b.checked_in_at >= :from AND b.checked_in_at < :to
+			""", nativeQuery = true)
+	long countDaysCheckedIn(@Param("nannyId") Long nannyId, @Param("from") Instant from, @Param("to") Instant to);
+
 }

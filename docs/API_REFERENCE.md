@@ -178,6 +178,29 @@ A malformed or missing `{id}` (e.g. `/nannies/` with nothing after the slash, or
 
 ---
 
+## Ops manager team (`/api/v1/ops/**`, role `ADMIN`)
+
+One ops manager looks after many helpers. Each helper (`nanny` row) now has an ops manager (`manager_user_id`, an ADMIN user) and a role: `NANNY`, `ELDER_CARER` or `NURSE` (migration 049). Every `/ops` endpoint shows **only the signed-in manager's own team**; a helper on another team is a 404.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/ops/team/today` | `{counts: {total, onDuty, notStarted, done, offOrLeave, sos, needCover}, roles: {nannies, elderCarers, nurses}, needsAttention: [member], waitingForYou: {leave, shiftChanges, attendanceCorrections, problems}}`. `needsAttention` lists SOS first, then late, then helpers who need cover |
+| GET | `/ops/team?role=&group=` | Every team member with today's status, most urgent first. `role` = `NANNY`/`ELDER_CARER`/`NURSE`; `group` = `WORKING` (has duty today or an open SOS) or `FREE` (off or on leave). Both optional |
+| GET | `/ops/team/{nannyId}` | `{now: member, yearsExperience, verificationStatus, daysPresentThisMonth, leaveDaysThisMonth, rating, ratingCount}` |
+| GET | `/ops/approvals` | The team's pending requests, oldest first: `[{type: LEAVE/SHIFT_CHANGE/ATTENDANCE/PROBLEM, id, nannyId, nannyName, role, details, bookingId, fromDate, toDate, createdAt}]`. Approve/reject/resolve with the existing `/admin/approvals/**` and `/admin/safety/incidents/{id}/resolve` endpoints, using `id` |
+| PUT | `/admin/nannies/{id}/team` | `{managerUserId, caregiverRole}`: puts a helper on a manager's team. `managerUserId: null` takes them off any team; `caregiverRole: null` keeps their role. 400 if the manager isn't an active ADMIN user |
+
+**Member** = `{nannyId, name, phone, role, status, needsCover, openSosId, bookingId, careModel, careRecipient, area, startTime, endTime, checkedInAt, liveInDay, liveInDays}`.
+
+**`status`**, most urgent first:
+- `SOS`: an open SOS.
+- `LATE`: today's duty should have started and they haven't checked in. There's a 15-minute grace, the same as the dashboard. A live-in day is judged against its agreed duty start, not 00:00.
+- `ON_DUTY`, `UPCOMING`, `DONE`.
+- `ON_LEAVE`: approved leave today.
+- `OFF`.
+
+**`needsCover`** is true when the family needs someone sent: the helper is late, or on leave but still assigned to today's duty. **`careModel`** is `LIVE_IN`, `MONTHLY` or `VISIT`. `liveInDay`/`liveInDays` ("day 8 of 30") are set only on a live-in day.
+
 ## Conventions worth knowing before you build
 
 - **Pagination** shape is consistent everywhere it appears: `{items: [...], page, pageSize, totalElements, totalPages}`.

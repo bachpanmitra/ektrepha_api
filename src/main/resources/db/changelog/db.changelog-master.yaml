@@ -95,3 +95,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/047-senior-care-pricing.yaml
   - include:
       file: classpath:db/changelog/changes/048-live-in-care.yaml
+  - include:
+      file: classpath:db/changelog/changes/049-ops-manager-team.yaml

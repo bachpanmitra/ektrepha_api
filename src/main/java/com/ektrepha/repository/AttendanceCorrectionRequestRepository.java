@@ -1,5 +1,8 @@
 package com.ektrepha.repository;
 
+import java.util.Collection;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,5 +23,9 @@ public interface AttendanceCorrectionRequestRepository extends JpaRepository<Att
 	Page<AttendanceCorrectionRequest> searchForAdmin(@Param("status") RequestStatus status, Pageable pageable);
 
 	long countByStatus(RequestStatus status);
+
+
+	// Ops approvals - a manager's team only.
+	List<AttendanceCorrectionRequest> findByStatusAndNannyIdInOrderByCreatedAtAsc(RequestStatus status, Collection<Long> nannyIds);
 
 }
