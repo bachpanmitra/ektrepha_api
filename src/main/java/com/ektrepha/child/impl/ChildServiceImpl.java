@@ -23,6 +23,7 @@ import com.ektrepha.child.dto.response.ChildSummaryResponse;
 import com.ektrepha.child.dto.response.GuardianResponse;
 import com.ektrepha.child.service.ChildService;
 import com.ektrepha.exception.ChildInUseException;
+import com.ektrepha.exception.ChildNotFoundException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
 import com.ektrepha.exception.InvalidPhotoException;
 import com.ektrepha.exception.UserNotFoundException;
@@ -37,7 +38,7 @@ import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.ChildrenRepository;
 import com.ektrepha.repository.ParentChildRepository;
 import com.ektrepha.repository.ParentRepository;
-import com.ektrepha.storage.S3PhotoUrlService;
+import com.ektrepha.storage.GcsPhotoUrlService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -63,7 +64,7 @@ public class ChildServiceImpl implements ChildService {
 	private final ChildrenRepository childrenRepository;
 	private final ParentChildRepository parentChildRepository;
 	private final BookingRepository bookingRepository;
-	private final S3PhotoUrlService s3PhotoUrlService;
+	private final GcsPhotoUrlService gcsPhotoUrlService;
 	// No com.fasterxml.jackson.databind.ObjectMapper bean is registered in this app (Spring Boot's
 	// Jackson auto-configuration here wires the newer tools.jackson.* stack instead) — a plain
 	// local instance is enough for this internal JSONB blob, which has no date/naming-strategy needs.
@@ -177,7 +178,7 @@ public class ChildServiceImpl implements ChildService {
 		// keep resolving for the rest of its TTL.
 		String key = "children/%d/%s%s".formatted(child.getId(), UUID.randomUUID(), extensionFor(contentType));
 		try {
-			s3PhotoUrlService.upload(key, file.getBytes(), contentType);
+			gcsPhotoUrlService.upload(key, file.getBytes(), contentType);
 		} catch (IOException e) {
 			throw new InvalidPhotoException("Could not read the uploaded photo");
 		}
@@ -221,6 +222,14 @@ public class ChildServiceImpl implements ChildService {
 		parentChildRepository.delete(link);
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public CareNotes careNotesByChildId(Long childId) {
+		Children child = childrenRepository.findById(childId)
+				.orElseThrow(() -> new ChildNotFoundException("No child with id " + childId));
+		return readCareNotes(child);
+	}
+
 	private Parent resolveParent(Long userId) {
 		return parentRepository.findByUserId(userId)
 				.orElseThrow(() -> new UserNotFoundException("No parent profile found for this account"));
@@ -249,7 +258,7 @@ public class ChildServiceImpl implements ChildService {
 				child.getId(),
 				child.getFirstName(),
 				child.getLastName(),
-				s3PhotoUrlService.presign(child.getProfilePhotoS3Key()),
+				gcsPhotoUrlService.presign(child.getProfilePhotoS3Key()),
 				child.getDob(),
 				AgeDisplay.of(child.getDob(), LocalDate.now()),
 				child.getAllergies(),
@@ -263,7 +272,7 @@ public class ChildServiceImpl implements ChildService {
 				child.getId(),
 				child.getFirstName(),
 				child.getLastName(),
-				s3PhotoUrlService.presign(child.getProfilePhotoS3Key()),
+				gcsPhotoUrlService.presign(child.getProfilePhotoS3Key()),
 				child.getDob(),
 				AgeDisplay.of(child.getDob(), LocalDate.now()),
 				child.getGender(),

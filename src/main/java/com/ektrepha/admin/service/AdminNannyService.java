@@ -29,10 +29,11 @@ public interface AdminNannyService {
 
 	AdminNannyDetailResponse update(Long id, AdminNannyUpdateRequest request);
 
-	List<AdminNannyVerificationDocumentResponse> documents(Long nannyId);
+	/** {@code viewerUserId} is logged against every document's fresh presigned URL in {@code document_access_log}. */
+	List<AdminNannyVerificationDocumentResponse> documents(Long nannyId, Long viewerUserId);
 
-	/** Admin uploads a document on the nanny's behalf (e.g. collected in person); lands as PENDING, same as a nanny's own submission. {@code expiryDate} is only meaningful for BACKGROUND_CHECK (the PCC). */
-	AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file, LocalDate expiryDate);
+	/** Admin uploads a document on the nanny's behalf (e.g. collected in person); lands as PENDING, same as a nanny's own submission. {@code expiryDate} is only meaningful for BACKGROUND_CHECK (the PCC). {@code uploaderUserId} is logged against the response's presigned URL, same as {@link #documents}. */
+	AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file, LocalDate expiryDate, Long uploaderUserId);
 
 	/** Approve/reject/suspend/ban/reinstate - see {@code NannyVerificationService#changeStatus}. */
 	AdminNannyDetailResponse changeStatus(Long id, AdminNannyStatusChangeRequest request, Long changedByUserId);

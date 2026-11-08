@@ -3,12 +3,16 @@ package com.ektrepha.workforce.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
+import com.ektrepha.workforce.dto.request.CheckInRequest;
 import com.ektrepha.workforce.dto.request.ReasonRequest;
 import com.ektrepha.workforce.dto.response.AttendanceResponse;
 import com.ektrepha.workforce.dto.response.RequestCreatedResponse;
@@ -45,13 +49,21 @@ public class NannyBookingRequestController {
 	}
 
 	@PostMapping("/{id}/check-in")
-	public ResponseEntity<AttendanceResponse> checkIn(Authentication authentication, @PathVariable Long id) {
-		return ResponseEntity.ok(nannyAttendanceService.checkIn(userId(authentication), id));
+	public ResponseEntity<AttendanceResponse> checkIn(Authentication authentication, @PathVariable Long id,
+			@Valid @RequestBody CheckInRequest request) {
+		return ResponseEntity.ok(nannyAttendanceService.checkIn(userId(authentication), id, request.otp(), request.lat(), request.lng()));
 	}
 
 	@PostMapping("/{id}/check-out")
-	public ResponseEntity<AttendanceResponse> checkOut(Authentication authentication, @PathVariable Long id) {
-		return ResponseEntity.ok(nannyAttendanceService.checkOut(userId(authentication), id));
+	public ResponseEntity<AttendanceResponse> checkOut(Authentication authentication, @PathVariable Long id,
+			@Valid @RequestBody CheckInRequest request) {
+		return ResponseEntity.ok(nannyAttendanceService.checkOut(userId(authentication), id, request.otp(), request.lat(), request.lng()));
+	}
+
+	@GetMapping("/{id}/attendance")
+	public ResponseEntity<AttendanceMonthResponse> attendanceMonth(Authentication authentication, @PathVariable Long id,
+			@RequestParam String month) {
+		return ResponseEntity.ok(nannyAttendanceService.month(userId(authentication), id, month));
 	}
 
 	private Long userId(Authentication authentication) {

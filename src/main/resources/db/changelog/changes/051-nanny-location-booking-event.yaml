@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 51
+      author: ektrepha
+      description: Adds nanny_location and booking_event for live "on the way" trip tracking
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/051-nanny-location-booking-event.sql
+            relativeToChangelogFile: false

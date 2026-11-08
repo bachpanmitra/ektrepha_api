@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 50
+      author: ektrepha
+      description: Adds nanny_consent and dedup timestamps for the late-check-in / forgot-checkout attendance alert jobs
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/050-consents-and-attendance-alerts.sql
+            relativeToChangelogFile: false

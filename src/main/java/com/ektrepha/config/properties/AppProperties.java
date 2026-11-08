@@ -22,7 +22,7 @@ public record AppProperties(
 		@Valid @NotNull LoginLockout loginLockout,
 		@Valid @NotNull RateLimit rateLimit,
 		@Valid @NotNull Google google,
-		@Valid @NotNull Aws aws,
+		@Valid @NotNull Gcs gcs,
 		@Valid @NotNull Startup startup,
 		@Valid @NotNull Search search,
 		@Valid @NotNull Pricing pricing,
@@ -63,21 +63,17 @@ public record AppProperties(
 			@NotBlank(message = "app.google.client-id must be set — the OAuth client ID Google ID tokens are issued for") String clientId) {
 	}
 
-	public record Aws(@Valid @NotNull S3 s3) {
-
-		public record S3(
-				@NotBlank(message = "app.aws.s3.bucket must be set, even to a placeholder value if the S3 check is disabled") String bucket,
-				@NotBlank(message = "app.aws.s3.region must be set, even to a placeholder value if the S3 check is disabled") String region,
-				// When false (no AWS credentials available, e.g. most dev machines), S3PhotoUrlService
-				// skips the real S3 call - the generated key is still stored as if the upload
-				// succeeded, so the rest of the flow (DB row, rollup recompute, etc.) is still
-				// testable without real object storage.
-				@DefaultValue("true") boolean enabled) {
-		}
+	public record Gcs(
+			@NotBlank(message = "app.gcs.bucket must be set, even to a placeholder value if the GCS check is disabled") String bucket,
+			// When false (no real bucket/IAM grant available, e.g. most dev machines), GcsPhotoUrlService
+			// skips the real GCS call - the generated key is still stored as if the upload
+			// succeeded, so the rest of the flow (DB row, rollup recompute, etc.) is still
+			// testable without real object storage.
+			@DefaultValue("true") boolean enabled) {
 	}
 
 	public record Startup(
-			@DefaultValue("false") boolean checkS3,
+			@DefaultValue("false") boolean checkGcs,
 			@DefaultValue("false") boolean seedAdmin,
 			String seedAdminEmail,
 			String seedAdminPassword) {

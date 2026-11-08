@@ -1,11 +1,13 @@
 package com.ektrepha.verification.controller;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,7 +20,10 @@ import com.ektrepha.model.NannyVerification;
 import com.ektrepha.model.VerificationDocType;
 import com.ektrepha.model.VerificationRecordStatus;
 import com.ektrepha.verification.dto.request.VerificationRejectRequest;
+import com.ektrepha.verification.dto.response.DocumentViewUrlResponse;
+import com.ektrepha.verification.dto.response.MyVerificationDocumentResponse;
 import com.ektrepha.verification.dto.response.VerificationDocumentResponse;
+import com.ektrepha.verification.dto.response.VerificationQueueItemResponse;
 import com.ektrepha.verification.service.NannyVerificationService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -73,6 +78,48 @@ public class NannyVerificationController {
 			@Valid @RequestBody VerificationRejectRequest request) {
 		NannyVerification record = nannyVerificationService.updateRecordStatus(id, VerificationRecordStatus.REJECTED, userId(authentication), request.reason());
 		return ResponseEntity.ok(toResponse(record));
+	}
+
+	@Operation(summary = "Document review queue", description = "Every nanny's document currently in the given status (default PENDING) — the ops review queue, oldest-first. API Map row 20.")
+	@GetMapping("/documents/queue")
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<List<VerificationQueueItemResponse>> reviewQueue(
+			@Parameter(description = "Status to filter by") @RequestParam(value = "status", defaultValue = "PENDING") VerificationRecordStatus status) {
+		List<VerificationQueueItemResponse> response = nannyVerificationService.reviewQueue(status).stream()
+				.map(this::toQueueItem)
+				.toList();
+		return ResponseEntity.ok(response);
+	}
+
+	@Operation(summary = "My documents", description = "The caller's own verification documents, one per type (latest wins on a resubmission).")
+	@GetMapping("/documents")
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<List<MyVerificationDocumentResponse>> myDocuments(Authentication authentication) {
+		List<MyVerificationDocumentResponse> response = nannyVerificationService.listOwn(userId(authentication)).stream()
+				.map(this::toMyResponse)
+				.toList();
+		return ResponseEntity.ok(response);
+	}
+
+	@Operation(summary = "View my document", description = "A short-lived presigned URL for one of the caller's own documents.")
+	@GetMapping("/documents/{id}/view-url")
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<DocumentViewUrlResponse> viewUrl(Authentication authentication,
+			@Parameter(description = "nanny_verification row id") @PathVariable Long id) {
+		String url = nannyVerificationService.ownViewUrl(userId(authentication), id);
+		return ResponseEntity.ok(new DocumentViewUrlResponse(url, 900));
+	}
+
+	private VerificationQueueItemResponse toQueueItem(NannyVerification record) {
+		String nannyName = record.getNanny().getFirstName()
+				+ (record.getNanny().getLastName() == null ? "" : " " + record.getNanny().getLastName());
+		return new VerificationQueueItemResponse(record.getId(), record.getNanny().getId(), nannyName,
+				record.getType().name(), record.getStatus().name(), record.getCreatedAt());
+	}
+
+	private MyVerificationDocumentResponse toMyResponse(NannyVerification record) {
+		return new MyVerificationDocumentResponse(record.getId(), record.getType().name(), record.getStatus().name(),
+				record.getRejectionReason(), record.getCreatedAt(), record.getReviewedAt(), record.getExpiryDate());
 	}
 
 	private VerificationDocumentResponse toResponse(NannyVerification record) {

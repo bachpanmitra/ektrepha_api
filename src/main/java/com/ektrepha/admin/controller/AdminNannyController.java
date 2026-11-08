@@ -84,18 +84,19 @@ public class AdminNannyController {
 	}
 
 	@GetMapping("/{id}/documents")
-	public ResponseEntity<List<AdminNannyVerificationDocumentResponse>> documents(@PathVariable Long id) {
-		return ResponseEntity.ok(adminNannyService.documents(id));
+	public ResponseEntity<List<AdminNannyVerificationDocumentResponse>> documents(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(adminNannyService.documents(id, Long.valueOf(authentication.getName())));
 	}
 
 	// Admin uploading a document on the nanny's behalf (e.g. collected in person) — lands as PENDING,
 	// same as the nanny's own /api/v1/nanny-verification/documents submission, reviewed the same way.
 	// expiryDate is only meaningful for BACKGROUND_CHECK (the PCC).
 	@PostMapping("/{id}/documents")
-	public ResponseEntity<AdminNannyVerificationDocumentResponse> uploadDocument(@PathVariable Long id,
+	public ResponseEntity<AdminNannyVerificationDocumentResponse> uploadDocument(Authentication authentication, @PathVariable Long id,
 			@RequestParam("type") VerificationDocType type, @RequestParam("file") MultipartFile file,
 			@RequestParam(value = "expiryDate", required = false) LocalDate expiryDate) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(adminNannyService.uploadDocument(id, type, file, expiryDate));
+		return ResponseEntity.status(HttpStatus.CREATED).body(
+				adminNannyService.uploadDocument(id, type, file, expiryDate, Long.valueOf(authentication.getName())));
 	}
 
 	// Stands in for a "Roster" tab until a real schedule table exists — see AdminNannyDetailResponse's javadoc.

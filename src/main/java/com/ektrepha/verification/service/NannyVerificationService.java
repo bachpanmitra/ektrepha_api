@@ -65,4 +65,23 @@ public interface NannyVerificationService {
 	/** Scans every nanny and returns those whose stored rollup doesn't match what recompute would produce — the drift audit. Never flags a SUSPENDED/BANNED nanny as drifted, since recompute deliberately never overwrites those. */
 	List<DriftRecord> findDrift();
 
+	/** The nanny-owned-by-{@code userId}'s own documents, one row per type (latest wins on a resubmission) — for the nanny's own "My documents" screen. */
+	List<NannyVerification> listOwn(Long userId);
+
+	/**
+	 * A short-lived presigned GET URL for one of the caller's own documents (404 if {@code documentId}
+	 * doesn't belong to the nanny owned by {@code userId}) — logs a {@code document_access_log} row,
+	 * same as every other presigned view this system hands out.
+	 */
+	String ownViewUrl(Long userId, Long documentId);
+
+	/** Every {@link VerificationDocType} this nanny currently has a VERIFIED (latest-wins) record for — feeds {@code verificationBadges[]} on parent-facing responses. */
+	List<VerificationDocType> verifiedDocumentTypes(Long nannyId);
+
+	/** Every document across every nanny currently in {@code status} (API Map row 20) — the ADMIN review queue, oldest-first. No latest-wins dedup: each row is itself a distinct thing to review. */
+	List<NannyVerification> reviewQueue(VerificationRecordStatus status);
+
+	/** Marks the 30-days-before-expiry reminder as sent for one {@code nanny_verification} row, so {@code VerificationExpiryAuditJob} doesn't re-send it tomorrow. */
+	void markExpiryReminderSent(Long verificationRecordId);
+
 }

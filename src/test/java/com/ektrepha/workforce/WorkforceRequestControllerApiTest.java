@@ -2,6 +2,7 @@ package com.ektrepha.workforce;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -36,6 +38,8 @@ import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.UserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** HTTP-level coverage for the nanny/parent-facing side of Approvals & Safety: leave, shift-change-request, attendance-correction, SOS, incident reports. */
 @SpringBootTest
@@ -59,6 +63,7 @@ class WorkforceRequestControllerApiTest {
 
 	private MockMvc mockMvc;
 	private ServiceType childcare;
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@BeforeEach
 	void setUp() {
@@ -90,6 +95,7 @@ class WorkforceRequestControllerApiTest {
 		ParentAddress address = parentAddressRepository.save(ParentAddress.builder()
 				.parent(parent).label(AddressLabel.HOME).addressLine1("Test St")
 				.pincode("560034").city("Bangalore").state("Karnataka").country("India").primary(true)
+				.lat(12.9716).lng(77.5946)
 				.build());
 		Instant start = Instant.now().plusSeconds(3600);
 		return bookingRepository.save(Booking.builder()
@@ -171,25 +177,75 @@ class WorkforceRequestControllerApiTest {
 				.andExpect(status().isForbidden());
 	}
 
+	// NAO-48/49/50/51/52/53/59 — see docs/test-cases/nanny-app-order-and-live-tracking.md §7.
+	// Within 200m of the booking address (12.9716, 77.5946) set in createBookingFor above.
+	private static final String NEAR_ADDRESS_BODY = "{\"otp\":\"%s\",\"lat\":12.9717,\"lng\":77.5947}";
+	// ~2km away — outside the 200m geofence.
+	private static final String FAR_FROM_ADDRESS_BODY = "{\"otp\":\"%s\",\"lat\":12.99,\"lng\":77.5946}";
+
+	private String fetchTodayOtp(Long bookingId, Long parentUserId, String field) throws Exception {
+		MvcResult result = mockMvc.perform(get("/api/v1/bookings/" + bookingId + "/attendance/today")
+				.with(user(parentUserId.toString()).roles("PARENT")))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+		return body.get(field).asText();
+	}
+
 	@Test
-	void checkIn_onOwnBooking_stampsTimestamp() throws Exception {
+	void checkIn_withCorrectCode_stampsTimestamp() throws Exception {
 		Nanny nanny = createNanny();
 		Booking booking = createBookingFor(nanny);
+		String otp = fetchTodayOtp(booking.getId(), booking.getParent().getUser().getId(), "checkInOtp");
 
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted(otp)))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status", is("CHECKED_IN")))
 				.andExpect(jsonPath("$.checkedInAt").exists())
 				.andExpect(jsonPath("$.checkedOutAt").doesNotExist());
+	}
+
+	@Test
+	void checkIn_withWrongCode_isRejected() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+		fetchTodayOtp(booking.getId(), booking.getParent().getUser().getId(), "checkInOtp");
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted("0000")))
+				.andExpect(status().isUnprocessableEntity())
+				.andExpect(jsonPath("$.code", is("WRONG_OTP")));
+	}
+
+	@Test
+	void checkIn_tooFarFromAddress_isRejected() throws Exception {
+		Nanny nanny = createNanny();
+		Booking booking = createBookingFor(nanny);
+		String otp = fetchTodayOtp(booking.getId(), booking.getParent().getUser().getId(), "checkInOtp");
+
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(FAR_FROM_ADDRESS_BODY.formatted(otp)))
+				.andExpect(status().isUnprocessableEntity())
+				.andExpect(jsonPath("$.code", is("TOO_FAR")));
 	}
 
 	@Test
 	void checkIn_twice_isConflict() throws Exception {
 		Nanny nanny = createNanny();
 		Booking booking = createBookingFor(nanny);
+		String otp = fetchTodayOtp(booking.getId(), booking.getParent().getUser().getId(), "checkInOtp");
 
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted(otp)))
 				.andExpect(status().isOk());
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted(otp)))
 				.andExpect(status().isConflict());
 	}
 
@@ -198,19 +254,30 @@ class WorkforceRequestControllerApiTest {
 		Nanny nanny = createNanny();
 		Booking booking = createBookingFor(nanny);
 
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted("0000")))
 				.andExpect(status().isConflict());
 	}
 
 	@Test
-	void checkOut_afterCheckIn_stampsTimestamp() throws Exception {
+	void checkOut_afterCheckIn_withCorrectCode_stampsTimestamp() throws Exception {
 		Nanny nanny = createNanny();
 		Booking booking = createBookingFor(nanny);
+		Long parentUserId = booking.getParent().getUser().getId();
+		String checkInOtp = fetchTodayOtp(booking.getId(), parentUserId, "checkInOtp");
 
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted(checkInOtp)))
 				.andExpect(status().isOk());
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out").with(user(nanny.getUser().getId().toString()).roles("NANNY")))
+
+		String checkOutOtp = fetchTodayOtp(booking.getId(), parentUserId, "checkOutOtp");
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-out")
+				.with(user(nanny.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted(checkOutOtp)))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status", is("CHECKED_OUT")))
 				.andExpect(jsonPath("$.checkedOutAt").exists());
 	}
 
@@ -220,7 +287,9 @@ class WorkforceRequestControllerApiTest {
 		Nanny other = createNanny();
 		Booking booking = createBookingFor(owner);
 
-		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in").with(user(other.getUser().getId().toString()).roles("NANNY")))
+		mockMvc.perform(post("/api/v1/nanny-bookings/" + booking.getId() + "/check-in")
+				.with(user(other.getUser().getId().toString()).roles("NANNY"))
+				.contentType(MediaType.APPLICATION_JSON).content(NEAR_ADDRESS_BODY.formatted("0000")))
 				.andExpect(status().isNotFound());
 	}
 

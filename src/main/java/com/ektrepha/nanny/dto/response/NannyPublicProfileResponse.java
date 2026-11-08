@@ -15,6 +15,8 @@ public record NannyPublicProfileResponse(
 		Double ratingAvg,
 		Integer reviewCount,
 		boolean verified,
+		/** Short, parent-facing labels like "ID Verified" / "Police Verified" — never the documents or doc numbers themselves. See {@code VerificationBadgeMapper}. */
+		List<String> verificationBadges,
 		List<String> skills,
 		List<String> languages,
 		List<PublicReviewResponse> recentReviews) {

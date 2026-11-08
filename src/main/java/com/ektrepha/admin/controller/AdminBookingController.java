@@ -1,5 +1,6 @@
 package com.ektrepha.admin.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -13,11 +14,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
+import com.ektrepha.admin.dto.request.ManualAttendanceRequest;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.service.AdminBookingService;
+import com.ektrepha.booking.dto.response.AttendanceDayEntry;
+import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.model.BookingStatus;
 
 import jakarta.validation.Valid;
@@ -65,6 +69,23 @@ public class AdminBookingController {
 	public ResponseEntity<AdminBookingDetailResponse> cancel(Authentication authentication, @PathVariable Long id,
 			@Valid @RequestBody AdminBookingCancelRequest request) {
 		return ResponseEntity.ok(adminBookingService.cancel(Long.valueOf(authentication.getName()), id, request));
+	}
+
+	@GetMapping("/{id}/attendance")
+	public ResponseEntity<AttendanceMonthResponse> attendance(@PathVariable Long id, @RequestParam String month) {
+		return ResponseEntity.ok(adminBookingService.attendanceMonth(id, month));
+	}
+
+	@PostMapping("/{id}/attendance/{date}/manual-check-in")
+	public ResponseEntity<AttendanceDayEntry> manualCheckIn(Authentication authentication, @PathVariable Long id,
+			@PathVariable LocalDate date, @Valid @RequestBody ManualAttendanceRequest request) {
+		return ResponseEntity.ok(adminBookingService.manualCheckIn(Long.valueOf(authentication.getName()), id, date, request));
+	}
+
+	@PostMapping("/{id}/attendance/{date}/manual-check-out")
+	public ResponseEntity<AttendanceDayEntry> manualCheckOut(Authentication authentication, @PathVariable Long id,
+			@PathVariable LocalDate date, @Valid @RequestBody ManualAttendanceRequest request) {
+		return ResponseEntity.ok(adminBookingService.manualCheckOut(Long.valueOf(authentication.getName()), id, date, request));
 	}
 
 }

@@ -33,7 +33,7 @@ public class StartupSummaryLogger implements ApplicationRunner {
 		String[] profiles = environment.getActiveProfiles();
 		String activeProfile = profiles.length > 0 ? String.join(",", profiles) : "default";
 		String port = environment.getProperty("local.server.port", environment.getProperty("server.port", "8080"));
-		String s3Status = appProperties.startup().checkS3() ? "reachable (verified above)" : "check skipped for this profile";
+		String gcsStatus = appProperties.startup().checkGcs() ? "reachable (verified above)" : "check skipped for this profile";
 
 		log.info("========================================================");
 		log.info(" Ektrepha API started successfully");
@@ -41,7 +41,7 @@ public class StartupSummaryLogger implements ApplicationRunner {
 		log.info("   Active profile: {}", activeProfile);
 		log.info("   Port:           {}", port);
 		log.info("   Database:       reachable (verified above)");
-		log.info("   S3:             {}", s3Status);
+		log.info("   GCS:            {}", gcsStatus);
 		log.info("========================================================");
 	}
 

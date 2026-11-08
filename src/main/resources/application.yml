@@ -53,7 +53,7 @@ app:
     window-seconds: ${RATE_LIMIT_WINDOW_SECONDS:60}
   # Safe, do-nothing defaults for any profile that doesn't override them below.
   startup:
-    check-s3: ${STARTUP_CHECK_S3:false}
+    check-gcs: ${STARTUP_CHECK_GCS:false}
     seed-admin: ${STARTUP_SEED_ADMIN:false}
   search:
     allowed-radii-km: ${SEARCH_ALLOWED_RADII_KM:2,5,10,20}

@@ -232,6 +232,24 @@ class AdminBookingControllerApiTest {
 				.andExpect(jsonPath("$[0].nannyId", is(mapped.getId().intValue())));
 	}
 
+	// Nanny app spec row 24 - an unverified caregiver is never offered as a candidate (ops-side
+	// backstop is HourlyCareControllerApiTest#assign_unverifiedNanny_isRejected).
+	@Test
+	void candidates_excludesUnverifiedNanny() throws Exception {
+		Parent parent = createParent("Kavya S");
+		ParentAddress address = createAddress(parent);
+		Booking booking = createBooking(parent, null, address, BookingStatus.ASSIGNING_CAREGIVER);
+		Nanny approved = createMappedNanny("Lata", 12.9716, 77.5946);
+		Nanny unverified = createMappedNanny("Geeta", 12.9716, 77.5946);
+		unverified.applyRecomputedVerificationStatus(NannyVerificationStatus.PENDING);
+		nannyRepository.save(unverified);
+
+		mockMvc.perform(get("/api/v1/admin/bookings/" + booking.getId() + "/candidates").with(user("999").roles("ADMIN")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].nannyId", is(approved.getId().intValue())));
+	}
+
 	@Test
 	void candidates_addressWithNoLatLng_stillReturnsCandidatesWithNullDistance() throws Exception {
 		// Regression: Postgres rejects a null-valued bind parameter it can't infer a type for from

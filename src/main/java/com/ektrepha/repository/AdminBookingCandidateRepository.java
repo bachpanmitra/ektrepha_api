@@ -48,6 +48,9 @@ public class AdminBookingCandidateRepository {
 				LEFT JOIN nanny_service_area nsa ON nsa.nanny_id = n.id
 				WHERE czm.zone_area_id = :zoneAreaId AND czm.service_type_id = :serviceTypeId AND czm.is_active = true
 				  AND u.status = 0 AND u.is_active = true
+				  -- 3 = APPROVED (NannyVerificationStatus's CodedEnum code) - nanny app spec row 24:
+				  -- an unverified caregiver is never offered as a candidate in the first place.
+				  AND n.overall_verification_status = 3
 				ORDER BY n.id, distance_m ASC NULLS LAST
 				""";
 

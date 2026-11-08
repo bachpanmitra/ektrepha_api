@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ektrepha.booking.dto.response.BookingDetailResponse;
 import com.ektrepha.booking.dto.response.BookingListResponse;
+import com.ektrepha.booking.dto.response.NannyEtaForParentResponse;
 import com.ektrepha.booking.service.BookingReadService;
+import com.ektrepha.workforce.service.NannyTripService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class BookingReadController {
 
 	private final BookingReadService bookingReadService;
+	private final NannyTripService nannyTripService;
 
 	@GetMapping
 	@PreAuthorize("hasRole('PARENT')")
@@ -42,6 +45,15 @@ public class BookingReadController {
 	public ResponseEntity<BookingDetailResponse> get(Authentication authentication, @PathVariable Long id) {
 		Long userId = Long.valueOf(authentication.getName());
 		return ResponseEntity.ok(bookingReadService.get(userId, id));
+	}
+
+	/** API Map row 62 — the nanny's live distance/ETA while she's on the way, null (204) once she's arrived or checked in (privacy). */
+	@GetMapping("/{id}/nanny-eta")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<NannyEtaForParentResponse> nannyEta(Authentication authentication, @PathVariable Long id) {
+		Long userId = Long.valueOf(authentication.getName());
+		NannyEtaForParentResponse response = nannyTripService.parentEta(userId, id);
+		return response == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(response);
 	}
 
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 48
+      author: ektrepha
+      description: Adds document_access_log, an audit trail of who viewed each nanny verification document
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/048-document-access-log.sql
+            relativeToChangelogFile: false

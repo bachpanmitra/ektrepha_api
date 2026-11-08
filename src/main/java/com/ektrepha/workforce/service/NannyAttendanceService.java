@@ -1,19 +1,21 @@
 package com.ektrepha.workforce.service;
 
+import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.workforce.dto.response.AttendanceResponse;
 
 /**
- * Nanny-driven check-in/check-out timestamps — independent of {@code Booking.status}, which the
- * separate start/complete-care lifecycle (NannyBookingServiceImpl) owns. This is purely "what time
- * did the nanny actually arrive/leave", for the admin Attendance view and the dashboard's
- * lateOrNoCheckIn KPI; it applies to every booking occurrence the same way regardless of
- * {@code frequency} (ONE_TIME or one occurrence of a recurring series), since each occurrence is
- * its own row.
+ * Nanny-driven, OTP-gated daily check-in/check-out (nanny app spec: Ektrepha_Nanny_API_Map.xlsx,
+ * "OTP Rules"/"API Spec" sheets) — independent of {@code Booking.status}, which the separate
+ * start/complete-care lifecycle ({@code NannyBookingServiceImpl}) owns. Backed by
+ * {@code booking_attendance} (migration 047), one row per booking per day, rather than
+ * {@code Booking.checkedInAt/checkedOutAt} (migration 037), which this stops writing to.
  */
 public interface NannyAttendanceService {
 
-	AttendanceResponse checkIn(Long callerUserId, Long bookingId);
+	AttendanceResponse checkIn(Long callerUserId, Long bookingId, String otp, double lat, double lng);
 
-	AttendanceResponse checkOut(Long callerUserId, Long bookingId);
+	AttendanceResponse checkOut(Long callerUserId, Long bookingId, String otp, double lat, double lng);
+
+	AttendanceMonthResponse month(Long callerUserId, Long bookingId, String month);
 
 }

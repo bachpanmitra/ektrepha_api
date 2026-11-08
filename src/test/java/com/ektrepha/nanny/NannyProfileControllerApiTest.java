@@ -138,7 +138,10 @@ class NannyProfileControllerApiTest {
 				.andExpect(jsonPath("$.verified", is(true)))
 				.andExpect(jsonPath("$.ratingAvg", is(4.5)))
 				.andExpect(jsonPath("$.reviewCount", is(2)))
-				.andExpect(jsonPath("$.recentReviews[0].parentDisplayName", is("Anjali M.")));
+				.andExpect(jsonPath("$.recentReviews[0].parentDisplayName", is("Anjali M.")))
+				// Nanny app spec row 25 - badges name which checks passed; EDUCATION has no badge
+				// (VerificationBadgeMapper only covers ID_PROOF/BACKGROUND_CHECK/ADDRESS_PROOF).
+				.andExpect(jsonPath("$.verificationBadges", org.hamcrest.Matchers.containsInAnyOrder("ID Verified", "Police Verified")));
 	}
 
 	@Test

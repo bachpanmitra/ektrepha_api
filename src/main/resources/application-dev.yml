@@ -20,16 +20,13 @@ app:
   # an Authorized JavaScript origin on it in Google Cloud Console.
   google:
     client-id: ${GOOGLE_CLIENT_ID:252559169200-i4joaqg4nojht9bltsdb3hf8o0re01no.apps.googleusercontent.com}
-  aws:
-    s3:
-      # Placeholder values: the S3 connectivity check is off by default in dev
-      # (see app.startup.check-s3 below), so these just need to be non-blank.
-      bucket: ${S3_BUCKET:ektrepha-dev-local}
-      region: ${S3_REGION:ap-south-1}
-      # Most dev machines have no AWS credentials at all - real uploads (child photos, nanny
-      # verification docs) would 500 on SdkClientException otherwise. Off by default here; set
-      # S3_ENABLED=true once real credentials are exported into this environment.
-      enabled: ${S3_ENABLED:false}
+  gcs:
+    # Real bucket (ASIA-SOUTH1) the firebase-adminsdk-fbsvc@ektrepha service account already has
+    # Storage access on - verified 2026-11-06 (write/presign/delete all succeed).
+    bucket: ${GCS_BUCKET:ektrepha-dev}
+    # On by default now that the bucket/IAM grant exist - override to GCS_ENABLED=false if your
+    # machine's service account doesn't have Storage access on the bucket above.
+    enabled: ${GCS_ENABLED:true}
   # Placeholder values — OTP/notification emails will fail against the real Brevo
   # API without a real key, but the app still starts (dev otherwise just logs the
   # 401 from Brevo, same visibility as the old log-only stub had).
@@ -70,7 +67,9 @@ app:
     key-secret: ${RAZORPAY_KEY_SECRET:5KtIwAw6G2xhFlJbfhkwVBZO}
     webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   startup:
-    check-s3: ${STARTUP_CHECK_S3:false}
+    # On by default alongside app.gcs.enabled above, so a bucket/credential misconfiguration
+    # fails fast at boot instead of silently no-op'ing every upload.
+    check-gcs: ${STARTUP_CHECK_GCS:true}
     seed-admin: ${STARTUP_SEED_ADMIN:true}
     seed-admin-email: ${SEED_ADMIN_EMAIL:admin@ektrepha.local}
     seed-admin-password: ${SEED_ADMIN_PASSWORD:ChangeMe123!}

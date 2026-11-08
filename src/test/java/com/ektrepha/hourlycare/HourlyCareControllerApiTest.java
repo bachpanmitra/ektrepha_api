@@ -155,6 +155,10 @@ class HourlyCareControllerApiTest {
 	}
 
 	private Nanny createMappedNanny() {
+		return createMappedNanny(NannyVerificationStatus.APPROVED);
+	}
+
+	private Nanny createMappedNanny(NannyVerificationStatus verificationStatus) {
 		User nannyUser = userRepository.save(User.builder()
 				.name("Nanny").email("hc-nanny-" + System.nanoTime() + "@example.com")
 				.active(true).emailVerified(true).phoneVerified(true)
@@ -162,7 +166,7 @@ class HourlyCareControllerApiTest {
 				.build());
 		Nanny nanny = nannyRepository.save(Nanny.builder()
 				.user(nannyUser).firstName("Priya").lastName("Sharma")
-				.overallVerificationStatus(NannyVerificationStatus.APPROVED)
+				.overallVerificationStatus(verificationStatus)
 				.build());
 		caregiverZoneMappingRepository.save(CaregiverZoneMapping.builder()
 				.caregiver(nanny).zoneArea(zone).serviceType(childcare).active(true).build());
@@ -284,6 +288,39 @@ class HourlyCareControllerApiTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status", is("CONFIRMED")))
 				.andExpect(jsonPath("$.progress[2].state", is("COMPLETED")));
+	}
+
+	// Nanny app spec row 24 / test NAO-71 - a caregiver who hasn't cleared verification can't be
+	// assigned even via a direct API call (the candidate list already filters these out before ops
+	// ever sees them - see AdminBookingControllerApiTest's candidates_* tests).
+	@Test
+	void assign_unverifiedNanny_isRejected() throws Exception {
+		Parent parent = createParent();
+		Nanny pendingNanny = createMappedNanny(NannyVerificationStatus.PENDING);
+		ParentAddress address = createAddress(parent);
+		Children child = createChild(parent);
+		var parentAuth = user(parent.getUser().getId().toString()).roles("PARENT");
+
+		String createResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"childId\":" + child.getId() + ",\"addressId\":" + address.getId()
+						+ ",\"startTime\":\"" + start + "\",\"endTime\":\"" + end + "\",\"pricingMode\":\"RANGE\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		long bookingId = ((Number) com.jayway.jsonpath.JsonPath.read(createResponse, "$.id")).longValue();
+
+		String initiateResponse = mockMvc.perform(post("/api/v1/hourly-care/bookings/" + bookingId + "/payment").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"UPI\"}"))
+				.andReturn().getResponse().getContentAsString();
+		long paymentId = ((Number) com.jayway.jsonpath.JsonPath.read(initiateResponse, "$.paymentId")).longValue();
+		mockMvc.perform(post("/api/v1/hourly-care/payments/" + paymentId + "/confirm").with(parentAuth)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"razorpayPaymentId\":\"pay_test123\",\"razorpaySignature\":\"sig_test123\"}"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/admin/hourly-care/bookings/" + bookingId + "/assign").with(user("999").roles("ADMIN"))
+				.contentType(MediaType.APPLICATION_JSON).content("{\"nannyId\":" + pendingNanny.getId() + "}"))
+				.andExpect(status().isUnprocessableEntity())
+				.andExpect(jsonPath("$.code", is("NANNY_DOCS_NOT_VERIFIED")));
 	}
 
 	@Test

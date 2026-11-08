@@ -1,12 +1,16 @@
 package com.ektrepha.admin.service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
+import com.ektrepha.admin.dto.request.ManualAttendanceRequest;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
+import com.ektrepha.booking.dto.response.AttendanceDayEntry;
+import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.model.BookingStatus;
 
 public interface AdminBookingService {
@@ -23,5 +27,15 @@ public interface AdminBookingService {
 	List<AdminBookingCandidateResponse> candidates(Long id);
 
 	List<AdminOrderActivityResponse> activity(Long id);
+
+	// Day-by-day attendance for ops (API Spec sheet row 2) - unlike the nanny/parent month view this
+	// includes manualByUserId, since ops is exactly who's allowed to see which colleague recorded a
+	// manual entry.
+	AttendanceMonthResponse attendanceMonth(Long bookingId, String month);
+
+	// Backup when the parent can't give the code - phone dead, not home (OTP Rules sheet rule 12).
+	AttendanceDayEntry manualCheckIn(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request);
+
+	AttendanceDayEntry manualCheckOut(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request);
 
 }

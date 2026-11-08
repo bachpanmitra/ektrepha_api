@@ -129,13 +129,27 @@ A request for a child not linked to the caller returns **403**, not 404 — don'
 | GET | `/bookings/{id}/contact` | `{nannyPhone}` — **403 unless the booking is `CONFIRMED` or `IN_PROGRESS`.** There's no number-masking vendor integrated; this is the real phone number, gated purely on booking status. Don't show a "call" button on a pending booking card |
 | GET | `/bookings/{id}/rebook-context` | Prefill data for H4's rebook flow: `{nanny, nannyAvailable, unavailableReason, child, childStillLinked, address, addressStillExists, previousTotal, currentEstimate, priceChangeNote}`. If `nannyAvailable` is `false`, show `unavailableReason` and offer "find similar" instead of proceeding. If `currentEstimate` differs from `previousTotal`, show `priceChangeNote` — **never let a price change be silent** |
 
+## Attendance (`/api/v1/bookings/{id}/attendance`)
+
+Daily OTP-gated check-in/check-out, built for the nanny app but these three reads/actions are **parent-side** — the parent is the one who hands the code to the nanny each day.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/bookings/{id}/attendance/today` | `{date, status, checkInOtp, checkOutOtp, checkedInAt, checkedOutAt}`. `checkInOtp` is shown only while `status` is `PENDING`; `checkOutOtp` only once `CHECKED_IN` — both go back to `null` once `CHECKED_OUT`, or on an `OFF_DAY`. **Never cache a previously-seen code past this response going null** — a stale code shown after checkout is a real support complaint waiting to happen |
+| POST | `/bookings/{id}/attendance/today/regenerate-otp` | `{type: "CHECK_IN"\|"CHECK_OUT"}` → `{type, otp}`. Invalidates the old code immediately — use this if the parent says the nanny's code "isn't working" rather than re-showing the same one |
+| GET | `/bookings/{id}/attendance?month=2026-10` | `{bookingId, month, days: [{date, status, checkedInAt, checkedOutAt, minutes, checkInMethod, checkOutMethod, manualByUserId}], totals: {daysWorked, offDays, absent}}`. One entry per day in the booking's recurring series for that month — a date simply absent from `days` means it was never a scheduled day (weekly off), not a missed one. `manualByUserId` is always `null` on this endpoint (only populated for ops' own admin view) |
+
+Attendance-specific error codes (same `{timestamp, status, error, message, path, code}` shape as above): `WRONG_OTP` (422), `OTP_LOCKED` (423, 5 wrong tries in a row — even the correct code is rejected until the lock clears), `TOO_FAR` (422, nanny's device >200m from the address), `OFF_DAY`/`LEAVE_DAY` (422, no shift scheduled or an approved leave covers that date).
+
 ## Nanny Profile & Verification & Reviews (`/api/v1/nannies/{id}`)
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/nannies/{id}` | Public profile — bio, skills, languages, `verified` (boolean), `ratingAvg`/`reviewCount`, `recentReviews` (max 5, masked reviewer names like "Anjali M.") |
+| GET | `/nannies/{id}` | Public profile — bio, skills, languages, `verified` (boolean), `verificationBadges` (`string[]`, e.g. `["ID Verified", "Police Verified"]` — only the subset of checks that are meaningfully parent-facing; empty array, not missing, when none apply yet), `ratingAvg`/`reviewCount`, `recentReviews` (max 5, masked reviewer names like "Anjali M.") |
 | GET | `/nannies/{id}/verification` | `{overallStatus, completedCount, totalCount, items: [{type, label, description, status, verifiedAt}]}` — always 5 items (one per verification type), even for types never submitted (shown as `PENDING`). **Never expect or render raw document data** — the server deliberately never sends `s3Key`, `vendorReferenceId`, or rejection details |
 | GET | `/nannies/{id}/reviews?page=&pageSize=` | Paginated review list, same reviewer-name masking as above |
+
+`verificationBadges` also appears on the nanny summary embedded in booking responses (`GET /bookings`, `GET /bookings/{id}`) — same meaning, same array shape, so a booking card can show the same badges without a second call to `/nannies/{id}`.
 
 A malformed or missing `{id}` (e.g. `/nannies/` with nothing after the slash, or a non-numeric id) now returns a clean `400`/`404` — safe to build error-state UI around normal HTTP semantics here, no special-casing needed for garbage input.
 

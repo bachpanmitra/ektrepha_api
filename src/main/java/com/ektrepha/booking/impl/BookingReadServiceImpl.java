@@ -33,6 +33,8 @@ import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.Review;
+import com.ektrepha.verification.VerificationBadgeMapper;
+import com.ektrepha.verification.service.NannyVerificationService;
 import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.pricing.dto.response.PriceBreakdownResponse;
 import com.ektrepha.repository.BookingRepository;
@@ -58,6 +60,8 @@ public class BookingReadServiceImpl implements BookingReadService {
 	private final BookingRepository bookingRepository;
 	private final ReviewRepository reviewRepository;
 	private final AddressResponseMapper addressResponseMapper;
+	private final NannyVerificationService nannyVerificationService;
+	private final VerificationBadgeMapper verificationBadgeMapper;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -210,6 +214,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 					booking.getNanny().getLastName(),
 					booking.getNanny().getProfilePhotoS3Key(),
 					booking.getNanny().getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
+					verificationBadgeMapper.toBadges(nannyVerificationService.verifiedDocumentTypes(booking.getNanny().getId())),
 					rating == null ? null : rating[0],
 					rating == null ? null : (int) rating[1]);
 		}
@@ -239,6 +244,7 @@ public class BookingReadServiceImpl implements BookingReadService {
 				nanny.getLastName(),
 				nanny.getProfilePhotoS3Key(),
 				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
+				verificationBadgeMapper.toBadges(nannyVerificationService.verifiedDocumentTypes(nanny.getId())),
 				avg,
 				count == null ? null : count.intValue());
 	}

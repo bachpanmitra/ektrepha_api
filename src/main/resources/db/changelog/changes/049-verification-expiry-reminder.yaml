@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 49
+      author: ektrepha
+      description: Adds nanny_verification.expiry_reminder_sent_at to dedupe the 30-days-before-expiry reminder push
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/049-verification-expiry-reminder.sql
+            relativeToChangelogFile: false

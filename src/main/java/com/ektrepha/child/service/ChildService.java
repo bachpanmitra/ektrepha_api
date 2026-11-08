@@ -6,6 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.ektrepha.child.dto.request.CareNotesUpdateRequest;
 import com.ektrepha.child.dto.request.ChildUpsertRequest;
+import com.ektrepha.child.dto.response.CareNotes;
 import com.ektrepha.child.dto.response.ChildDetailResponse;
 import com.ektrepha.child.dto.response.ChildSummaryResponse;
 import com.ektrepha.child.dto.response.GuardianResponse;
@@ -27,5 +28,8 @@ public interface ChildService {
 	List<GuardianResponse> guardians(Long userId, Long childId);
 
 	void remove(Long userId, Long childId);
+
+	/** No ownership check — for a nanny's own "care guide" read of a child on a booking she's assigned to, not the parent's own screens. 404 if childId doesn't exist. */
+	CareNotes careNotesByChildId(Long childId);
 
 }

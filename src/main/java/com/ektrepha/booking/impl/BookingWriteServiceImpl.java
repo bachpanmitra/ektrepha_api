@@ -44,6 +44,8 @@ import com.ektrepha.model.Children;
 import com.ektrepha.model.GstStateCode;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyVerificationStatus;
+import com.ektrepha.verification.VerificationBadgeMapper;
+import com.ektrepha.verification.service.NannyVerificationService;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.Parent;
 import com.ektrepha.model.ParentAddress;
@@ -104,6 +106,8 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 	private final BookingCancellationLogService bookingCancellationLogService;
 	private final AppProperties appProperties;
 	private final GstStateCodeRepository gstStateCodeRepository;
+	private final NannyVerificationService nannyVerificationService;
+	private final VerificationBadgeMapper verificationBadgeMapper;
 
 	@Override
 	@Transactional
@@ -354,6 +358,7 @@ public class BookingWriteServiceImpl implements BookingWriteService {
 		NannySummary nannySummary = new NannySummary(
 				nanny.getId(), nanny.getFirstName(), nanny.getLastName(), nanny.getProfilePhotoS3Key(),
 				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
+				verificationBadgeMapper.toBadges(nannyVerificationService.verifiedDocumentTypes(nanny.getId())),
 				ratingAggregate == null ? null : (Double) ratingAggregate[0],
 				ratingAggregate == null ? null : ((Long) ratingAggregate[1]).intValue());
 

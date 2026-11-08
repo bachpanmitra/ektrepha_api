@@ -91,3 +91,15 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/045-gst-state-codes.yaml
   - include:
       file: classpath:db/changelog/changes/046-care-amount-gst.yaml
+  - include:
+      file: classpath:db/changelog/changes/047-booking-attendance-otp.yaml
+  - include:
+      file: classpath:db/changelog/changes/048-document-access-log.yaml
+  - include:
+      file: classpath:db/changelog/changes/049-verification-expiry-reminder.yaml
+  - include:
+      file: classpath:db/changelog/changes/050-consents-and-attendance-alerts.yaml
+  - include:
+      file: classpath:db/changelog/changes/051-nanny-location-booking-event.yaml
+  - include:
+      file: classpath:db/changelog/changes/052-trip-reminder.yaml

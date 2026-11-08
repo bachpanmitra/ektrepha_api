@@ -37,6 +37,44 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	List<Booking> findByNannyIdAndWindow(@Param("nannyId") Long nannyId, @Param("statuses") Collection<BookingStatus> statuses,
 			@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
 
+	// Nanny app's Roster screen (API Map row 29) - same overlap shape as findByNannyIdAndWindow,
+	// but across a caller-chosen [from,to] range (up to 62 days) instead of a single day.
+	@Query("""
+			SELECT b FROM Booking b
+			LEFT JOIN FETCH b.child
+			LEFT JOIN FETCH b.address
+			LEFT JOIN FETCH b.serviceType
+			WHERE b.nanny.id = :nannyId AND b.status IN :statuses
+			  AND b.startTime < :rangeEnd AND b.endTime > :rangeStart
+			ORDER BY b.startTime ASC
+			""")
+	List<Booking> findByNannyIdAndRange(@Param("nannyId") Long nannyId, @Param("statuses") Collection<BookingStatus> statuses,
+			@Param("rangeStart") Instant rangeStart, @Param("rangeEnd") Instant rangeEnd);
+
+	// DailyAttendanceCodeGenerationJob - every assigned booking whose shift starts today (any
+	// nanny), fetched with the nanny so the job can check that nanny's approved-leave status without
+	// an extra round trip per row. dayStart/dayEnd are the IST calendar day's bounds, same convention
+	// as findByNannyIdAndWindow above - unlike that method this matches on startTime alone (a shift
+	// "starting" today), not an overlap, since a live-in booking's day is a whole separate Booking row.
+	@Query("""
+			SELECT b FROM Booking b
+			JOIN FETCH b.nanny n
+			WHERE b.status IN :statuses AND b.startTime >= :dayStart AND b.startTime < :dayEnd
+			""")
+	List<Booking> findByStatusInAndStartTimeBetween(@Param("statuses") Collection<BookingStatus> statuses,
+			@Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
+
+	// Ops manual check-in/out (API Spec sheet row 3) - {id} in the admin URL is one occurrence
+	// (anchor or otherwise) of a booking, possibly part of a recurring series; this resolves the
+	// ACTUAL Booking row for the specific {date} ops is correcting, same groupId convention as
+	// BookingAttendanceRepository#findForSeriesInMonth.
+	@Query("""
+			SELECT b FROM Booking b
+			WHERE (b.recurrenceGroupId = :groupId OR b.id = :groupId)
+			  AND b.startTime >= :dayStart AND b.startTime < :dayEnd
+			""")
+	Optional<Booking> findInSeriesForDate(@Param("groupId") Long groupId, @Param("dayStart") Instant dayStart, @Param("dayEnd") Instant dayEnd);
+
 	// B1/H1 card list — one query, one status-set param, shared by both the "active" and "history"
 	// scopes (PRD "PRD API Design Spec" §3.4: same repository method, different status sets, so the
 	// two screens can never drift). JOIN FETCH avoids N+1 on every card's nanny/child/address.

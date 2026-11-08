@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 52
+      author: ektrepha
+      description: Adds dedup timestamps for the start-trip push-reminder job
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/052-trip-reminder.sql
+            relativeToChangelogFile: false

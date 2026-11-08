@@ -38,4 +38,11 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 			""")
 	List<LeaveRequest> findApprovedCoveringDate(@Param("date") LocalDate date);
 
+	// Daily attendance-code job and the nanny-side check-in path (OTP Rules sheet rule 5: no codes
+	// on an approved leave day) - same coverage rule as countApprovedCoveringDate/
+	// findApprovedCoveringDate, scoped to one nanny rather than every nanny.
+	@Query("SELECT COUNT(lr) > 0 FROM LeaveRequest lr WHERE lr.status = com.ektrepha.model.RequestStatus.APPROVED "
+			+ "AND lr.nanny.id = :nannyId AND lr.startDate <= :date AND lr.endDate >= :date")
+	boolean existsApprovedForNannyAndDate(@Param("nannyId") Long nannyId, @Param("date") LocalDate date);
+
 }

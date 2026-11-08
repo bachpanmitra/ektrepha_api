@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 47
+      author: ektrepha
+      description: Adds booking_attendance (per-day OTP-gated check-in/check-out) replacing migration 037's plain booking.checked_in_at/checked_out_at for new attendance
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/047-booking-attendance-otp.sql
+            relativeToChangelogFile: false

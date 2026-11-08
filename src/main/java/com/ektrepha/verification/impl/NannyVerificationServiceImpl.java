@@ -17,7 +17,9 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ektrepha.exception.InvalidVerificationDocumentException;
 import com.ektrepha.exception.NannyNotEligibleForApprovalException;
 import com.ektrepha.exception.NannyNotFoundException;
+import com.ektrepha.exception.NannyVerificationDocumentNotFoundException;
 import com.ektrepha.model.BannedIdentity;
+import com.ektrepha.model.DocumentAccessLog;
 import com.ektrepha.model.InterviewOutcome;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.NannyInterview;
@@ -28,6 +30,7 @@ import com.ektrepha.model.User;
 import com.ektrepha.model.VerificationDocType;
 import com.ektrepha.model.VerificationRecordStatus;
 import com.ektrepha.repository.BannedIdentityRepository;
+import com.ektrepha.repository.DocumentAccessLogRepository;
 import com.ektrepha.repository.NannyCodeOfConductAcceptanceRepository;
 import com.ektrepha.repository.NannyInterviewRepository;
 import com.ektrepha.repository.NannyReferenceRepository;
@@ -36,7 +39,7 @@ import com.ektrepha.repository.NannyStatusHistoryRepository;
 import com.ektrepha.repository.NannyTrainingAttemptRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.UserRepository;
-import com.ektrepha.storage.S3PhotoUrlService;
+import com.ektrepha.storage.GcsPhotoUrlService;
 import com.ektrepha.verification.BanEvasionCheckService;
 import com.ektrepha.verification.CodeOfConductDocument;
 import com.ektrepha.verification.IdentityHashUtil;
@@ -65,7 +68,7 @@ public class NannyVerificationServiceImpl implements NannyVerificationService {
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final NannyRepository nannyRepository;
 	private final UserRepository userRepository;
-	private final S3PhotoUrlService s3PhotoUrlService;
+	private final GcsPhotoUrlService gcsPhotoUrlService;
 	private final KycVerificationProvider kycVerificationProvider;
 	private final BanEvasionCheckService banEvasionCheckService;
 	private final NannyReferenceRepository nannyReferenceRepository;
@@ -74,6 +77,7 @@ public class NannyVerificationServiceImpl implements NannyVerificationService {
 	private final NannyCodeOfConductAcceptanceRepository nannyCodeOfConductAcceptanceRepository;
 	private final NannyStatusHistoryRepository nannyStatusHistoryRepository;
 	private final BannedIdentityRepository bannedIdentityRepository;
+	private final DocumentAccessLogRepository documentAccessLogRepository;
 
 	@Override
 	@Transactional
@@ -116,7 +120,7 @@ public class NannyVerificationServiceImpl implements NannyVerificationService {
 		// a resubmission after rejection must not invalidate a presigned URL already handed out
 		// for the old key.
 		String key = "nanny-verification/%d/%s%s".formatted(nanny.getId(), UUID.randomUUID(), extensionFor(contentType));
-		s3PhotoUrlService.upload(key, bytes, contentType);
+		gcsPhotoUrlService.upload(key, bytes, contentType);
 
 		NannyVerification.NannyVerificationBuilder builder = NannyVerification.builder()
 				.nanny(nanny)
@@ -259,6 +263,58 @@ public class NannyVerificationServiceImpl implements NannyVerificationService {
 			}
 		}
 		return drift;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<NannyVerification> listOwn(Long userId) {
+		Nanny nanny = nannyRepository.findByUserId(userId)
+				.orElseThrow(() -> new NannyNotFoundException("No nanny profile for the current user"));
+		return new ArrayList<>(latestRecordPerType(nannyVerificationRepository.findByNannyId(nanny.getId())).values());
+	}
+
+	@Override
+	@Transactional
+	public String ownViewUrl(Long userId, Long documentId) {
+		Nanny nanny = nannyRepository.findByUserId(userId)
+				.orElseThrow(() -> new NannyNotFoundException("No nanny profile for the current user"));
+		NannyVerification record = nannyVerificationRepository.findById(documentId)
+				.filter(r -> r.getNanny().getId().equals(nanny.getId()))
+				.orElseThrow(() -> new NannyVerificationDocumentNotFoundException("No document with id " + documentId));
+
+		String url = gcsPhotoUrlService.presign(record.getS3Key());
+		// Every presigned view this system hands out for a verification document gets a
+		// document_access_log row (nanny app spec: "every view saved in document_access_log") -
+		// AdminNannyServiceImpl logs its own ops-side views the same way.
+		User viewer = userRepository.findById(userId).orElse(null);
+		if (viewer != null) {
+			documentAccessLogRepository.save(DocumentAccessLog.builder().document(record).viewedBy(viewer).build());
+		}
+		return url;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<NannyVerification> reviewQueue(VerificationRecordStatus status) {
+		return nannyVerificationRepository.findByStatusForReviewQueue(status);
+	}
+
+	@Override
+	@Transactional
+	public void markExpiryReminderSent(Long verificationRecordId) {
+		NannyVerification record = nannyVerificationRepository.findById(verificationRecordId)
+				.orElseThrow(() -> new NannyVerificationDocumentNotFoundException("No document with id " + verificationRecordId));
+		record.setExpiryReminderSentAt(Instant.now());
+		nannyVerificationRepository.save(record);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<VerificationDocType> verifiedDocumentTypes(Long nannyId) {
+		return latestRecordPerType(nannyVerificationRepository.findByNannyId(nannyId)).values().stream()
+				.filter(record -> record.getStatus() == VerificationRecordStatus.VERIFIED)
+				.map(NannyVerification::getType)
+				.toList();
 	}
 
 	private RollupInputs gatherRollupInputs(Nanny nanny) {

@@ -35,7 +35,9 @@ import com.ektrepha.exception.ServiceTypeNotFoundException;
 import com.ektrepha.exception.ZoneNotFoundException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.CaregiverZoneMapping;
+import com.ektrepha.model.DocumentAccessLog;
 import com.ektrepha.model.Nanny;
+import com.ektrepha.model.NannyVerification;
 import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.Review;
 import com.ektrepha.model.ServiceType;
@@ -46,6 +48,7 @@ import com.ektrepha.model.VerificationDocType;
 import com.ektrepha.model.ZoneArea;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CaregiverZoneMappingRepository;
+import com.ektrepha.repository.DocumentAccessLogRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.NannyStatusHistoryRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
@@ -53,7 +56,7 @@ import com.ektrepha.repository.ReviewRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
 import com.ektrepha.repository.UserRepository;
 import com.ektrepha.repository.ZoneAreaRepository;
-import com.ektrepha.storage.S3PhotoUrlService;
+import com.ektrepha.storage.GcsPhotoUrlService;
 import com.ektrepha.verification.BanEvasionCheckService;
 import com.ektrepha.verification.IdentityHashUtil;
 import com.ektrepha.verification.service.NannyVerificationService;
@@ -74,8 +77,9 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final NannyStatusHistoryRepository nannyStatusHistoryRepository;
 	private final ReviewRepository reviewRepository;
-	private final S3PhotoUrlService s3PhotoUrlService;
+	private final GcsPhotoUrlService gcsPhotoUrlService;
 	private final BookingRepository bookingRepository;
+	private final DocumentAccessLogRepository documentAccessLogRepository;
 	private final NannyVerificationService nannyVerificationService;
 	private final BanEvasionCheckService banEvasionCheckService;
 
@@ -187,23 +191,36 @@ public class AdminNannyServiceImpl implements AdminNannyService {
 	}
 
 	@Override
-	@Transactional(readOnly = true)
-	public List<AdminNannyVerificationDocumentResponse> documents(Long nannyId) {
+	@Transactional
+	public List<AdminNannyVerificationDocumentResponse> documents(Long nannyId, Long viewerUserId) {
 		if (!nannyRepository.existsById(nannyId)) {
 			throw new NannyNotFoundException("No nanny with id " + nannyId);
 		}
 		return nannyVerificationRepository.findByNannyId(nannyId).stream()
 				.map(v -> new AdminNannyVerificationDocumentResponse(v.getId(), v.getType().name(), v.getStatus().name(),
-						v.getCreatedAt(), v.getReviewedAt(), v.getRejectionReason(), s3PhotoUrlService.presign(v.getS3Key()), v.getExpiryDate()))
+						v.getCreatedAt(), v.getReviewedAt(), v.getRejectionReason(), presignAndLog(v, viewerUserId), v.getExpiryDate()))
 				.toList();
 	}
 
 	@Override
 	@Transactional
-	public AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file, LocalDate expiryDate) {
+	public AdminNannyVerificationDocumentResponse uploadDocument(Long nannyId, VerificationDocType type, MultipartFile file, LocalDate expiryDate,
+			Long uploaderUserId) {
 		var record = nannyVerificationService.submitDocumentForNanny(nannyId, type, file, expiryDate);
 		return new AdminNannyVerificationDocumentResponse(record.getId(), record.getType().name(), record.getStatus().name(),
-				record.getCreatedAt(), record.getReviewedAt(), record.getRejectionReason(), s3PhotoUrlService.presign(record.getS3Key()), record.getExpiryDate());
+				record.getCreatedAt(), record.getReviewedAt(), record.getRejectionReason(), presignAndLog(record, uploaderUserId), record.getExpiryDate());
+	}
+
+	// Every presigned view this system hands out for a verification document gets a
+	// document_access_log row (nanny app spec: "every view saved in document_access_log") -
+	// NannyVerificationServiceImpl#ownViewUrl logs the nanny's own views the same way.
+	private String presignAndLog(NannyVerification record, Long viewerUserId) {
+		String url = gcsPhotoUrlService.presign(record.getS3Key());
+		User viewer = userRepository.findById(viewerUserId).orElse(null);
+		if (viewer != null) {
+			documentAccessLogRepository.save(DocumentAccessLog.builder().document(record).viewedBy(viewer).build());
+		}
+		return url;
 	}
 
 	@Override

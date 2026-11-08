@@ -54,6 +54,10 @@ public class NannyVerification {
 	@Column(name = "expiry_date")
 	private LocalDate expiryDate;
 
+	/** Set once the 30-days-before-{@code expiryDate} reminder push has gone out, so {@code VerificationExpiryAuditJob} never sends it twice for the same row. */
+	@Column(name = "expiry_reminder_sent_at")
+	private Instant expiryReminderSentAt;
+
 	/** One-way hash from {@code KycVerificationProvider#verifyIdentity} - only ever set on an {@link VerificationDocType#ID_PROOF} row. Never the raw extracted ID number. */
 	@Column(name = "id_doc_hash", length = 128)
 	private String idDocHash;

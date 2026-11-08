@@ -1,5 +1,9 @@
 package com.ektrepha.booking.controller;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -7,10 +11,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
+import com.ektrepha.booking.dto.response.NannyCareDetailsResponse;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
+import com.ektrepha.booking.dto.response.RosterEntryResponse;
 import com.ektrepha.booking.service.NannyBookingService;
 import com.ektrepha.exception.ErrorResponse;
 
@@ -80,6 +87,33 @@ public class NannyBookingController {
 	public ResponseEntity<BookingLifecycleResponse> complete(Authentication authentication,
 			@Parameter(description = "Booking id") @PathVariable Long id) {
 		return ResponseEntity.ok(nannyBookingService.completeCare(userId(authentication), id));
+	}
+
+	@Operation(summary = "Care guide", description = "Child care-notes, address, and the parent's masked contact for one of the assigned caregiver's own bookings.")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Care guide detail"),
+			@ApiResponse(responseCode = "401", description = "Missing/invalid bearer token", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "403", description = "Caller is not NANNY-role", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "404", description = "No booking with the given id assigned to this caregiver", content = @Content(schema = @Schema(implementation = ErrorResponse.class))) })
+	@GetMapping("/{id}/care-details")
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<NannyCareDetailsResponse> careDetails(Authentication authentication,
+			@Parameter(description = "Booking id") @PathVariable Long id) {
+		return ResponseEntity.ok(nannyBookingService.careDetails(userId(authentication), id));
+	}
+
+	@Operation(summary = "Roster", description = "This caregiver's bookings overlapping [from, to] (max 62 days), one entry per working day.")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Roster entries"),
+			@ApiResponse(responseCode = "400", description = "Invalid or too-wide date range", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "401", description = "Missing/invalid bearer token", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "403", description = "Caller is not NANNY-role", content = @Content(schema = @Schema(implementation = ErrorResponse.class))) })
+	@GetMapping
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<List<RosterEntryResponse>> roster(Authentication authentication,
+			@Parameter(description = "Range start (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@Parameter(description = "Range end (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+		return ResponseEntity.ok(nannyBookingService.roster(userId(authentication), from, to));
 	}
 
 	private Long userId(Authentication authentication) {

@@ -41,9 +41,55 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), ex.code(), request);
 	}
 
+	// Nanny check-in/check-out OTP errors (Ektrepha_Nanny_API_Map.xlsx "API Spec"/"OTP Rules"
+	// sheets) - each carries its own machine-readable code, same shape as QuoteExpired/TrialRevoked
+	// above.
+	@ExceptionHandler(WrongOtpException.class)
+	public ResponseEntity<ErrorResponse> handleWrongOtp(WrongOtpException ex, HttpServletRequest request) {
+		return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(OtpLockedException.class)
+	public ResponseEntity<ErrorResponse> handleOtpLocked(OtpLockedException ex, HttpServletRequest request) {
+		return build(HttpStatus.LOCKED, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(TooFarException.class)
+	public ResponseEntity<ErrorResponse> handleTooFar(TooFarException ex, HttpServletRequest request) {
+		return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(OffDayException.class)
+	public ResponseEntity<ErrorResponse> handleOffDay(OffDayException ex, HttpServletRequest request) {
+		return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(LeaveDayException.class)
+	public ResponseEntity<ErrorResponse> handleLeaveDay(LeaveDayException ex, HttpServletRequest request) {
+		return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), ex.code(), request);
+	}
+
+	@ExceptionHandler(NannyNotVerifiedException.class)
+	public ResponseEntity<ErrorResponse> handleNannyNotVerified(NannyNotVerifiedException ex, HttpServletRequest request) {
+		return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), ex.code(), request);
+	}
+
+	// "On the way" live-location tracking (API Map rows 30, 31, 51) — the "arrived but too far"
+	// check reuses the existing TooFarException/handler above (same 422 geofence shape).
+	@ExceptionHandler(ConsentRequiredException.class)
+	public ResponseEntity<ErrorResponse> handleConsentRequired(ConsentRequiredException ex, HttpServletRequest request) {
+		return build(HttpStatus.PRECONDITION_REQUIRED, ex.getMessage(), request);
+	}
+
+	@ExceptionHandler(TooManyLocationUpdatesException.class)
+	public ResponseEntity<ErrorResponse> handleTooManyLocationUpdates(TooManyLocationUpdatesException ex, HttpServletRequest request) {
+		return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+	}
+
 	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class, ParentNotFoundException.class,
 			ApprovalRequestNotFoundException.class, SosAlertNotFoundException.class, IncidentReportNotFoundException.class,
-			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class, ReviewNotFoundException.class })
+			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class, ReviewNotFoundException.class,
+			NannyVerificationDocumentNotFoundException.class, ChildNotFoundException.class })
 	public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}

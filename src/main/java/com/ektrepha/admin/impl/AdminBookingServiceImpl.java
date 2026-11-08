@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.admin.dto.request.AdminBookingCancelRequest;
+import com.ektrepha.admin.dto.request.ManualAttendanceRequest;
 import com.ektrepha.admin.dto.response.AdminAddressResponse;
 import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
@@ -32,11 +34,19 @@ import com.ektrepha.admin.dto.response.AdminNannyRefResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.dto.response.AdminParentRefResponse;
 import com.ektrepha.admin.service.AdminBookingService;
+import com.ektrepha.booking.dto.response.AttendanceDayEntry;
+import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
+import com.ektrepha.booking.impl.AttendanceMonthMapper;
 import com.ektrepha.cancellation.service.BookingCancellationLogService;
 import com.ektrepha.exception.BookingNotCancellableException;
 import com.ektrepha.exception.BookingNotFoundException;
+import com.ektrepha.exception.InvalidBookingTransitionException;
 import com.ektrepha.exception.NotServiceableException;
+import com.ektrepha.exception.OffDayException;
+import com.ektrepha.model.AttendanceMethod;
+import com.ektrepha.model.AttendanceStatus;
 import com.ektrepha.model.Booking;
+import com.ektrepha.model.BookingAttendance;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
@@ -45,6 +55,7 @@ import com.ektrepha.model.PaymentTransaction;
 import com.ektrepha.model.User;
 import com.ektrepha.repository.AdminBookingCandidateRepository;
 import com.ektrepha.repository.AdminBookingCandidateRepository.CandidateRow;
+import com.ektrepha.repository.BookingAttendanceRepository;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ReviewRepository;
@@ -80,6 +91,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final OrderActivityService orderActivityService;
 	private final UserRepository userRepository;
 	private final BookingCancellationLogService bookingCancellationLogService;
+	private final BookingAttendanceRepository bookingAttendanceRepository;
+	private final AttendanceMonthMapper attendanceMonthMapper;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -232,6 +245,77 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				.thenComparing(AdminBookingCandidateResponse::hoursBookedThisWeek));
 
 		return candidates;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public AttendanceMonthResponse attendanceMonth(Long bookingId, String month) {
+		Booking booking = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+		LocalDate from = LocalDate.parse(month + "-01");
+		LocalDate to = from.plusMonths(1).minusDays(1);
+		Long groupId = booking.getRecurrenceGroupId() != null ? booking.getRecurrenceGroupId() : booking.getId();
+		List<BookingAttendance> rows = bookingAttendanceRepository.findForSeriesInMonth(groupId, from, to);
+		return attendanceMonthMapper.toResponse(bookingId, month, rows, true);
+	}
+
+	@Override
+	@Transactional
+	public AttendanceDayEntry manualCheckIn(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request) {
+		BookingAttendance row = resolveAttendanceRowForManualEntry(bookingId, date);
+		if (row.getStatus() == AttendanceStatus.CHECKED_IN || row.getStatus() == AttendanceStatus.CHECKED_OUT) {
+			throw new InvalidBookingTransitionException("Already checked in for " + date);
+		}
+		row.setCheckedInAt(date.atTime(request.time()).atZone(INDIA_ZONE).toInstant());
+		row.setCheckInMethod(AttendanceMethod.MANUAL);
+		row.setManualByUser(userRepository.findById(adminUserId).orElse(null));
+		row.setManualReason(request.reason());
+		row.setStatus(AttendanceStatus.CHECKED_IN);
+		row = bookingAttendanceRepository.save(row);
+		log.info("Ops manual check-in: bookingAttendanceId={}, bookingId={}, adminUserId={}, date={}", row.getId(), bookingId, adminUserId, date);
+		return attendanceMonthMapper.toResponse(bookingId, date.toString(), List.of(row), true).days().get(0);
+	}
+
+	@Override
+	@Transactional
+	public AttendanceDayEntry manualCheckOut(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request) {
+		BookingAttendance row = resolveAttendanceRowForManualEntry(bookingId, date);
+		if (row.getStatus() != AttendanceStatus.CHECKED_IN) {
+			throw new InvalidBookingTransitionException("Not checked in for " + date);
+		}
+		row.setCheckedOutAt(date.atTime(request.time()).atZone(INDIA_ZONE).toInstant());
+		row.setCheckOutMethod(AttendanceMethod.MANUAL);
+		row.setManualByUser(userRepository.findById(adminUserId).orElse(null));
+		row.setManualReason(request.reason());
+		row.setStatus(AttendanceStatus.CHECKED_OUT);
+		row = bookingAttendanceRepository.save(row);
+		log.info("Ops manual check-out: bookingAttendanceId={}, bookingId={}, adminUserId={}, date={}", row.getId(), bookingId, adminUserId, date);
+		return attendanceMonthMapper.toResponse(bookingId, date.toString(), List.of(row), true).days().get(0);
+	}
+
+	// {id} may be any occurrence of a recurring series - resolves the ACTUAL Booking row for the
+	// date ops is correcting (see BookingRepository#findInSeriesForDate), then that row's own
+	// booking_attendance entry. 422 "date is an off day" covers both no Booking at all for that
+	// date (weekly off) and an OFF_DAY (approved leave) attendance row.
+	private BookingAttendance resolveAttendanceRowForManualEntry(Long bookingId, LocalDate date) {
+		Booking anchor = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+		Long groupId = anchor.getRecurrenceGroupId() != null ? anchor.getRecurrenceGroupId() : anchor.getId();
+		Instant dayStart = date.atStartOfDay(INDIA_ZONE).toInstant();
+		Instant dayEnd = date.plusDays(1).atStartOfDay(INDIA_ZONE).toInstant();
+		Booking booking = bookingRepository.findInSeriesForDate(groupId, dayStart, dayEnd)
+				.orElseThrow(() -> new OffDayException("No shift scheduled for " + date));
+
+		Optional<BookingAttendance> existing = bookingAttendanceRepository.findByBookingIdAndAttendanceDate(booking.getId(), date);
+		if (existing.isPresent()) {
+			if (existing.get().getStatus() == AttendanceStatus.OFF_DAY) {
+				throw new OffDayException("No shift scheduled for " + date);
+			}
+			return existing.get();
+		}
+		return bookingAttendanceRepository.save(BookingAttendance.builder()
+				.booking(booking).attendanceDate(date).status(AttendanceStatus.PENDING)
+				.build());
 	}
 
 	// The admin UI always displays a booking's id as "BK-{id}" (see AdminBookingMapper / the

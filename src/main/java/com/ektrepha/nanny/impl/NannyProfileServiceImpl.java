@@ -29,6 +29,8 @@ import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.NannySkillLanguageRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.repository.ReviewRepository;
+import com.ektrepha.verification.VerificationBadgeMapper;
+import com.ektrepha.verification.service.NannyVerificationService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -60,6 +62,8 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final NannySkillLanguageRepository nannySkillLanguageRepository;
 	private final ReviewRepository reviewRepository;
+	private final NannyVerificationService nannyVerificationService;
+	private final VerificationBadgeMapper verificationBadgeMapper;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -86,6 +90,7 @@ public class NannyProfileServiceImpl implements NannyProfileService {
 				ratingAvg,
 				reviewCount == null ? 0 : reviewCount.intValue(),
 				nanny.getOverallVerificationStatus() == NannyVerificationStatus.APPROVED,
+				verificationBadgeMapper.toBadges(nannyVerificationService.verifiedDocumentTypes(nannyId)),
 				nannySkillLanguageRepository.findSkillNames(nannyId),
 				nannySkillLanguageRepository.findLanguageNames(nannyId),
 				recentReviews);

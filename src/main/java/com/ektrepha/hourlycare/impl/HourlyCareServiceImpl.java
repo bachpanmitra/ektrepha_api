@@ -27,6 +27,7 @@ import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.BookingNotReassignableException;
 import com.ektrepha.exception.ForbiddenChildAccessException;
 import com.ektrepha.exception.NannyNotFoundException;
+import com.ektrepha.exception.NannyNotVerifiedException;
 import com.ektrepha.exception.NannyUnavailableException;
 import com.ektrepha.exception.NotServiceableException;
 import com.ektrepha.exception.ParentAddressNotFoundException;
@@ -61,6 +62,7 @@ import com.ektrepha.model.Children;
 import com.ektrepha.model.GstStateCode;
 import com.ektrepha.model.HourlyCareQuote;
 import com.ektrepha.model.Nanny;
+import com.ektrepha.model.NannyVerificationStatus;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.Parent;
@@ -657,6 +659,17 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 		}
 	}
 
+	// Nanny app spec row 24 / test NAO-71: ops can't assign (or reassign onto) a caregiver who
+	// hasn't cleared every onboarding gate - documents, references, interview, training,
+	// code-of-conduct, age (see VerificationRollupCalculator). The candidate list
+	// (AdminBookingCandidateRepository) already filters these out before ops ever sees them; this
+	// is the server-side backstop for a stale candidate list or a direct API call.
+	private void requireVerified(Nanny nanny) {
+		if (nanny.getOverallVerificationStatus() != NannyVerificationStatus.APPROVED) {
+			throw new NannyNotVerifiedException("This caregiver has not completed verification yet");
+		}
+	}
+
 	@Override
 	@Transactional
 	public CaregiverAssignmentResponse assignCaregiver(Long adminUserId, Long bookingId, AssignCaregiverRequest request) {
@@ -668,6 +681,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		Nanny nanny = nannyRepository.findById(request.nannyId())
 				.orElseThrow(() -> new NannyNotFoundException("No nanny with id " + request.nannyId()));
+		requireVerified(nanny);
 		Long zoneAreaId = resolveZoneAreaId(booking.getAddress());
 		caregiverZoneMappingRepository.findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(nanny.getId(), zoneAreaId, booking.getServiceType().getId())
 				.orElseThrow(() -> new NannyUnavailableException("This caregiver does not serve this booking's zone/service"));
@@ -715,6 +729,7 @@ public class HourlyCareServiceImpl implements HourlyCareService {
 
 		Nanny newNanny = nannyRepository.findById(request.nannyId())
 				.orElseThrow(() -> new NannyNotFoundException("No nanny with id " + request.nannyId()));
+		requireVerified(newNanny);
 		Long zoneAreaId = resolveZoneAreaId(booking.getAddress());
 		caregiverZoneMappingRepository.findByCaregiverIdAndZoneAreaIdAndServiceTypeIdAndActiveTrue(newNanny.getId(), zoneAreaId, booking.getServiceType().getId())
 				.orElseThrow(() -> new NannyUnavailableException("This caregiver does not serve this booking's zone/service"));

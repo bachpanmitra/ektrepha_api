@@ -1,6 +1,7 @@
 package com.ektrepha.verification.impl;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -8,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.ektrepha.model.NannyVerificationStatus;
+import com.ektrepha.notification.service.PushSenderService;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.NannyVerificationRepository;
 import com.ektrepha.verification.service.NannyVerificationService;
@@ -41,11 +43,13 @@ public class VerificationExpiryAuditJob {
 	private final NannyVerificationRepository nannyVerificationRepository;
 	private final NannyRepository nannyRepository;
 	private final NannyVerificationService nannyVerificationService;
+	private final PushSenderService pushSenderService;
 
 	@Scheduled(cron = "${app.verification.expiry-audit-cron:0 0 4 * * *}")
 	public void auditExpiryAndReverification() {
 		suspendExpiredPcc();
 		flagDueForReverification();
+		remindBeforeExpiry();
 	}
 
 	private void suspendExpiredPcc() {
@@ -59,6 +63,25 @@ public class VerificationExpiryAuditJob {
 				// A nanny who is already SUSPENDED/BANNED, or whose status changed between the query
 				// and this call, must not stop the rest of the sweep from running.
 				log.error("Could not auto-suspend nannyId={} for PCC expiry", nannyId, e);
+			}
+		}
+	}
+
+	// "Push to nanny and alert ops 30 days before expiresOn" (API Map row 26). Ops alert is a log
+	// line, not a real broadcast channel - same stand-in NannyAttendanceServiceImpl's OTP-lock
+	// alert uses, until a real ops-broadcast exists.
+	private void remindBeforeExpiry() {
+		for (Object[] row : nannyVerificationRepository.findDueForExpiryReminderRows()) {
+			Long verificationId = ((Number) row[0]).longValue();
+			Long nannyUserId = ((Number) row[1]).longValue();
+			LocalDate expiryDate = (LocalDate) row[2];
+			try {
+				pushSenderService.sendToUser(nannyUserId, "Your Police Clearance Certificate expires soon",
+						"Your PCC expires on " + expiryDate + ". Upload a renewed certificate to avoid an automatic suspension.");
+				log.warn("PCC expiring soon: verificationId={}, nannyUserId={}, expiryDate={}", verificationId, nannyUserId, expiryDate);
+				nannyVerificationService.markExpiryReminderSent(verificationId);
+			} catch (RuntimeException e) {
+				log.error("Could not send expiry reminder for verificationId={}", verificationId, e);
 			}
 		}
 	}
