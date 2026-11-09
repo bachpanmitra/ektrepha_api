@@ -27,5 +27,11 @@ public record AvailabilityCheckRequest(
 		 * {@code HourlyCareServiceImpl#applyDailyCareTrial}), since a client-sent boolean is
 		 * trivially spoofable. Null/omitted is treated the same as false - it's simply ignored.
 		 */
-		Boolean isTrialPeriod) {
+		Boolean isTrialPeriod,
+		// Elder Care — both optional, added at the end so an app build that predates Elder Care
+		// keeps working unchanged. Null/blank serviceTypeCode defaults to "childcare" (see
+		// HourlyCareServiceImpl#resolveServiceType); "senior_care" requires elderId and forbids
+		// childId, "childcare" forbids elderId - enforced in HourlyCareServiceImpl#validateCareRecipient.
+		String serviceTypeCode,
+		Long elderId) {
 }

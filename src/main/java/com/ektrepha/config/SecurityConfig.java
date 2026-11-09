@@ -64,6 +64,7 @@ public class SecurityConfig {
 						.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 						.requestMatchers("/api/v1/nanny-verification/**").hasAnyRole("NANNY", "ADMIN")
 						.requestMatchers("/api/v1/parents/me/**").hasRole("PARENT")
+						.requestMatchers("/api/v1/parents/me/elders/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/bookings/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.POST, "/api/v1/bookings/**").hasRole("PARENT")
 						.requestMatchers(HttpMethod.GET, "/api/v1/hourly-care/**").hasRole("PARENT")

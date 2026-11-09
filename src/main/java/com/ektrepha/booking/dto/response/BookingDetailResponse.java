@@ -34,5 +34,7 @@ public record BookingDetailResponse(
 		String frequency,
 		// Total occurrences in this booking's recurring series, or null for a ONE_TIME booking.
 		Integer totalOccurrences,
-		List<PriceBreakdownLineResponse> priceBreakdown) {
+		List<PriceBreakdownLineResponse> priceBreakdown,
+		// Elder Care counterpart of child above - null for a childcare booking.
+		ElderBookingSummary elder) {
 }

@@ -37,6 +37,7 @@ import com.ektrepha.repository.HourlyCareQuoteRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentAddressRepository;
 import com.ektrepha.repository.ParentChildRepository;
+import com.ektrepha.repository.ParentElderRepository;
 import com.ektrepha.repository.ParentRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ServiceTypeRepository;
@@ -72,6 +73,8 @@ class HourlyCareServiceImplReconciliationTest {
 	@Mock
 	private ParentChildRepository parentChildRepository;
 	@Mock
+	private ParentElderRepository parentElderRepository;
+	@Mock
 	private ServiceabilityPincodeRepository serviceabilityPincodeRepository;
 	@Mock
 	private CaregiverZoneMappingRepository caregiverZoneMappingRepository;
@@ -104,7 +107,7 @@ class HourlyCareServiceImplReconciliationTest {
 	@BeforeEach
 	void setUp() {
 		service = new HourlyCareServiceImpl(parentRepository, bookingRepository, nannyRepository, serviceTypeRepository,
-				parentAddressRepository, parentChildRepository, serviceabilityPincodeRepository,
+				parentAddressRepository, parentChildRepository, parentElderRepository, serviceabilityPincodeRepository,
 				caregiverZoneMappingRepository, paymentTransactionRepository, paymentGatewayService, pricingService,
 				addressResponseMapper, orderActivityService, userRepository, hourlyCareQuoteRepository, gstStateCodeRepository, trialService, appProperties);
 

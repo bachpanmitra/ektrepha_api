@@ -2,6 +2,8 @@ package com.ektrepha.repository;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +17,18 @@ import com.ektrepha.model.PaymentTransaction;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
 
 	Optional<PaymentTransaction> findByIdAndBookingParentId(Long id, Long parentId);
+
+	// Payments screen (ektrepha_ui's L6) — every attempt across every booking this parent has ever
+	// made, newest first. join fetch avoids one query per row for booking/child/elder/serviceType
+	// when the service maps each row to PaymentHistoryItemResponse.
+	@Query("select t from PaymentTransaction t"
+			+ " join fetch t.booking b"
+			+ " join fetch b.serviceType"
+			+ " left join fetch b.child"
+			+ " left join fetch b.elder"
+			+ " where b.parent.id = :parentId"
+			+ " order by t.createdAt desc, t.id desc")
+	Page<PaymentTransaction> findByBookingParentId(@Param("parentId") Long parentId, Pageable pageable);
 
 	// The active attempt to confirm/fail against - the most recent one still awaiting a gateway result.
 	Optional<PaymentTransaction> findFirstByBookingIdAndStatusOrderByIdDesc(Long bookingId, PaymentStatus status);

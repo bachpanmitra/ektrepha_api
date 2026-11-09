@@ -30,6 +30,7 @@ import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminBookingSummaryResponse;
 import com.ektrepha.admin.dto.response.AdminChildRefResponse;
+import com.ektrepha.admin.dto.response.AdminElderRefResponse;
 import com.ektrepha.admin.dto.response.AdminNannyRefResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.dto.response.AdminParentRefResponse;
@@ -51,6 +52,7 @@ import com.ektrepha.model.BookingAttendance;
 import com.ektrepha.model.BookingEvent;
 import com.ektrepha.model.BookingEventType;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.Elder;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
 import com.ektrepha.model.ParentAddress;
@@ -61,6 +63,7 @@ import com.ektrepha.repository.AdminBookingCandidateRepository.CandidateRow;
 import com.ektrepha.repository.BookingAttendanceRepository;
 import com.ektrepha.repository.BookingEventRepository;
 import com.ektrepha.repository.BookingRepository;
+import com.ektrepha.repository.ParentElderRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ReviewRepository;
 import com.ektrepha.repository.ServiceabilityPincodeRepository;
@@ -98,6 +101,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final BookingAttendanceRepository bookingAttendanceRepository;
 	private final AttendanceMonthMapper attendanceMonthMapper;
 	private final BookingEventRepository bookingEventRepository;
+	private final ParentElderRepository parentElderRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -132,6 +136,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 		AdminChildRefResponse child = booking.getChild() == null ? null
 				: new AdminChildRefResponse(booking.getChild().getId(), booking.getChild().getFirstName(), ageYears(booking.getChild().getDob()));
 
+		AdminElderRefResponse elder = toElderRef(booking);
+
 		AdminAddressResponse address = booking.getAddress() == null ? null
 				: new AdminAddressResponse(booking.getAddress().getAddressLine1(), booking.getAddress().getAddressLine2(),
 						booking.getAddress().getLandmark(), booking.getAddress().getCity(), booking.getAddress().getState(), booking.getAddress().getPincode());
@@ -141,7 +147,21 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				booking.getStartTime(), booking.getEndTime(), booking.getCareNotes(), booking.getTotalAmount(), paymentStatus,
 				paymentReferenceId, paymentMethod,
 				new AdminParentRefResponse(booking.getParent().getId(), AdminBookingMapper.resolveParentName(booking), booking.getParent().getUser().getPhone(), booking.getParent().getUser().getEmail()),
-				nanny, child, address, booking.getCreatedAt(), booking.getCheckedInAt(), booking.getCheckedOutAt());
+				nanny, child, address, booking.getCreatedAt(), booking.getCheckedInAt(), booking.getCheckedOutAt(), elder);
+	}
+
+	// Elder Care counterpart of the child ref above, via parent_elder for relationship (not on the
+	// elders row itself booking.elder points straight at) plus the care-relevant detail ops needs here.
+	private AdminElderRefResponse toElderRef(Booking booking) {
+		Elder elder = booking.getElder();
+		if (elder == null) {
+			return null;
+		}
+		String relationship = parentElderRepository.findByIdParentIdAndIdElderId(booking.getParent().getId(), elder.getId())
+				.map(link -> link.getRelationship() == null ? null : link.getRelationship().name())
+				.orElse(null);
+		return new AdminElderRefResponse(elder.getId(), elder.getFirstName(), elder.getAge(), relationship, elder.getMobility().name(),
+				elder.getConditions(), elder.getAllergies(), elder.getMedicationNotes(), elder.getEmergencyContactName(), elder.getEmergencyContactPhone());
 	}
 
 	@Override

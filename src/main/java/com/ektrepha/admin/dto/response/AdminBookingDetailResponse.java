@@ -22,5 +22,7 @@ public record AdminBookingDetailResponse(
 		AdminAddressResponse address,
 		Instant createdAt,
 		Instant checkedInAt,
-		Instant checkedOutAt) {
+		Instant checkedOutAt,
+		// Elder Care counterpart of child above - null for a childcare booking.
+		AdminElderRefResponse elder) {
 }

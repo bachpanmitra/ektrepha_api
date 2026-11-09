@@ -103,3 +103,7 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/051-nanny-location-booking-event.yaml
   - include:
       file: classpath:db/changelog/changes/052-trip-reminder.yaml
+  - include:
+      file: classpath:db/changelog/changes/046-elder-care.yaml
+  - include:
+      file: classpath:db/changelog/changes/047-senior-care-pricing.yaml

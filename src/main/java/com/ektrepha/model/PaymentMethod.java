@@ -4,7 +4,8 @@ package com.ektrepha.model;
 public enum PaymentMethod implements CodedEnum {
 
 	UPI(1),
-	CARD(2);
+	CARD(2),
+	NETBANKING(3);
 
 	private final int code;
 

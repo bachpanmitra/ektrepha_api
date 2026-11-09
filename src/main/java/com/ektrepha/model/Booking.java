@@ -51,6 +51,12 @@ public class Booking {
 	@JoinColumn(name = "child_id")
 	private Children child;
 
+	// The senior_care counterpart of child above - mutually exclusive with it, both at the app
+	// layer (HourlyCareServiceImpl#validateCareRecipient) and via the DB's chk_booking_child_xor_elder.
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "elder_id")
+	private Elder elder;
+
 	/** Which vertical this booking is for. child is only required when this is 'childcare' — enforced at the app layer, not the DB. */
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "service_type_id", nullable = false)

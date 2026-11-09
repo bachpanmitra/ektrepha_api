@@ -16,5 +16,7 @@ public record BookingCardResponse(
 		Long elapsedSeconds,
 		boolean reviewPending,
 		// ONE_TIME/REPEAT_DAILY/REPEAT_WEEKLY/REPEAT_MONTHLY — lets the list badge a recurring occurrence.
-		String frequency) {
+		String frequency,
+		// Elder Care counterpart of child above - null for a childcare booking.
+		ElderBookingSummary elder) {
 }

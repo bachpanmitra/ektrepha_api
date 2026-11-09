@@ -23,5 +23,8 @@ public record HourlyCareBookingCreateRequest(
 		@NotNull Instant endTime,
 		@Size(max = 500) String careNotes,
 		@NotNull PricingMode pricingMode,
-		UUID quoteId) {
+		UUID quoteId,
+		// Elder Care — see AvailabilityCheckRequest's matching fields.
+		String serviceTypeCode,
+		Long elderId) {
 }

@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 47
+      author: ektrepha
+      description: Seeds senior_care zone pricing/dynamic-pricing/serviceability rows (copied from childcare) and Elder Care skills
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/047-senior-care-pricing.sql
+            relativeToChangelogFile: false
