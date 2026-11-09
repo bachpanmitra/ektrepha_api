@@ -33,6 +33,7 @@ import com.ektrepha.admin.dto.response.AdminChildRefResponse;
 import com.ektrepha.admin.dto.response.AdminNannyRefResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
 import com.ektrepha.admin.dto.response.AdminParentRefResponse;
+import com.ektrepha.admin.dto.response.AdminTripStatusResponse;
 import com.ektrepha.admin.service.AdminBookingService;
 import com.ektrepha.booking.dto.response.AttendanceDayEntry;
 import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
@@ -47,6 +48,8 @@ import com.ektrepha.model.AttendanceMethod;
 import com.ektrepha.model.AttendanceStatus;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingAttendance;
+import com.ektrepha.model.BookingEvent;
+import com.ektrepha.model.BookingEventType;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
@@ -56,6 +59,7 @@ import com.ektrepha.model.User;
 import com.ektrepha.repository.AdminBookingCandidateRepository;
 import com.ektrepha.repository.AdminBookingCandidateRepository.CandidateRow;
 import com.ektrepha.repository.BookingAttendanceRepository;
+import com.ektrepha.repository.BookingEventRepository;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.PaymentTransactionRepository;
 import com.ektrepha.repository.ReviewRepository;
@@ -93,6 +97,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final BookingCancellationLogService bookingCancellationLogService;
 	private final BookingAttendanceRepository bookingAttendanceRepository;
 	private final AttendanceMonthMapper attendanceMonthMapper;
+	private final BookingEventRepository bookingEventRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -291,6 +296,65 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 		row = bookingAttendanceRepository.save(row);
 		log.info("Ops manual check-out: bookingAttendanceId={}, bookingId={}, adminUserId={}, date={}", row.getId(), bookingId, adminUserId, date);
 		return attendanceMonthMapper.toResponse(bookingId, date.toString(), List.of(row), true).days().get(0);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public AdminTripStatusResponse tripStatus(Long bookingId) {
+		if (!bookingRepository.existsById(bookingId)) {
+			throw new BookingNotFoundException("No booking found with id " + bookingId);
+		}
+		LocalDate today = LocalDate.now(INDIA_ZONE);
+		BookingEvent tripStarted = bookingEventRepository.findByBookingIdAndEventDateAndType(bookingId, today, BookingEventType.TRIP_STARTED).orElse(null);
+		BookingEvent arrived = bookingEventRepository.findByBookingIdAndEventDateAndType(bookingId, today, BookingEventType.ARRIVED).orElse(null);
+
+		String status = arrived != null ? "ARRIVED" : tripStarted != null ? "ON_THE_WAY" : "NOT_STARTED";
+		BookingEvent latest = arrived != null ? arrived : tripStarted;
+		return new AdminTripStatusResponse(bookingId, today, status,
+				tripStarted == null ? null : tripStarted.getCreatedAt(),
+				arrived == null ? null : arrived.getCreatedAt(),
+				latest == null ? null : latest.getLat(),
+				latest == null ? null : latest.getLng());
+	}
+
+	@Override
+	@Transactional
+	public AdminBookingDetailResponse start(Long adminUserId, Long bookingId) {
+		Booking booking = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+		if (booking.getStatus() != BookingStatus.CONFIRMED) {
+			throw new InvalidBookingTransitionException("Care can only be started from a CONFIRMED booking");
+		}
+
+		booking.setStatus(BookingStatus.IN_PROGRESS);
+		bookingRepository.save(booking);
+
+		User admin = userRepository.findById(adminUserId).orElse(null);
+		orderActivityService.log(booking, OrderActivityType.BOOKING_STARTED, OrderActivityActorType.ADMIN, adminUserId,
+				admin == null ? null : admin.getName());
+
+		log.info("Booking started by admin: id={}, adminUserId={}", booking.getId(), adminUserId);
+		return detail(bookingId);
+	}
+
+	@Override
+	@Transactional
+	public AdminBookingDetailResponse complete(Long adminUserId, Long bookingId) {
+		Booking booking = bookingRepository.findById(bookingId)
+				.orElseThrow(() -> new BookingNotFoundException("No booking found with id " + bookingId));
+		if (booking.getStatus() != BookingStatus.IN_PROGRESS) {
+			throw new InvalidBookingTransitionException("Care can only be completed from an IN_PROGRESS booking");
+		}
+
+		booking.setStatus(BookingStatus.COMPLETED);
+		bookingRepository.save(booking);
+
+		User admin = userRepository.findById(adminUserId).orElse(null);
+		orderActivityService.log(booking, OrderActivityType.BOOKING_COMPLETED, OrderActivityActorType.ADMIN, adminUserId,
+				admin == null ? null : admin.getName());
+
+		log.info("Booking completed by admin: id={}, adminUserId={}", booking.getId(), adminUserId);
+		return detail(bookingId);
 	}
 
 	// {id} may be any occurrence of a recurring series - resolves the ACTUAL Booking row for the

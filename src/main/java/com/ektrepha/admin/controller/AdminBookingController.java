@@ -19,6 +19,7 @@ import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
+import com.ektrepha.admin.dto.response.AdminTripStatusResponse;
 import com.ektrepha.admin.service.AdminBookingService;
 import com.ektrepha.booking.dto.response.AttendanceDayEntry;
 import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
@@ -86,6 +87,25 @@ public class AdminBookingController {
 	public ResponseEntity<AttendanceDayEntry> manualCheckOut(Authentication authentication, @PathVariable Long id,
 			@PathVariable LocalDate date, @Valid @RequestBody ManualAttendanceRequest request) {
 		return ResponseEntity.ok(adminBookingService.manualCheckOut(Long.valueOf(authentication.getName()), id, date, request));
+	}
+
+	// Ops visibility into the nanny's "on the way"/arrived state for today — the parent and the
+	// nanny already have their own equivalents (NannyTripController's own /eta).
+	@GetMapping("/{id}/trip-status")
+	public ResponseEntity<AdminTripStatusResponse> tripStatus(@PathVariable Long id) {
+		return ResponseEntity.ok(adminBookingService.tripStatus(id));
+	}
+
+	// Ops override of the nanny's own start-care/complete-care actions, for when the nanny can't or
+	// didn't tap it themselves (app issue, phone dead, etc).
+	@PostMapping("/{id}/start")
+	public ResponseEntity<AdminBookingDetailResponse> start(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(adminBookingService.start(Long.valueOf(authentication.getName()), id));
+	}
+
+	@PostMapping("/{id}/complete")
+	public ResponseEntity<AdminBookingDetailResponse> complete(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(adminBookingService.complete(Long.valueOf(authentication.getName()), id));
 	}
 
 }

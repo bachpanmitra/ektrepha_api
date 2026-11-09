@@ -9,6 +9,7 @@ import com.ektrepha.admin.dto.response.AdminBookingCandidateResponse;
 import com.ektrepha.admin.dto.response.AdminBookingDetailResponse;
 import com.ektrepha.admin.dto.response.AdminBookingListResponse;
 import com.ektrepha.admin.dto.response.AdminOrderActivityResponse;
+import com.ektrepha.admin.dto.response.AdminTripStatusResponse;
 import com.ektrepha.booking.dto.response.AttendanceDayEntry;
 import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.model.BookingStatus;
@@ -37,5 +38,17 @@ public interface AdminBookingService {
 	AttendanceDayEntry manualCheckIn(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request);
 
 	AttendanceDayEntry manualCheckOut(Long adminUserId, Long bookingId, LocalDate date, ManualAttendanceRequest request);
+
+	// Visibility into the nanny's "on the way"/arrived state for today — the parent and the nanny
+	// already have their own equivalents (NannyTripService#parentEta / #nannyEta); ops had no way to
+	// see this at all.
+	AdminTripStatusResponse tripStatus(Long bookingId);
+
+	// Ops override of the nanny's own start-care/complete-care actions (NannyBookingService), for
+	// when the nanny can't or didn't tap it themselves (e.g. app issue, phone dead) — same
+	// CONFIRMED->IN_PROGRESS->COMPLETED transitions, just admin-initiated and logged as such.
+	AdminBookingDetailResponse start(Long adminUserId, Long bookingId);
+
+	AdminBookingDetailResponse complete(Long adminUserId, Long bookingId);
 
 }
