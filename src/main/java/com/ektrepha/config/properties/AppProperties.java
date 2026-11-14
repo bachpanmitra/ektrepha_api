@@ -34,7 +34,8 @@ public record AppProperties(
 		@Valid @NotNull Sms sms,
 		@Valid @NotNull OlaMaps olaMaps,
 		@Valid @NotNull Razorpay razorpay,
-		@Valid @NotNull Trial trial) {
+		@Valid @NotNull Trial trial,
+		@Valid @NotNull CareManager careManager) {
 
 	public record Jwt(
 			@NotBlank @Size(min = 32, message = "must be at least 32 characters (256 bits) for HS256 signing") String secret,
@@ -239,5 +240,32 @@ public record AppProperties(
 			@NotNull @Positive Integer careDateLimitDays,
 			@NotNull @Positive Integer quoteLockMinutes,
 			@NotBlank String hashSalt) {
+	}
+
+	/**
+	 * Care Manager feature (docs/api/openapi.yaml). {@code seniorManagerPhone} is the fallback
+	 * contact alerted when auto-assignment has to pick an over-cap CM, or when a task has no
+	 * on-duty CM owner (business rules 1 and 7) — may be blank in dev/stage, same convention as
+	 * {@link OlaMaps#apiKey()}: the alert is then only logged, never sent. {@code sms} template ids
+	 * follow the same convention as {@code app.sms.msg91.template-id} — each must be a real
+	 * DLT-registered MSG91 template id in any environment that actually sends these; blank means
+	 * that specific message is only logged, not sent (dev/stage default).
+	 */
+	public record CareManager(
+			String seniorManagerPhone,
+			@Valid @NotNull Backfill backfill,
+			@Valid @NotNull Sms sms) {
+
+		/**
+		 * CmBackfillRunner. {@code enabled} gates whether it runs at all (off by default — this is
+		 * one-off ops tooling, not something that should run on every app/test startup);
+		 * {@code dryRun} (on by default) logs the plan without writing anything, for staging
+		 * verification before a real run.
+		 */
+		public record Backfill(@DefaultValue("false") boolean enabled, @DefaultValue("true") boolean dryRun) {
+		}
+
+		public record Sms(String meetYourCmTemplateId, String cmChangingTemplateId) {
+		}
 	}
 }

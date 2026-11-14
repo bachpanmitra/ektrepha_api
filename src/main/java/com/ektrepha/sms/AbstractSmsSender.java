@@ -70,6 +70,37 @@ public abstract class AbstractSmsSender {
 		}
 	}
 
+	/**
+	 * Sends an arbitrary DLT-registered template, unlike {@link #send(String, String)} which is
+	 * fixed to this instance's own OTP template — used by callers (e.g. CmNotificationService)
+	 * that send several different templates through the same MSG91 account. {@code templateId}
+	 * blank/null means this particular message has no real template registered yet in this
+	 * environment (dev/stage default, same convention as the OTP template) — logged and skipped,
+	 * not an error.
+	 */
+	protected boolean sendTemplated(String e164MobileNumber, String templateId, Map<String, Object> variables) {
+		if (templateId == null || templateId.isBlank()) {
+			log.info("No MSG91 template configured — skipping SMS to {}", e164MobileNumber);
+			return false;
+		}
+		Map<String, Object> recipient = new HashMap<>(variables);
+		recipient.put("mobiles", toMsg91MobileFormat(e164MobileNumber));
+		if (senderId != null && !senderId.isBlank()) {
+			recipient.put("SENDERID", senderId);
+		}
+		try {
+			msg91Client.post()
+					.uri("/flow")
+					.body(new Msg91FlowRequest(templateId, List.of(recipient)))
+					.retrieve()
+					.toBodilessEntity();
+			return true;
+		} catch (RestClientException e) {
+			log.warn("Failed to send SMS to {} via MSG91 (template {}): {}", e164MobileNumber, templateId, e.getMessage());
+			return false;
+		}
+	}
+
 	/** MSG91 expects a bare national number (e.g. "919876543210"), not the leading '+' of E.164. */
 	private static String toMsg91MobileFormat(String e164MobileNumber) {
 		return e164MobileNumber.startsWith("+") ? e164MobileNumber.substring(1) : e164MobileNumber;

@@ -138,3 +138,11 @@ app:
     # min" scheduled sweep.
     expiry-cron: ${TRIAL_EXPIRY_CRON:0 */5 * * * *}
     notification-cron: ${TRIAL_NOTIFICATION_CRON:0 */5 * * * *}
+  care-manager:
+    senior-manager-phone: ${CM_SENIOR_MANAGER_PHONE:}
+    backfill:
+      enabled: ${CM_BACKFILL_ENABLED:false}
+      dry-run: ${CM_BACKFILL_DRY_RUN:true}
+    sms:
+      meet-your-cm-template-id: ${CM_SMS_MEET_YOUR_CM_TEMPLATE_ID:}
+      cm-changing-template-id: ${CM_SMS_CM_CHANGING_TEMPLATE_ID:}

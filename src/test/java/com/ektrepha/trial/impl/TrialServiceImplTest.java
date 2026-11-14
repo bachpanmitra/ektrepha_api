@@ -82,7 +82,7 @@ class TrialServiceImplTest {
 	@BeforeEach
 	void setUp() {
 		AppProperties.Trial trial = new AppProperties.Trial(true, 7200L, FREE_HOURS_CAP, CARE_DATE_LIMIT_DAYS, 15, SALT);
-		appProperties = new AppProperties(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, trial);
+		appProperties = new AppProperties(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, trial, null);
 		service = new TrialServiceImpl(parentTrialRepository, parentRepository, bookingRepository, parentResolver,
 				paymentGatewayService, analyticsService, trialEmailService, appProperties, transactionManager);
 		org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(null);
@@ -96,7 +96,7 @@ class TrialServiceImplTest {
 	@Test
 	void onFirstOtpVerification_disabled_doesNothing() {
 		AppProperties.Trial disabled = new AppProperties.Trial(false, 7200L, FREE_HOURS_CAP, CARE_DATE_LIMIT_DAYS, 15, SALT);
-		AppProperties disabledProps = new AppProperties(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, disabled);
+		AppProperties disabledProps = new AppProperties(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, disabled, null);
 		TrialServiceImpl disabledService = new TrialServiceImpl(parentTrialRepository, parentRepository, bookingRepository, parentResolver,
 				paymentGatewayService, analyticsService, trialEmailService, disabledProps, transactionManager);
 

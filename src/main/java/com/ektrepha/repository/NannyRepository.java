@@ -17,6 +17,9 @@ public interface NannyRepository extends JpaRepository<Nanny, Long> {
 
 	Optional<Nanny> findByUserId(Long userId);
 
+	/** Care Manager backfill only (CmBackfillRunner). */
+	List<Nanny> findByCareManagerIsNull();
+
 	// For VerificationExpiryAuditJob's periodic re-verification check: every APPROVED nanny whose
 	// last status change (i.e. the approval itself) is older than the 12-month re-verification
 	// window.

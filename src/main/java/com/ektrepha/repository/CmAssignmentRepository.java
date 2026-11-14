@@ -12,4 +12,8 @@ public interface CmAssignmentRepository extends JpaRepository<CmAssignment, Long
 
 	Optional<CmAssignment> findByNannyIdAndUnassignedAtIsNull(Long nannyId);
 
+	long countByCareManagerIdAndUnassignedAtIsNullAndParentIsNotNull(Long careManagerId);
+
+	long countByCareManagerIdAndUnassignedAtIsNullAndNannyIsNotNull(Long careManagerId);
+
 }

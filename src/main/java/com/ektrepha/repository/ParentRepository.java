@@ -1,5 +1,6 @@
 package com.ektrepha.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +14,9 @@ import com.ektrepha.model.Parent;
 public interface ParentRepository extends JpaRepository<Parent, Long> {
 
 	Optional<Parent> findByUserId(Long userId);
+
+	/** Care Manager backfill only (CmBackfillRunner). */
+	List<Parent> findByCareManagerIsNull();
 
 	// Admin parent detail — parent's own user row (name/email/phone), not the requesting admin's.
 	@Query("SELECT p FROM Parent p JOIN FETCH p.user WHERE p.id = :id")

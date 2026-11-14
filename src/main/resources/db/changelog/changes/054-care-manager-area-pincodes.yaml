@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 54
+      author: ektrepha
+      description: Pincode -> Care Manager area reference data (BROOKEFIELD/WHITEFIELD)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/054-care-manager-area-pincodes.sql
+            relativeToChangelogFile: false

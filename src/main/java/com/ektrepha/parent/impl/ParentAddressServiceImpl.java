@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.caremanager.service.CmAssignmentService;
 import com.ektrepha.exception.AddressInUseException;
 import com.ektrepha.exception.ParentAddressNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
@@ -37,6 +38,7 @@ public class ParentAddressServiceImpl implements ParentAddressService {
 	private final ParentAddressRepository parentAddressRepository;
 	private final BookingRepository bookingRepository;
 	private final AddressResponseMapper addressResponseMapper;
+	private final CmAssignmentService cmAssignmentService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -81,6 +83,13 @@ public class ParentAddressServiceImpl implements ParentAddressService {
 			clearExistingPrimary(parent.getId());
 		}
 		address = parentAddressRepository.save(address);
+
+		// Care Manager business rule 1: this is the first point a parent's area is actually
+		// knowable (auto-vivification at P1/P2 happens with no address at all) — a no-op if the
+		// parent already has a CM.
+		if (isFirstAddress) {
+			cmAssignmentService.autoAssignParentIfNeeded(parent);
+		}
 		return toResponse(address);
 	}
 

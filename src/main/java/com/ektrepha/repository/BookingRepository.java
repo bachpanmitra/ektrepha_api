@@ -18,6 +18,25 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	Optional<Booking> findByIdAndParentId(Long id, Long parentId);
 
+	/** Care Manager backfill only (CmBackfillRunner) — every nanny's booking count per CM area, via each booking's address pincode (migration 054's reference data). */
+	@Query(value = """
+			SELECT b.nanny_id AS nannyId, cap.area AS area, count(*) AS bookingCount
+			FROM booking b
+			JOIN parent_address pa ON pa.id = b.address_id
+			JOIN cm_area_pincodes cap ON cap.pincode = pa.pincode
+			WHERE b.nanny_id IS NOT NULL
+			GROUP BY b.nanny_id, cap.area
+			""", nativeQuery = true)
+	List<NannyAreaBookingCount> findNannyAreaBookingCounts();
+
+	interface NannyAreaBookingCount {
+		Long getNannyId();
+
+		String getArea();
+
+		Long getBookingCount();
+	}
+
 	// Nanny-side lifecycle actions (start/complete care) - scoped to the assigned caregiver, same
 	// ownership-check shape as findByIdAndParentId is for the parent side.
 	Optional<Booking> findByIdAndNannyId(Long id, Long nannyId);
