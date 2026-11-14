@@ -275,7 +275,8 @@ public record AppProperties(
 		public record Backfill(@DefaultValue("false") boolean enabled, @DefaultValue("true") boolean dryRun) {
 		}
 
-		public record Sms(String meetYourCmTemplateId, String cmChangingTemplateId) {
+		public record Sms(String meetYourCmTemplateId, String cmChangingTemplateId, String taskOverdueTemplateId,
+				String safetyEscalationTemplateId) {
 		}
 	}
 }

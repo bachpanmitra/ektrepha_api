@@ -20,11 +20,13 @@ import com.ektrepha.caremanager.dto.response.ComplaintResponse;
 import com.ektrepha.caremanager.event.ComplaintRaisedPayload;
 import com.ektrepha.caremanager.service.CareManagerAccessService;
 import com.ektrepha.caremanager.service.CmComplaintService;
+import com.ektrepha.caremanager.service.CmNotificationService;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.CmResourceNotFoundException;
 import com.ektrepha.exception.CmValidationException;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.CareManager;
+import com.ektrepha.model.CmDutyShift;
 import com.ektrepha.model.Complaint;
 import com.ektrepha.model.ComplaintCategory;
 import com.ektrepha.model.ComplaintStatus;
@@ -33,6 +35,7 @@ import com.ektrepha.model.NannyOperationalStatus;
 import com.ektrepha.model.Parent;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CareManagerRepository;
+import com.ektrepha.repository.CmDutyShiftRepository;
 import com.ektrepha.repository.ComplaintRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentRepository;
@@ -52,7 +55,9 @@ public class CmComplaintServiceImpl implements CmComplaintService {
 	private final NannyRepository nannyRepository;
 	private final BookingRepository bookingRepository;
 	private final CareManagerRepository careManagerRepository;
+	private final CmDutyShiftRepository cmDutyShiftRepository;
 	private final CareManagerAccessService careManagerAccessService;
+	private final CmNotificationService cmNotificationService;
 	private final OutboxEventWriter outboxEventWriter;
 	private final AppProperties appProperties;
 	private final Clock clock;
@@ -112,6 +117,10 @@ public class CmComplaintServiceImpl implements CmComplaintService {
 		if (safety && nanny != null) {
 			nanny.setStatus(NannyOperationalStatus.SUSPENDED);
 			nannyRepository.save(nanny);
+		}
+		if (safety) {
+			List<CmDutyShift> onDuty = cmDutyShiftRepository.findAnyCoveringNow(Instant.now(clock));
+			cmNotificationService.alertSafetyEscalation(complaint, onDuty.isEmpty() ? null : onDuty.get(0).getCareManager());
 		}
 
 		outboxEventWriter.write("ComplaintRaised",

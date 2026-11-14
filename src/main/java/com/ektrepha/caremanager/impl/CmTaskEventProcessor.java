@@ -18,6 +18,7 @@ import com.ektrepha.caremanager.event.NannyCheckedOutPayload;
 import com.ektrepha.caremanager.event.ParentRequestPayload;
 import com.ektrepha.caremanager.event.ParentSignedUpPayload;
 import com.ektrepha.caremanager.event.RatingSubmittedPayload;
+import com.ektrepha.caremanager.service.CmNotificationService;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter.TaskOwnerResolution;
 import com.ektrepha.model.CareManager;
@@ -57,6 +58,7 @@ public class CmTaskEventProcessor {
 	private final ReviewRepository reviewRepository;
 	private final CmTaskRepository cmTaskRepository;
 	private final CmTaskOwnerRouter cmTaskOwnerRouter;
+	private final CmNotificationService cmNotificationService;
 	private final Clock clock;
 
 	// No ObjectMapper bean is registered app-wide in this Spring Boot version — see
@@ -223,6 +225,7 @@ public class CmTaskEventProcessor {
 			task.setComplaint(Complaint.builder().id(complaintId).build());
 		}
 		cmTaskRepository.save(task);
+		cmNotificationService.notifyNewTask(resolution.owner(), task);
 	}
 
 	private <T> T read(OutboxEvent event, Class<T> type) {

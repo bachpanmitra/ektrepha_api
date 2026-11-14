@@ -26,6 +26,7 @@ import com.ektrepha.caremanager.dto.request.RaiseComplaintRequest;
 import com.ektrepha.caremanager.dto.request.UpdateComplaintRequest;
 import com.ektrepha.caremanager.event.ComplaintRaisedPayload;
 import com.ektrepha.caremanager.service.CareManagerAccessService;
+import com.ektrepha.caremanager.service.CmNotificationService;
 import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.exception.CmValidationException;
 import com.ektrepha.exception.NotYourRecordException;
@@ -40,6 +41,7 @@ import com.ektrepha.model.Parent;
 import com.ektrepha.model.UserType;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.CareManagerRepository;
+import com.ektrepha.repository.CmDutyShiftRepository;
 import com.ektrepha.repository.ComplaintRepository;
 import com.ektrepha.repository.NannyRepository;
 import com.ektrepha.repository.ParentRepository;
@@ -60,7 +62,11 @@ class CmComplaintServiceImplTest {
 	@Mock
 	private CareManagerRepository careManagerRepository;
 	@Mock
+	private CmDutyShiftRepository cmDutyShiftRepository;
+	@Mock
 	private CareManagerAccessService careManagerAccessService;
+	@Mock
+	private CmNotificationService cmNotificationService;
 	@Mock
 	private OutboxEventWriter outboxEventWriter;
 
@@ -72,8 +78,10 @@ class CmComplaintServiceImplTest {
 		AppProperties.CareManager cmProps = new AppProperties.CareManager(null, "cm_senior", null, null, true);
 		appProperties = new AppProperties(null, null, null, null, null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, cmProps);
+		org.mockito.Mockito.lenient().when(cmDutyShiftRepository.findAnyCoveringNow(any())).thenReturn(List.of());
 		service = new CmComplaintServiceImpl(complaintRepository, parentRepository, nannyRepository, bookingRepository,
-				careManagerRepository, careManagerAccessService, outboxEventWriter, appProperties, Clock.fixed(NOW, ZoneOffset.UTC));
+				careManagerRepository, cmDutyShiftRepository, careManagerAccessService, cmNotificationService, outboxEventWriter,
+				appProperties, Clock.fixed(NOW, ZoneOffset.UTC));
 	}
 
 	private CmCaller cmCaller(Long careManagerId) {

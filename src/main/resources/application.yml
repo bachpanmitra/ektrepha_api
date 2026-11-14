@@ -150,3 +150,5 @@ app:
     sms:
       meet-your-cm-template-id: ${CM_SMS_MEET_YOUR_CM_TEMPLATE_ID:}
       cm-changing-template-id: ${CM_SMS_CM_CHANGING_TEMPLATE_ID:}
+      task-overdue-template-id: ${CM_SMS_TASK_OVERDUE_TEMPLATE_ID:}
+      safety-escalation-template-id: ${CM_SMS_SAFETY_ESCALATION_TEMPLATE_ID:}

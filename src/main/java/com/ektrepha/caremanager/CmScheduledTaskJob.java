@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.caremanager.service.CmNotificationService;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter.TaskOwnerResolution;
 import com.ektrepha.caremanager.service.ParentStageService;
@@ -51,6 +52,7 @@ public class CmScheduledTaskJob {
 	private final CmTaskRepository cmTaskRepository;
 	private final ParentStageService parentStageService;
 	private final CmTaskOwnerRouter cmTaskOwnerRouter;
+	private final CmNotificationService cmNotificationService;
 	private final AppProperties appProperties;
 	private final Clock clock;
 
@@ -106,8 +108,7 @@ public class CmScheduledTaskJob {
 		for (CmTask task : cmTaskRepository.findByStatusAndDueAtBeforeAndOverdueAlertedAtIsNull(CmTaskStatus.OPEN, now)) {
 			task.setOverdueAlertedAt(now);
 			cmTaskRepository.save(task);
-			log.warn("Task {} ({}) for parent {} is overdue (due {})", task.getPublicId(), task.getType(),
-					task.getParent().getId(), task.getDueAt());
+			cmNotificationService.alertTaskOverdue(task);
 		}
 	}
 
@@ -123,14 +124,16 @@ public class CmScheduledTaskJob {
 		if (resolution.alertNeeded()) {
 			log.warn("No CM on duty to own scheduled task '{}' for parent {} due {}", title, parent.getId(), dueAt);
 		}
-		cmTaskRepository.save(CmTask.builder()
+		CmTask task = CmTask.builder()
 				.parent(parent)
 				.careManager(resolution.owner())
 				.type(type)
 				.priority(priority)
 				.title(title)
 				.dueAt(dueAt)
-				.build());
+				.build();
+		cmTaskRepository.save(task);
+		cmNotificationService.notifyNewTask(resolution.owner(), task);
 	}
 
 	private Instant endOfTodayIst() {

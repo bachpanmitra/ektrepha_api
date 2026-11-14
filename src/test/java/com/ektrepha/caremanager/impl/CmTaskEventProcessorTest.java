@@ -68,6 +68,8 @@ class CmTaskEventProcessorTest {
 	private CmTaskRepository cmTaskRepository;
 	@Mock
 	private CmTaskOwnerRouter cmTaskOwnerRouter;
+	@Mock
+	private com.ektrepha.caremanager.service.CmNotificationService cmNotificationService;
 
 	private CmTaskEventProcessor processor;
 	private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -77,7 +79,7 @@ class CmTaskEventProcessorTest {
 	@BeforeEach
 	void setUp() {
 		processor = new CmTaskEventProcessor(parentRepository, nannyRepository, complaintRepository, reviewRepository,
-				cmTaskRepository, cmTaskOwnerRouter, Clock.fixed(NOON_IST, ZoneOffset.UTC));
+				cmTaskRepository, cmTaskOwnerRouter, cmNotificationService, Clock.fixed(NOON_IST, ZoneOffset.UTC));
 		parent = Parent.builder().id(1L).build();
 		owner = CareManager.builder().id(5L).name("Owner CM").user(com.ektrepha.model.User.builder().id(50L).build()).build();
 		org.mockito.Mockito.lenient().when(parentRepository.findById(1L)).thenReturn(Optional.of(parent));
@@ -195,7 +197,7 @@ class CmTaskEventProcessorTest {
 	@Test
 	void cmContactRequested_atNight_dueInFourHours() throws Exception {
 		CmTaskEventProcessor nightProcessor = new CmTaskEventProcessor(parentRepository, nannyRepository, complaintRepository,
-				reviewRepository, cmTaskRepository, cmTaskOwnerRouter, Clock.fixed(NIGHT_IST, ZoneOffset.UTC));
+				reviewRepository, cmTaskRepository, cmTaskOwnerRouter, cmNotificationService, Clock.fixed(NIGHT_IST, ZoneOffset.UTC));
 
 		nightProcessor.process(event("CmContactRequested", new ParentRequestPayload(1L)));
 
