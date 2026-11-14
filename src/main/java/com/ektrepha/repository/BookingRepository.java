@@ -27,6 +27,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 	/** Care Manager complaint trial-refund eligibility window ("within 5 days of the first booking"). */
 	Optional<Booking> findFirstByParentIdOrderByStartTimeAsc(Long parentId);
 
+	/** Care Manager GET /me/care-manager — appends ", about booking {id}" to the WhatsApp message when the parent has one of these in flight. */
+	Optional<Booking> findFirstByParentIdAndStatusInOrderByStartTimeAsc(Long parentId, Collection<BookingStatus> statuses);
+
 	/** Care Manager parent-list — one batched fetch for every parent's bookings, instead of a per-parent "latest booking" query. */
 	List<Booking> findByParentIdInOrderByStartTimeDesc(Collection<Long> parentIds);
 
