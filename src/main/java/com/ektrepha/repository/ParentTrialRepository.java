@@ -23,6 +23,11 @@ public interface ParentTrialRepository extends JpaRepository<ParentTrial, UUID> 
 	/** Care Manager scheduler (trial day-4/daily check-ins) and stage derivation. */
 	List<ParentTrial> findByStatus(TrialStatus status);
 
+	/** Care Manager CM-summary/parent-list: batched trial lookup for a set of parents, avoiding a per-parent query. */
+	List<ParentTrial> findByParentIdInAndStatus(List<Long> parentIds, TrialStatus status);
+
+	long countByParentIdInAndStatus(List<Long> parentIds, TrialStatus status);
+
 	boolean existsByPhoneHash(String phoneHash);
 
 	boolean existsByDeviceIdHash(String deviceIdHash);

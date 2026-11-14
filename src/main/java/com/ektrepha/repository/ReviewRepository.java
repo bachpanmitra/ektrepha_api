@@ -1,6 +1,7 @@
 package com.ektrepha.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
 	/** Care Manager nanny-flag rule: 2+ ratings of 3 or lower in the last 90 days. */
 	long countByNannyIdAndRatingLessThanEqualAndCreatedAtAfter(Long nannyId, short rating, Instant after);
+
+	/** Care Manager NannyListItem.low_ratings_count — all-time, unlike the 90-day flag-rule window above. */
+	long countByNannyIdAndRatingLessThanEqual(Long nannyId, short rating);
+
+	/** Care Manager parent-list "low rating" issue hint — batched per parent instead of a per-parent query. */
+	@Query("SELECT DISTINCT r.parent.id FROM Review r WHERE r.parent.id IN :parentIds AND r.rating <= :rating")
+	List<Long> findParentIdsWithLowRating(@Param("parentIds") Collection<Long> parentIds, @Param("rating") short rating);
 
 	// Admin moderation list only - every review regardless of status, so ops can see and un-hide a
 	// HIDDEN one. Every other caller below needs the VISIBLE-only variant.

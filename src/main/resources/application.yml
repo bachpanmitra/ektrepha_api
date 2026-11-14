@@ -141,6 +141,7 @@ app:
   care-manager:
     senior-manager-phone: ${CM_SENIOR_MANAGER_PHONE:}
     senior-manager-care-manager-id: ${CM_SENIOR_MANAGER_CARE_MANAGER_ID:}
+    scheduling-enabled: ${CM_SCHEDULING_ENABLED:true}
     outbox-poll-interval-ms: ${CM_OUTBOX_POLL_INTERVAL_MS:2000}
     scheduler-cron: ${CM_SCHEDULER_CRON:0 * * * * *}
     backfill:

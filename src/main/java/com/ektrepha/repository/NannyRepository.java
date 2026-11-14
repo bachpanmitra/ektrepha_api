@@ -22,6 +22,21 @@ public interface NannyRepository extends JpaRepository<Nanny, Long> {
 	/** Care Manager backfill only (CmBackfillRunner). */
 	List<Nanny> findByCareManagerIsNull();
 
+	List<Nanny> findByCareManagerId(Long careManagerId);
+
+	List<Nanny> findByCareManagerIdAndStatus(Long careManagerId, com.ektrepha.model.NannyOperationalStatus status);
+
+	// GET /cm/nannies?q= — name (prefix, case-insensitive, either word) or phone (substring match,
+	// same convention as ParentRepository#search). Keyset ("cursor") pagination on id.
+	@Query("""
+			SELECT n FROM Nanny n JOIN n.user u
+			WHERE (LOWER(n.firstName) LIKE :namePattern OR LOWER(n.lastName) LIKE :namePattern OR u.phone LIKE :phonePattern)
+			  AND (:afterId IS NULL OR n.id > :afterId)
+			ORDER BY n.id ASC
+			""")
+	List<Nanny> search(@Param("namePattern") String namePattern, @Param("phonePattern") String phonePattern,
+			@Param("afterId") Long afterId, Pageable pageable);
+
 	// For VerificationExpiryAuditJob's periodic re-verification check: every APPROVED nanny whose
 	// last status change (i.e. the approval itself) is older than the 12-month re-verification
 	// window.

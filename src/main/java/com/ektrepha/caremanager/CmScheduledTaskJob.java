@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter;
 import com.ektrepha.caremanager.service.CmTaskOwnerRouter.TaskOwnerResolution;
 import com.ektrepha.caremanager.service.ParentStageService;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.model.CmTask;
 import com.ektrepha.model.CmTaskPriority;
 import com.ektrepha.model.CmTaskStatus;
@@ -50,11 +51,18 @@ public class CmScheduledTaskJob {
 	private final CmTaskRepository cmTaskRepository;
 	private final ParentStageService parentStageService;
 	private final CmTaskOwnerRouter cmTaskOwnerRouter;
+	private final AppProperties appProperties;
 	private final Clock clock;
 
+	// Disabled in the test profile (see CmOutboxPoller's comment) — a full parentRepository.findAll()
+	// sweep every minute inside *every* @SpringBootTest context is heavy enough on its own to be
+	// worth gating, independent of the interference risk.
 	@Scheduled(cron = "${app.care-manager.scheduler-cron:0 * * * * *}")
 	@Transactional
 	public void run() {
+		if (!appProperties.careManager().schedulingEnabled()) {
+			return;
+		}
 		createTrialCheckInTasks();
 		createMonthlyCheckIns();
 		raiseOverdueAlerts();

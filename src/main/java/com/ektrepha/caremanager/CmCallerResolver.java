@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.ektrepha.config.constants.SecurityConstants;
 import com.ektrepha.exception.CmResourceNotFoundException;
+import com.ektrepha.exception.NotYourRecordException;
 import com.ektrepha.model.CareManager;
 import com.ektrepha.model.UserType;
 import com.ektrepha.repository.CareManagerRepository;
@@ -41,6 +42,16 @@ public class CmCallerResolver {
 		CareManager careManager = careManagerRepository.findByUserId(userId)
 				.orElseThrow(() -> new CmResourceNotFoundException("No Care Manager profile for this account"));
 		return new CmCaller(role, userId, careManager.getId());
+	}
+
+	/** For /cm/me/** endpoints — Admin has no "mine", so this throws rather than returning one. */
+	public CareManager resolveOwnCareManager(Authentication authentication) {
+		CmCaller caller = resolve(authentication);
+		if (caller.isAdmin()) {
+			throw new NotYourRecordException("This endpoint is Care-Manager-only — there's no \"mine\" for Admin");
+		}
+		return careManagerRepository.findById(caller.careManagerId())
+				.orElseThrow(() -> new CmResourceNotFoundException("No Care Manager profile for this account"));
 	}
 
 }

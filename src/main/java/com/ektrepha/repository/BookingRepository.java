@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingStatus;
+import com.ektrepha.model.Parent;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
@@ -22,6 +23,23 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	/** Care Manager stage derivation (LAPSED = no booking in 60 days) and monthly-check-in scheduling. */
 	Optional<Booking> findFirstByParentIdOrderByStartTimeDesc(Long parentId);
+
+	/** Care Manager complaint trial-refund eligibility window ("within 5 days of the first booking"). */
+	Optional<Booking> findFirstByParentIdOrderByStartTimeAsc(Long parentId);
+
+	/** Care Manager parent-list — one batched fetch for every parent's bookings, instead of a per-parent "latest booking" query. */
+	List<Booking> findByParentIdInOrderByStartTimeDesc(Collection<Long> parentIds);
+
+	List<Booking> findByParentIdOrderByStartTimeDesc(Long parentId, Pageable pageable);
+
+	/** Care Manager NannyListItem.families_count — distinct parents across this nanny's lifetime bookings. */
+	@Query("SELECT COUNT(DISTINCT b.parent.id) FROM Booking b WHERE b.nanny.id = :nannyId")
+	long countDistinctParentsByNannyId(@Param("nannyId") Long nannyId);
+
+	List<Booking> findByNannyIdOrderByStartTimeDesc(Long nannyId, Pageable pageable);
+
+	@Query("SELECT DISTINCT b.parent FROM Booking b WHERE b.nanny.id = :nannyId")
+	List<Parent> findDistinctParentsByNannyId(@Param("nannyId") Long nannyId);
 
 	/** Care Manager backfill only (CmBackfillRunner) — every nanny's booking count per CM area, via each booking's address pincode (migration 054's reference data). */
 	@Query(value = """

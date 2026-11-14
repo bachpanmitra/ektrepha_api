@@ -40,7 +40,7 @@ class CmTaskOwnerRouterImplTest {
 
 	@BeforeEach
 	void setUp() {
-		cmProps = new AppProperties.CareManager(null, "cm_senior", null, null);
+		cmProps = new AppProperties.CareManager(null, "cm_senior", null, null, true);
 		AppProperties appProperties = new AppProperties(null, null, null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, null, null, cmProps);
 		router = new CmTaskOwnerRouterImpl(cmDutyShiftRepository, careManagerRepository, appProperties);
@@ -94,7 +94,7 @@ class CmTaskOwnerRouterImplTest {
 
 	@Test
 	void resolveOwner_nobodyOnDuty_noSeniorManagerConfigured_ownerNull_stillAlerts() {
-		cmProps = new AppProperties.CareManager(null, null, null, null);
+		cmProps = new AppProperties.CareManager(null, null, null, null, true);
 		AppProperties noSeniorProps = new AppProperties(null, null, null, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, null, null, cmProps);
 		router = new CmTaskOwnerRouterImpl(cmDutyShiftRepository, careManagerRepository, noSeniorProps);

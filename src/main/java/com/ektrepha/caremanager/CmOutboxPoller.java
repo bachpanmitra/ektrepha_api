@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ektrepha.caremanager.impl.CmTaskEventProcessor;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.model.OutboxEvent;
 import com.ektrepha.repository.OutboxEventRepository;
 
@@ -38,9 +39,18 @@ public class CmOutboxPoller {
 
 	private final OutboxEventRepository outboxEventRepository;
 	private final CmTaskEventProcessor cmTaskEventProcessor;
+	private final AppProperties appProperties;
 
+	// Every-2-second polling is far more aggressive than any other @Scheduled job in this codebase
+	// (hourly/daily crons) — unguarded, it fires inside *every* @SpringBootTest context (@EnableScheduling
+	// is on the main class), not just this feature's own tests, competing for the shared Hikari
+	// connection pool and causing unrelated tests to intermittently fail. Disabled in the test
+	// profile via the surefire plugin's environmentVariables, same convention as RATE_LIMIT_ENABLED.
 	@Scheduled(fixedDelayString = "${app.care-manager.outbox-poll-interval-ms:2000}")
 	public void poll() {
+		if (!appProperties.careManager().schedulingEnabled()) {
+			return;
+		}
 		for (int i = 0; i < MAX_PER_TICK; i++) {
 			boolean didWork = processOne();
 			if (!didWork) {

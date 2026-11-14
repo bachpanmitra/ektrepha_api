@@ -260,7 +260,11 @@ public record AppProperties(
 			// fallback leaves the task's owner null and only logs/alerts, rather than guessing.
 			String seniorManagerCareManagerId,
 			@Valid @NotNull Backfill backfill,
-			@Valid @NotNull Sms sms) {
+			@Valid @NotNull Sms sms,
+			// Gates CmOutboxPoller/CmScheduledTaskJob — off in the test profile (surefire's
+			// environmentVariables), since both would otherwise fire inside every @SpringBootTest
+			// context in this app, not just this feature's own tests.
+			@DefaultValue("true") boolean schedulingEnabled) {
 
 		/**
 		 * CmBackfillRunner. {@code enabled} gates whether it runs at all (off by default — this is

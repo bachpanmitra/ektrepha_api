@@ -249,6 +249,14 @@
 					-->
 					<environmentVariables>
 						<RATE_LIMIT_ENABLED>false</RATE_LIMIT_ENABLED>
+						<!--
+							CmOutboxPoller (every 2s) and CmScheduledTaskJob (every minute) are
+							@Scheduled beans that fire inside every @SpringBootTest context in this
+							app (@EnableScheduling is on the main class), not just this feature's own
+							tests - same shared-singleton-across-the-JVM concern as RATE_LIMIT_ENABLED
+							above, and one found by a real cross-test failure, not just in theory.
+						-->
+						<CM_SCHEDULING_ENABLED>false</CM_SCHEDULING_ENABLED>
 					</environmentVariables>
 				</configuration>
 			</plugin>
