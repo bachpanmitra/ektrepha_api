@@ -15,6 +15,8 @@ public interface ParentRepository extends JpaRepository<Parent, Long> {
 
 	Optional<Parent> findByUserId(Long userId);
 
+	Optional<Parent> findByPublicId(String publicId);
+
 	/** Care Manager backfill only (CmBackfillRunner). */
 	List<Parent> findByCareManagerIsNull();
 

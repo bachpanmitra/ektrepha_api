@@ -17,6 +17,8 @@ public interface NannyRepository extends JpaRepository<Nanny, Long> {
 
 	Optional<Nanny> findByUserId(Long userId);
 
+	Optional<Nanny> findByPublicId(String publicId);
+
 	/** Care Manager backfill only (CmBackfillRunner). */
 	List<Nanny> findByCareManagerIsNull();
 

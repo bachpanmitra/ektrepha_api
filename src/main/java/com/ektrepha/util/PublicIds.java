@@ -28,6 +28,8 @@ public final class PublicIds {
 	public static final String CHANGE_REQUEST_PREFIX = "chg_";
 	/** No contract-mandated prefix (cm_duty_shifts has no GET-by-id endpoint) — picked for internal consistency. */
 	public static final String DUTY_SHIFT_PREFIX = "shf_";
+	/** Only ever surfaced for ADMIN-role users (Assignment.assigned_by, AccessLogEntry.actor) — see migration 055. */
+	public static final String ADMIN_PREFIX = "adm_";
 
 	private PublicIds() {
 	}

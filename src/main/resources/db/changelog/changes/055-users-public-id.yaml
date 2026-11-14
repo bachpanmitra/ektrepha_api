@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 55
+      author: ektrepha
+      description: Add a public_id column to users (Care Manager admin-API actor references)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/055-users-public-id.sql
+            relativeToChangelogFile: false

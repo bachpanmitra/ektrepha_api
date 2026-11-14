@@ -111,3 +111,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/053-care-manager-schema.yaml
   - include:
       file: classpath:db/changelog/changes/054-care-manager-area-pincodes.yaml
+  - include:
+      file: classpath:db/changelog/changes/055-users-public-id.yaml

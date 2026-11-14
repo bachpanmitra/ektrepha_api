@@ -12,6 +12,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import com.ektrepha.util.PublicIds;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,6 +32,10 @@ public class User {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	/** Opaque external id (adm_1a4) — only ever surfaced for ADMIN-role users by the Care Manager feature; every other endpoint still uses {@link #id}. */
+	@Column(name = "public_id", nullable = false, unique = true, length = 20)
+	private String publicId;
 
 	private String name;
 
@@ -87,6 +93,9 @@ public class User {
 		Instant now = Instant.now();
 		this.createdAt = now;
 		this.updatedAt = now;
+		if (this.publicId == null) {
+			this.publicId = PublicIds.of(PublicIds.ADMIN_PREFIX);
+		}
 	}
 
 	@PreUpdate

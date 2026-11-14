@@ -37,6 +37,14 @@ public class CareManagerExceptionHandler {
 		return build(ex.getStatus(), ex.getCode(), ex.getMessage(), ex.getFields());
 	}
 
+	// These pre-date this feature (shared with the rest of the app, where GlobalExceptionHandler
+	// maps them to the flat shape instead) — reused here rather than introducing parallel
+	// CM-specific not-found types for the same underlying entities.
+	@ExceptionHandler({ ParentNotFoundException.class, NannyNotFoundException.class, BookingNotFoundException.class, UserNotFoundException.class })
+	public ResponseEntity<CmErrorResponse> handleNotFound(RuntimeException ex) {
+		return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), null);
+	}
+
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<CmErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
 		var fields = ex.getBindingResult().getFieldErrors().stream()
