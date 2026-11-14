@@ -5,8 +5,8 @@ import java.time.Instant;
 import com.ektrepha.model.CmContactChannel;
 import com.ektrepha.model.CmContactDirection;
 import com.ektrepha.model.CmContactSource;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** docs/api/openapi.yaml#/components/schemas/Contact */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

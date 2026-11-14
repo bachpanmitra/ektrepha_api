@@ -15,7 +15,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import com.ektrepha.caremanager.dto.response.CmErrorResponse;
@@ -25,8 +24,11 @@ import com.ektrepha.repository.IdempotencyKeyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,11 +73,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		ContentCachingRequestWrapper cachedRequest = new ContentCachingRequestWrapper(request, 65536);
-		// Force the body to be read/cached now, before any downstream code (including this method)
-		// consumes the stream, since ContentCachingRequestWrapper only buffers what's actually read.
-		cachedRequest.getInputStream().readAllBytes();
-		String requestHash = hash(method + ":" + request.getRequestURI() + ":" + new String(cachedRequest.getContentAsByteArray(), StandardCharsets.UTF_8));
+		// ContentCachingRequestWrapper only populates its cache as a side effect of downstream code
+		// reading the body - it does NOT let a second reader (like us, needing the body up front to
+		// hash it) replay what's already been consumed. So read the raw bytes ourselves first, then
+		// hand downstream code a wrapper backed by those same bytes so @RequestBody still sees them.
+		byte[] bodyBytes = request.getInputStream().readAllBytes();
+		HttpServletRequest cachedRequest = new CachedBodyRequestWrapper(request, bodyBytes);
+		String requestHash = hash(method + ":" + request.getRequestURI() + ":" + new String(bodyBytes, StandardCharsets.UTF_8));
 
 		IdempotencyKey.Id id = IdempotencyKey.Id.builder().key(key).userId(userId).build();
 		Optional<IdempotencyKey> existing = idempotencyKeyRepository.findById(id);
@@ -142,6 +146,47 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
 		} catch (NoSuchAlgorithmException ex) {
 			throw new IllegalStateException("SHA-256 not available", ex);
+		}
+	}
+
+	/** Replays an already-consumed body for downstream readers (Spring's own caching wrapper can't do this - see above). */
+	private static final class CachedBodyRequestWrapper extends HttpServletRequestWrapper {
+
+		private final byte[] body;
+
+		private CachedBodyRequestWrapper(HttpServletRequest request, byte[] body) {
+			super(request);
+			this.body = body;
+		}
+
+		@Override
+		public ServletInputStream getInputStream() {
+			java.io.ByteArrayInputStream byteStream = new java.io.ByteArrayInputStream(body);
+			return new ServletInputStream() {
+				@Override
+				public boolean isFinished() {
+					return byteStream.available() == 0;
+				}
+
+				@Override
+				public boolean isReady() {
+					return true;
+				}
+
+				@Override
+				public void setReadListener(ReadListener readListener) {
+				}
+
+				@Override
+				public int read() {
+					return byteStream.read();
+				}
+			};
+		}
+
+		@Override
+		public java.io.BufferedReader getReader() {
+			return new java.io.BufferedReader(new java.io.InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
 		}
 	}
 

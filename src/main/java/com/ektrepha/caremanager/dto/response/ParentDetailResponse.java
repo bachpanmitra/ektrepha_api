@@ -5,8 +5,8 @@ import java.util.List;
 
 import com.ektrepha.model.CmArea;
 import com.ektrepha.model.ParentStage;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** docs/api/openapi.yaml#/components/schemas/ParentDetail */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

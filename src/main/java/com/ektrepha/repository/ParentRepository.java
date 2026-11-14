@@ -34,7 +34,7 @@ public interface ParentRepository extends JpaRepository<Parent, Long> {
 	@Query("""
 			SELECT p FROM Parent p JOIN p.user u
 			WHERE (LOWER(p.firstName) LIKE :namePattern OR LOWER(p.lastName) LIKE :namePattern OR u.phone LIKE :phonePattern)
-			  AND (:afterId IS NULL OR p.id > :afterId)
+			  AND (cast(:afterId as Long) IS NULL OR p.id > :afterId)
 			ORDER BY p.id ASC
 			""")
 	List<Parent> search(@Param("namePattern") String namePattern, @Param("phonePattern") String phonePattern,

@@ -36,9 +36,9 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Long> {
 	// Keyset ("cursor") pagination, newest first — GET /cm/complaints.
 	@Query("""
 			SELECT c FROM Complaint c
-			WHERE (:careManagerId IS NULL OR c.careManager.id = :careManagerId)
-			  AND (:status IS NULL OR c.status = :status)
-			  AND (:beforeRaisedAt IS NULL OR c.raisedAt < :beforeRaisedAt
+			WHERE (cast(:careManagerId as Long) IS NULL OR c.careManager.id = :careManagerId)
+			  AND (cast(:status as String) IS NULL OR c.status = :status)
+			  AND (cast(:beforeRaisedAt as Instant) IS NULL OR c.raisedAt < :beforeRaisedAt
 			       OR (c.raisedAt = :beforeRaisedAt AND c.id < :beforeId))
 			ORDER BY c.raisedAt DESC, c.id DESC
 			""")

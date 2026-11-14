@@ -4,8 +4,8 @@ import java.time.Instant;
 
 import com.ektrepha.model.AccessLogAction;
 import com.ektrepha.model.AccessLogRecordType;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** docs/api/openapi.yaml#/components/schemas/AccessLogEntry */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

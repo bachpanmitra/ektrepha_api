@@ -17,7 +17,7 @@ public interface CmContactRepository extends JpaRepository<CmContact, Long> {
 	@Query("""
 			SELECT c FROM CmContact c
 			WHERE c.parent.id = :parentId
-			  AND (:beforeContactedAt IS NULL OR c.contactedAt < :beforeContactedAt
+			  AND (cast(:beforeContactedAt as Instant) IS NULL OR c.contactedAt < :beforeContactedAt
 			       OR (c.contactedAt = :beforeContactedAt AND c.id < :beforeId))
 			ORDER BY c.contactedAt DESC, c.id DESC
 			""")

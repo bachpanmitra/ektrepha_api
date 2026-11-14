@@ -4,8 +4,8 @@ import java.time.Instant;
 
 import com.ektrepha.model.ComplaintCategory;
 import com.ektrepha.model.ComplaintStatus;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** docs/api/openapi.yaml#/components/schemas/Complaint */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

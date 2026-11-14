@@ -2,8 +2,8 @@ package com.ektrepha.caremanager.dto.response;
 
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /**
  * docs/api/openapi.yaml#/components/schemas/Error — the Care Manager feature's own nested error

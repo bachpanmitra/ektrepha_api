@@ -4,8 +4,8 @@ import java.time.Instant;
 import java.util.List;
 
 import com.ektrepha.model.NannyOperationalStatus;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
 
 /** docs/api/openapi.yaml#/components/schemas/NannyDetail (allOf NannyListItem) */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

@@ -26,12 +26,12 @@ public interface AccessLogRepository extends JpaRepository<AccessLog, Long> {
 	// except the cursor bounds (beforeAt/beforeId null means "from the most recent").
 	@Query("""
 			SELECT l FROM AccessLog l
-			WHERE (:actorUserId IS NULL OR l.actor.id = :actorUserId)
-			  AND (:recordType IS NULL OR l.recordType = :recordType)
-			  AND (:recordId IS NULL OR l.recordId = :recordId)
-			  AND (:from IS NULL OR l.at >= :from)
-			  AND (:to IS NULL OR l.at <= :to)
-			  AND (:beforeAt IS NULL OR l.at < :beforeAt OR (l.at = :beforeAt AND l.id < :beforeId))
+			WHERE (cast(:actorUserId as Long) IS NULL OR l.actor.id = :actorUserId)
+			  AND (cast(:recordType as String) IS NULL OR l.recordType = :recordType)
+			  AND (cast(:recordId as Long) IS NULL OR l.recordId = :recordId)
+			  AND (cast(:from as Instant) IS NULL OR l.at >= :from)
+			  AND (cast(:to as Instant) IS NULL OR l.at <= :to)
+			  AND (cast(:beforeAt as Instant) IS NULL OR l.at < :beforeAt OR (l.at = :beforeAt AND l.id < :beforeId))
 			ORDER BY l.at DESC, l.id DESC
 			""")
 	List<AccessLog> search(@Param("actorUserId") Long actorUserId, @Param("recordType") AccessLogRecordType recordType,

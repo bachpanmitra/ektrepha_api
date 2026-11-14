@@ -35,10 +35,10 @@ public interface CmTaskRepository extends JpaRepository<CmTask, Long> {
 	@Query("""
 			SELECT t FROM CmTask t
 			WHERE t.careManager.id = :careManagerId
-			  AND (:status IS NULL OR t.status = :status)
-			  AND (:dueFrom IS NULL OR t.dueAt >= :dueFrom)
-			  AND (:dueTo IS NULL OR t.dueAt < :dueTo)
-			  AND (:afterDueAt IS NULL OR t.dueAt > :afterDueAt OR (t.dueAt = :afterDueAt AND t.id > :afterId))
+			  AND (cast(:status as String) IS NULL OR t.status = :status)
+			  AND (cast(:dueFrom as Instant) IS NULL OR t.dueAt >= :dueFrom)
+			  AND (cast(:dueTo as Instant) IS NULL OR t.dueAt < :dueTo)
+			  AND (cast(:afterDueAt as Instant) IS NULL OR t.dueAt > :afterDueAt OR (t.dueAt = :afterDueAt AND t.id > :afterId))
 			ORDER BY t.dueAt ASC, t.id ASC
 			""")
 	List<CmTask> findPageForCareManager(@Param("careManagerId") Long careManagerId, @Param("status") CmTaskStatus status,

@@ -31,7 +31,7 @@ public interface NannyRepository extends JpaRepository<Nanny, Long> {
 	@Query("""
 			SELECT n FROM Nanny n JOIN n.user u
 			WHERE (LOWER(n.firstName) LIKE :namePattern OR LOWER(n.lastName) LIKE :namePattern OR u.phone LIKE :phonePattern)
-			  AND (:afterId IS NULL OR n.id > :afterId)
+			  AND (cast(:afterId as Long) IS NULL OR n.id > :afterId)
 			ORDER BY n.id ASC
 			""")
 	List<Nanny> search(@Param("namePattern") String namePattern, @Param("phonePattern") String phonePattern,

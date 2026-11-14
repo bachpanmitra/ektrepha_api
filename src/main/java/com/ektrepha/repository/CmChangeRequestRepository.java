@@ -22,7 +22,7 @@ public interface CmChangeRequestRepository extends JpaRepository<CmChangeRequest
 	@Query("""
 			SELECT r FROM CmChangeRequest r
 			WHERE r.kind = :kind AND r.status = :status
-			  AND (:afterCreatedAt IS NULL OR r.createdAt > :afterCreatedAt
+			  AND (cast(:afterCreatedAt as Instant) IS NULL OR r.createdAt > :afterCreatedAt
 			       OR (r.createdAt = :afterCreatedAt AND r.id > :afterId))
 			ORDER BY r.createdAt ASC, r.id ASC
 			""")
