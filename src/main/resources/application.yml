@@ -140,6 +140,9 @@ app:
     notification-cron: ${TRIAL_NOTIFICATION_CRON:0 */5 * * * *}
   care-manager:
     senior-manager-phone: ${CM_SENIOR_MANAGER_PHONE:}
+    senior-manager-care-manager-id: ${CM_SENIOR_MANAGER_CARE_MANAGER_ID:}
+    outbox-poll-interval-ms: ${CM_OUTBOX_POLL_INTERVAL_MS:2000}
+    scheduler-cron: ${CM_SCHEDULER_CRON:0 * * * * *}
     backfill:
       enabled: ${CM_BACKFILL_ENABLED:false}
       dry-run: ${CM_BACKFILL_DRY_RUN:true}

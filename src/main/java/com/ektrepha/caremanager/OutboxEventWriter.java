@@ -22,8 +22,10 @@ public class OutboxEventWriter {
 	private final OutboxEventRepository outboxEventRepository;
 
 	// No ObjectMapper bean is registered app-wide in this Spring Boot version — see
-	// BookingEventService/ElderServiceImpl for the same pattern.
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	// BookingEventService/ElderServiceImpl for the same pattern. findAndRegisterModules() picks up
+	// jackson-datatype-jsr310 (on the classpath via spring-boot-starter-json) so Instant payload
+	// fields actually serialize instead of throwing InvalidDefinitionException.
+	private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
 	public void write(String type, Object payload) {
 		String json;

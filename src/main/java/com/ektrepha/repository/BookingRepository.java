@@ -20,6 +20,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
 	Optional<Booking> findByPublicId(String publicId);
 
+	/** Care Manager stage derivation (LAPSED = no booking in 60 days) and monthly-check-in scheduling. */
+	Optional<Booking> findFirstByParentIdOrderByStartTimeDesc(Long parentId);
+
 	/** Care Manager backfill only (CmBackfillRunner) — every nanny's booking count per CM area, via each booking's address pincode (migration 054's reference data). */
 	@Query(value = """
 			SELECT b.nanny_id AS nannyId, cap.area AS area, count(*) AS bookingCount

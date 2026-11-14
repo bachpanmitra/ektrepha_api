@@ -10,6 +10,12 @@ public enum BookingCancellationReasonCode {
 	NO_CAREGIVER_AVAILABLE,
 	DUPLICATE_BOOKING,
 	FRAUD_POLICY_VIOLATION,
-	OTHER
+	OTHER,
+
+	// Care Manager feature: there's no nanny-initiated self-service cancel/no-show flow in this
+	// app, so ops records these via the existing admin cancel endpoint — that's what emits the
+	// BookingCancelledByNanny/NannyNoShow outbox events (both map to REPLACEMENT_NEEDED).
+	NANNY_CANCELLED,
+	NANNY_NO_SHOW
 
 }

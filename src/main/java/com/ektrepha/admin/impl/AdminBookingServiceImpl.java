@@ -40,6 +40,8 @@ import com.ektrepha.booking.dto.response.AttendanceDayEntry;
 import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.booking.impl.AttendanceMonthMapper;
 import com.ektrepha.cancellation.service.BookingCancellationLogService;
+import com.ektrepha.caremanager.OutboxEventWriter;
+import com.ektrepha.caremanager.event.BookingNeedsReplacementPayload;
 import com.ektrepha.exception.BookingNotCancellableException;
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.InvalidBookingTransitionException;
@@ -49,6 +51,7 @@ import com.ektrepha.model.AttendanceMethod;
 import com.ektrepha.model.AttendanceStatus;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingAttendance;
+import com.ektrepha.model.BookingCancellationReasonCode;
 import com.ektrepha.model.BookingEvent;
 import com.ektrepha.model.BookingEventType;
 import com.ektrepha.model.BookingStatus;
@@ -102,6 +105,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 	private final AttendanceMonthMapper attendanceMonthMapper;
 	private final BookingEventRepository bookingEventRepository;
 	private final ParentElderRepository parentElderRepository;
+	private final OutboxEventWriter outboxEventWriter;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -192,6 +196,15 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 				admin == null ? null : admin.getName(),
 				Map.of("previousStatus", previousStatus.name(), "reason", request.reason()));
 		bookingCancellationLogService.log(booking, admin, OrderActivityActorType.ADMIN, request.reasonCode(), request.reason(), previousStatus);
+
+		// Care Manager feature: no nanny-initiated self-service cancel/no-show flow exists, so this
+		// is where ops records one (via the reason code) — the trigger for REPLACEMENT_NEEDED.
+		if (request.reasonCode() == BookingCancellationReasonCode.NANNY_CANCELLED
+				|| request.reasonCode() == BookingCancellationReasonCode.NANNY_NO_SHOW) {
+			String eventType = request.reasonCode() == BookingCancellationReasonCode.NANNY_CANCELLED
+					? "BookingCancelledByNanny" : "NannyNoShow";
+			outboxEventWriter.write(eventType, new BookingNeedsReplacementPayload(booking.getId(), booking.getParent().getId()));
+		}
 
 		log.info("Booking cancelled by admin: id={}, previousStatus={}, adminUserId={}", booking.getId(), previousStatus, adminUserId);
 		return detail(bookingId);

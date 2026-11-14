@@ -253,6 +253,12 @@ public record AppProperties(
 	 */
 	public record CareManager(
 			String seniorManagerPhone,
+			// The task engine's owner-of-last-resort (business rule 7: "if nobody is on duty, the
+			// senior manager") must be an actual care_managers row, not just a phone number, since
+			// cm_tasks.care_manager_id is a real FK — this is that CM's public id (cm_...). Null in
+			// dev/stage (same convention as every other optional external config here) means that
+			// fallback leaves the task's owner null and only logs/alerts, rather than guessing.
+			String seniorManagerCareManagerId,
 			@Valid @NotNull Backfill backfill,
 			@Valid @NotNull Sms sms) {
 

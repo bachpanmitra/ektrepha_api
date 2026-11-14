@@ -1,5 +1,6 @@
 package com.ektrepha.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 	boolean existsByBookingId(Long bookingId);
 
 	Optional<Review> findByBookingId(Long bookingId);
+
+	/** Care Manager nanny-flag rule: 2+ ratings of 3 or lower in the last 90 days. */
+	long countByNannyIdAndRatingLessThanEqualAndCreatedAtAfter(Long nannyId, short rating, Instant after);
 
 	// Admin moderation list only - every review regardless of status, so ops can see and un-hide a
 	// HIDDEN one. Every other caller below needs the VISIBLE-only variant.
