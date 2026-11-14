@@ -1,0 +1,1329 @@
+openapi: 3.1.0
+info:
+  title: Ektrepha Care Manager API
+  version: 1.0.0
+  description: |
+    Contract between the backend (Java 17, Spring Boot) and the frontends
+    (parent app, OPS admin panel). Source of truth: "PRD v2: Ektrepha Care Manager",
+    tab "Technical design and API".
+
+    Conventions
+    - All times are ISO 8601 in UTC. Display in IST.
+    - Public ids are prefixed strings: par_, nan_, cm_, tsk_, cmp_, bkg_, adm_.
+    - List endpoints are cursor paginated (limit, cursor -> next_cursor).
+    - List endpoints return masked phones (phone_masked). Detail endpoints return the
+      full phone and write an access-log row.
+    - POST and PUT accept an Idempotency-Key header (kept 24 hours).
+    - Errors always use the Error schema.
+servers:
+  - url: https://api.ektrepha.example/v1
+    description: Production (replace with the real host)
+  - url: http://localhost:8080/v1
+    description: Local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Parent app
+    description: Role PARENT. Only what the Care Manager card needs.
+  - name: CM - summary and tasks
+    description: Role CARE_MANAGER or ADMIN.
+  - name: CM - parents
+    description: Role CARE_MANAGER or ADMIN. Reads work for any parent; writes need ownership or on-duty.
+  - name: CM - nannies
+    description: Role CARE_MANAGER or ADMIN. Reads work for any nanny; writes need ownership or on-duty.
+  - name: CM - complaints
+    description: Role CARE_MANAGER or ADMIN.
+  - name: Admin
+    description: Role ADMIN only.
+
+paths:
+  # ------------------------------------------------------------------ Parent app
+  /me/care-manager:
+    get:
+      tags: [Parent app]
+      operationId: getMyCareManager
+      summary: Care Manager card for the signed-in parent
+      description: |
+        Used on Help & support, Account and Home. Outside the CM's shift, contact.call
+        and contact.whatsapp point to the on-duty number. Shift hours are never returned.
+        Clients may cache for 5 minutes.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyCareManagerResponse' }
+              example:
+                care_manager:
+                  id: cm_8f2k
+                  display_name: Anjali Sharma
+                  initials: AS
+                  photo_url: https://cdn.ektrepha.example/cm/cm_8f2k.jpg
+                  availability_text: Reach them 24x7, even when the help desk is closed
+                  contact:
+                    call: tel:+91XXXXXXXXXX
+                    whatsapp: https://wa.me/91XXXXXXXXXX?text=Hi%2C%20this%20is%20...
+                    email: mailto:anjali@ektrepha.example
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/care-manager/contacts:
+    post:
+      tags: [Parent app]
+      operationId: logCareManagerContact
+      summary: Log a tap on Call, WhatsApp, Email or "Ask my Care Manager"
+      description: Fire-and-forget from the app before opening the dialer, WhatsApp or mail app.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogContactRequest' }
+            example: { channel: WHATSAPP, source_screen: HELP_SUPPORT, booking_id: bkg_5836 }
+      responses:
+        '202': { description: Accepted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /me/care-manager/change-requests:
+    post:
+      tags: [Parent app]
+      operationId: requestCareManagerChange
+      summary: Parent asks for a different Care Manager
+      description: Creates an ADMIN_REASSIGN task. The parent keeps the current CM until an Admin acts.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bookings/{bookingId}/ratings:
+    post:
+      tags: [Parent app]
+      operationId: rateVisit
+      summary: Rate a visit
+      description: A score of 3 or lower creates a LOW_RATING_CALL task (due in 2 hours).
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RateVisitRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateVisitResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /bookings/{bookingId}/nanny-change-requests:
+    post:
+      tags: [Parent app]
+      operationId: requestNannyChange
+      summary: Request a different nanny
+      description: Creates a PARENT_REQUEST task for the parent's CM (1 hr day, 4 hrs night).
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeRequest' }
+
+  # ------------------------------------------------------- CM summary and tasks
+  /cm/me/summary:
+    get:
+      tags: [CM - summary and tasks]
+      operationId: getCmSummary
+      summary: KPI cards for Tasks today
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CmSummary' }
+
+  /cm/me/tasks:
+    get:
+      tags: [CM - summary and tasks]
+      operationId: listMyTasks
+      summary: Tasks for the signed-in CM, sorted by due time
+      parameters:
+        - name: due
+          in: query
+          schema: { type: string, enum: [today, overdue, all], default: today }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaskStatus' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskPage' }
+
+  /cm/tasks/{taskId}:
+    patch:
+      tags: [CM - summary and tasks]
+      operationId: updateTask
+      summary: Mark a task done or cancelled
+      parameters: [ { $ref: '#/components/parameters/TaskId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -------------------------------------------------------------- CM parents
+  /cm/me/parents:
+    get:
+      tags: [CM - parents]
+      operationId: listMyParents
+      summary: My parents (masked phones)
+      parameters:
+        - name: stage
+          in: query
+          schema: { $ref: '#/components/schemas/ParentStage' }
+        - name: has_issues
+          in: query
+          schema: { type: boolean }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [last_contact, name, stage], default: last_contact }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParentListPage' }
+
+  /cm/parents:
+    get:
+      tags: [CM - parents]
+      operationId: searchParents
+      summary: Search any parent by name or phone
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParentListPage' }
+
+  /cm/parents/{parentId}:
+    get:
+      tags: [CM - parents]
+      operationId: getParentDetail
+      summary: Every detail of a parent (writes an access-log row)
+      parameters: [ { $ref: '#/components/parameters/ParentId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParentDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cm/parents/{parentId}/bookings:
+    get:
+      tags: [CM - parents]
+      operationId: listParentBookings
+      summary: Bookings and ratings
+      parameters:
+        - $ref: '#/components/parameters/ParentId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingPage' }
+
+  /cm/parents/{parentId}/payments:
+    get:
+      tags: [CM - parents]
+      operationId: getParentPayments
+      summary: Plan, amounts and refund status (never card data)
+      parameters: [ { $ref: '#/components/parameters/ParentId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentSummary' }
+
+  /cm/parents/{parentId}/notes:
+    get:
+      tags: [CM - parents]
+      operationId: getFamilyNotes
+      summary: Family notes (the brief sent to every nanny)
+      parameters: [ { $ref: '#/components/parameters/ParentId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FamilyNotes' }
+    put:
+      tags: [CM - parents]
+      operationId: putFamilyNotes
+      summary: Replace family notes
+      parameters:
+        - $ref: '#/components/parameters/ParentId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FamilyNotesInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FamilyNotes' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /cm/parents/{parentId}/contacts:
+    get:
+      tags: [CM - parents]
+      operationId: listParentContacts
+      summary: Contact log
+      parameters:
+        - $ref: '#/components/parameters/ParentId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContactPage' }
+    post:
+      tags: [CM - parents]
+      operationId: logParentContact
+      summary: CM logs a call or message
+      parameters:
+        - $ref: '#/components/parameters/ParentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CmLogContactRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contact' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -------------------------------------------------------------- CM nannies
+  /cm/me/nannies:
+    get:
+      tags: [CM - nannies]
+      operationId: listMyNannies
+      summary: My nanny team
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/NannyStatus' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NannyListPage' }
+
+  /cm/nannies:
+    get:
+      tags: [CM - nannies]
+      operationId: searchNannies
+      summary: Search any nanny by name or phone
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NannyListPage' }
+
+  /cm/nannies/{nannyId}:
+    get:
+      tags: [CM - nannies]
+      operationId: getNannyDetail
+      summary: Every detail of a nanny (writes an access-log row)
+      parameters: [ { $ref: '#/components/parameters/NannyId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NannyDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cm/nannies/{nannyId}/flag-review:
+    post:
+      tags: [CM - nannies]
+      operationId: reviewNannyFlag
+      summary: Clear a flag, or suspend the nanny
+      parameters:
+        - $ref: '#/components/parameters/NannyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FlagReviewRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NannyListItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ----------------------------------------------------------- CM complaints
+  /cm/complaints:
+    get:
+      tags: [CM - complaints]
+      operationId: listComplaints
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ComplaintStatus' }
+        - name: mine
+          in: query
+          schema: { type: boolean, default: true }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComplaintPage' }
+    post:
+      tags: [CM - complaints]
+      operationId: raiseComplaint
+      summary: Raise a complaint on behalf of a parent
+      description: Category SAFETY escalates within 15 minutes and suspends the nanny.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RaiseComplaintRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Complaint' }
+
+  /cm/complaints/{complaintId}:
+    patch:
+      tags: [CM - complaints]
+      operationId: updateComplaint
+      summary: Update, escalate, close, or issue the trial refund
+      parameters: [ { $ref: '#/components/parameters/ComplaintId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateComplaintRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Complaint' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  # -------------------------------------------------------------------- Admin
+  /admin/care-managers:
+    get:
+      tags: [Admin]
+      operationId: listCareManagers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CareManagerAdmin' }
+    post:
+      tags: [Admin]
+      operationId: createCareManager
+      summary: Add a Care Manager (step 1 of the flow)
+      description: Creates the admin-panel login (role CARE_MANAGER) and sends the welcome email.
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCareManagerRequest' }
+            example:
+              name: Sana Qureshi
+              phone: '+919800000040'
+              email: sana@ektrepha.example
+              area: WHITEFIELD
+              max_parents: 150
+              shift_start: '09:00'
+              shift_end: '18:00'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareManagerAdmin' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /admin/care-managers/{careManagerId}:
+    patch:
+      tags: [Admin]
+      operationId: updateCareManager
+      parameters: [ { $ref: '#/components/parameters/CareManagerId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCareManagerRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareManagerAdmin' }
+
+  /admin/care-managers/{careManagerId}/photo:
+    put:
+      tags: [Admin]
+      operationId: uploadCareManagerPhoto
+      parameters: [ { $ref: '#/components/parameters/CareManagerId' } ]
+      requestBody:
+        required: true
+        content:
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo_url]
+                properties:
+                  photo_url: { type: string, format: uri }
+
+  /admin/care-managers/{careManagerId}/connect:
+    post:
+      tags: [Admin]
+      operationId: connectToCareManager
+      summary: Connect parents and nannies (step 2 of the flow)
+      description: All-or-nothing. Parents are notified before the change when notify_parents is true.
+      parameters:
+        - $ref: '#/components/parameters/CareManagerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectRequest' }
+            example:
+              auto_assign_new_signups: true
+              parent_ids: [par_31x, par_7qa]
+              nanny_ids: [nan_2kd]
+              notify_parents: true
+              reason: PARENT_REQUEST
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectResponse' }
+        '409':
+          description: CM_OVER_CAP or ALREADY_ASSIGNED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /admin/care-managers/{careManagerId}/deactivate:
+    post:
+      tags: [Admin]
+      operationId: deactivateCareManager
+      description: Refused with 409 CM_HAS_ASSIGNMENTS until all families and nannies are moved.
+      parameters: [ { $ref: '#/components/parameters/CareManagerId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CareManagerAdmin' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/parents/{parentId}/care-manager:
+    put:
+      tags: [Admin]
+      operationId: reassignParent
+      parameters:
+        - $ref: '#/components/parameters/ParentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReassignRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/nannies/{nannyId}/care-manager:
+    put:
+      tags: [Admin]
+      operationId: reassignNanny
+      parameters:
+        - $ref: '#/components/parameters/NannyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReassignRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+
+  /admin/duty-shifts:
+    get:
+      tags: [Admin]
+      operationId: listDutyShifts
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DutyShift' }
+    post:
+      tags: [Admin]
+      operationId: createDutyShift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DutyShiftInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DutyShift' }
+        '409':
+          description: SHIFT_OVERLAP
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /admin/cm-change-requests:
+    get:
+      tags: [Admin]
+      operationId: listCmChangeRequests
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChangeRequest' }
+                  next_cursor: { type: [string, 'null'] }
+
+  /admin/access-log:
+    get:
+      tags: [Admin]
+      operationId: searchAccessLog
+      parameters:
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: record_type, in: query, schema: { type: string, enum: [PARENT, NANNY] } }
+        - { name: record_id, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AccessLogEntry' }
+                  next_cursor: { type: [string, 'null'] }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token (15 min). Claims include sub, role (PARENT | NANNY | CARE_MANAGER | ADMIN).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 64 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The version from the last GET, to avoid overwriting another CM's edit.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    ParentId:
+      name: parentId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^par_' }
+    NannyId:
+      name: nannyId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^nan_' }
+    CareManagerId:
+      name: careManagerId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^cm_' }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^tsk_' }
+    ComplaintId:
+      name: complaintId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^cmp_' }
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^bkg_' }
+
+  responses:
+    Unauthorized:
+      description: Missing or expired token
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Role not allowed, or NOT_YOUR_RECORD (write outside own families/nannies while not on duty)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: Conflict (CM_OVER_CAP, CM_HAS_ASSIGNMENTS, ALREADY_ASSIGNED, DUPLICATE_REQUEST, TASK_CLOSED)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unprocessable:
+      description: Validation failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    PreconditionFailed:
+      description: If-Match did not match; reload and retry
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    # ---------------------------------------------------------------- shared
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              enum: [UNAUTHENTICATED, FORBIDDEN, NOT_YOUR_RECORD, NOT_FOUND, VALIDATION_FAILED,
+                     CM_OVER_CAP, CM_HAS_ASSIGNMENTS, ALREADY_ASSIGNED, DUPLICATE_REQUEST,
+                     TASK_CLOSED, SHIFT_OVERLAP, VERSION_MISMATCH, RATE_LIMITED, INTERNAL]
+            message: { type: string }
+            request_id: { type: string }
+            fields:
+              type: object
+              additionalProperties: { type: string }
+              description: Field-level validation messages
+    Area:
+      type: string
+      enum: [BROOKEFIELD, WHITEFIELD]
+    Channel:
+      type: string
+      enum: [CALL, WHATSAPP, EMAIL, SMS]
+    ParentStage:
+      type: string
+      enum: [NEW, TRIAL, REGULAR, LAPSED]
+    NannyStatus:
+      type: string
+      enum: [ACTIVE, FLAGGED, SUSPENDED, ON_LEAVE]
+    TaskType:
+      type: string
+      enum: [SAFETY_ESCALATION, REPLACEMENT_NEEDED, LOW_RATING_CALL, COMPLAINT_CALL, PARENT_REQUEST,
+             PRE_VISIT_CALL, VISIT_CHECK_MESSAGE, FEEDBACK_REQUEST, INTRO_CALL, TRIAL_DAY4_CALL,
+             TRIAL_DAILY_CHECKIN, MONTHLY_CHECKIN, ADMIN_REASSIGN]
+    TaskPriority:
+      type: string
+      enum: [URGENT, HIGH, NORMAL, LOW]
+    TaskStatus:
+      type: string
+      enum: [OPEN, DONE, CANCELLED]
+    ComplaintCategory:
+      type: string
+      enum: [SAFETY, NANNY_CONDUCT, NO_SHOW, BILLING, OTHER]
+    ComplaintStatus:
+      type: string
+      enum: [OPEN, ESCALATED, RESOLVED, CLOSED]
+    AssignmentReason:
+      type: string
+      enum: [SIGNUP, PARENT_REQUEST, CM_LEFT, ADMIN_MOVE, BACKFILL]
+    PersonRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    # ------------------------------------------------------------ parent app
+    MyCareManagerResponse:
+      type: object
+      required: [care_manager]
+      properties:
+        care_manager: { $ref: '#/components/schemas/CareManagerCard' }
+    CareManagerCard:
+      type: object
+      required: [id, display_name, initials, availability_text, contact]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        initials: { type: string, maxLength: 3 }
+        photo_url: { type: [string, 'null'], format: uri }
+        availability_text: { type: string }
+        contact:
+          type: object
+          required: [call, whatsapp, email]
+          properties:
+            call: { type: string, description: 'tel: link; on-duty number outside shift' }
+            whatsapp: { type: string, description: 'wa.me link with a pre-filled message' }
+            email: { type: string, description: 'mailto: link to the CM work email' }
+    LogContactRequest:
+      type: object
+      required: [channel, source_screen]
+      properties:
+        channel:
+          type: string
+          enum: [CALL, WHATSAPP, EMAIL, ASK_CM_CHIP]
+        source_screen:
+          type: string
+          enum: [HELP_SUPPORT, ACCOUNT, HOME, BOOKING_CARD, RATE_VISIT]
+        booking_id: { type: [string, 'null'] }
+    ChangeRequest:
+      type: object
+      required: [id, parent, status, created_at]
+      properties:
+        id: { type: string }
+        parent: { $ref: '#/components/schemas/PersonRef' }
+        booking_id: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        status: { type: string, enum: [OPEN, DONE, CANCELLED] }
+        created_at: { type: string, format: date-time }
+    RateVisitRequest:
+      type: object
+      required: [score]
+      properties:
+        score: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: [string, 'null'], maxLength: 1000 }
+    RateVisitResponse:
+      type: object
+      required: [score, cm_will_call]
+      properties:
+        score: { type: integer }
+        cm_will_call: { type: boolean, description: true when score <= 3 }
+        call_within_minutes: { type: [integer, 'null'], example: 120 }
+
+    # ------------------------------------------------------- CM: summary/tasks
+    CmSummary:
+      type: object
+      required: [tasks_due_today, overdue, open_complaints, trial_families, total_families, on_duty]
+      properties:
+        tasks_due_today: { type: integer }
+        overdue: { type: integer }
+        open_complaints: { type: integer }
+        trial_families: { type: integer }
+        total_families: { type: integer }
+        on_duty: { type: boolean }
+    Task:
+      type: object
+      required: [id, type, priority, status, due_at, parent, owner, is_overdue, created_at]
+      properties:
+        id: { type: string }
+        type: { $ref: '#/components/schemas/TaskType' }
+        priority: { $ref: '#/components/schemas/TaskPriority' }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        due_at: { type: string, format: date-time }
+        is_overdue: { type: boolean }
+        title: { type: string, example: Low rating call }
+        detail: { type: [string, 'null'], example: Rated 2 / 5 after visit with Lakshmi }
+        parent: { $ref: '#/components/schemas/PersonRef' }
+        owner: { $ref: '#/components/schemas/PersonRef' }
+        booking_id: { type: [string, 'null'] }
+        complaint_id: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        done_at: { type: [string, 'null'], format: date-time }
+    TaskPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Task' } }
+        next_cursor: { type: [string, 'null'] }
+    UpdateTaskRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [DONE, CANCELLED] }
+        note: { type: string, maxLength: 1000 }
+
+    # ------------------------------------------------------------ CM: parents
+    ParentListItem:
+      type: object
+      required: [id, name, phone_masked, stage, last_contact_at, open_issues]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone_masked: { type: string, example: +91 98xxx xxx21 }
+        area: { $ref: '#/components/schemas/Area' }
+        stage: { $ref: '#/components/schemas/ParentStage' }
+        trial_day: { type: [integer, 'null'], minimum: 0, maximum: 5 }
+        nanny: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        care_manager: { $ref: '#/components/schemas/PersonRef' }
+        last_contact_at: { type: [string, 'null'], format: date-time }
+        open_issues: { type: array, items: { type: string }, example: [1 complaint, low rating] }
+    ParentListPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ParentListItem' } }
+        next_cursor: { type: [string, 'null'] }
+        total: { type: integer }
+    ParentDetail:
+      type: object
+      required: [id, name, phone, area, stage, care_manager, children, notes, open_complaints, version]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: [string, 'null'] }
+        address: { type: [string, 'null'] }
+        area: { $ref: '#/components/schemas/Area' }
+        stage: { $ref: '#/components/schemas/ParentStage' }
+        trial_day: { type: [integer, 'null'] }
+        signed_up_at: { type: string, format: date-time }
+        referred_by: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        care_manager: { $ref: '#/components/schemas/PersonRef' }
+        is_my_family: { type: boolean }
+        can_edit: { type: boolean, description: own family, or the CM is on duty }
+        children:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              age_years: { type: [number, 'null'] }
+        current_nanny:
+          oneOf:
+            - $ref: '#/components/schemas/NannyListItem'
+            - type: 'null'
+        notes: { $ref: '#/components/schemas/FamilyNotes' }
+        open_complaints: { type: array, items: { $ref: '#/components/schemas/Complaint' } }
+        open_tasks: { type: array, items: { $ref: '#/components/schemas/Task' } }
+        cm_history: { type: array, items: { $ref: '#/components/schemas/Assignment' } }
+        version: { type: string }
+    Booking:
+      type: object
+      required: [id, starts_at, status]
+      properties:
+        id: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, 'null'], format: date-time }
+        nanny: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        status: { type: string, enum: [REQUESTED, ASSIGNED, ON_THE_WAY, CHECKED_IN, CHECKED_OUT, CANCELLED, NO_SHOW] }
+        rating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        is_trial: { type: boolean }
+    BookingPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Booking' } }
+        next_cursor: { type: [string, 'null'] }
+    PaymentSummary:
+      type: object
+      required: [plan, trial_refund_issued]
+      properties:
+        plan: { type: string, example: FREE_TRIAL }
+        platform_fee_paise: { type: [integer, 'null'] }
+        last_payment_at: { type: [string, 'null'], format: date-time }
+        trial_refund_issued: { type: boolean }
+        currency: { type: string, default: INR }
+    FamilyNotesInput:
+      type: object
+      properties:
+        child_routine: { type: [string, 'null'], maxLength: 2000 }
+        allergies: { type: [string, 'null'], maxLength: 1000 }
+        preferences: { type: [string, 'null'], maxLength: 2000 }
+        expectations: { type: [string, 'null'], maxLength: 2000 }
+    FamilyNotes:
+      allOf:
+        - $ref: '#/components/schemas/FamilyNotesInput'
+        - type: object
+          required: [version]
+          properties:
+            updated_by: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+            updated_at: { type: [string, 'null'], format: date-time }
+            version: { type: string }
+    Contact:
+      type: object
+      required: [id, channel, direction, source, contacted_at]
+      properties:
+        id: { type: string }
+        channel: { $ref: '#/components/schemas/Channel' }
+        direction: { type: string, enum: [INBOUND, OUTBOUND] }
+        source: { type: string, enum: [APP_TAP, CM_LOG] }
+        summary: { type: [string, 'null'] }
+        task_id: { type: [string, 'null'] }
+        by: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        contacted_at: { type: string, format: date-time }
+    ContactPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Contact' } }
+        next_cursor: { type: [string, 'null'] }
+    CmLogContactRequest:
+      type: object
+      required: [channel, direction]
+      properties:
+        channel: { $ref: '#/components/schemas/Channel' }
+        direction: { type: string, enum: [INBOUND, OUTBOUND] }
+        summary: { type: string, maxLength: 1000 }
+        task_id: { type: string }
+
+    # ------------------------------------------------------------ CM: nannies
+    NannyListItem:
+      type: object
+      required: [id, name, phone_masked, status, families_count, care_manager]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone_masked: { type: string }
+        status: { $ref: '#/components/schemas/NannyStatus' }
+        avg_rating: { type: [number, 'null'] }
+        low_ratings_count: { type: integer }
+        families_count: { type: integer }
+        care_manager: { $ref: '#/components/schemas/PersonRef' }
+    NannyListPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/NannyListItem' } }
+        next_cursor: { type: [string, 'null'] }
+    NannyDetail:
+      allOf:
+        - $ref: '#/components/schemas/NannyListItem'
+        - type: object
+          required: [phone, verification, families, schedule]
+          properties:
+            phone: { type: string }
+            address: { type: [string, 'null'] }
+            languages: { type: array, items: { type: string } }
+            experience_years: { type: [number, 'null'] }
+            joined_at: { type: [string, 'null'], format: date-time }
+            is_my_nanny: { type: boolean }
+            can_edit: { type: boolean }
+            verification:
+              type: object
+              properties:
+                id_verified_at: { type: [string, 'null'], format: date-time }
+                police_verified_at: { type: [string, 'null'], format: date-time }
+                references_checked_at: { type: [string, 'null'], format: date-time }
+                interviewed_at: { type: [string, 'null'], format: date-time }
+                documents:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, url]
+                    properties:
+                      type: { type: string, enum: [ID, POLICE_CERTIFICATE, REFERENCE, OTHER] }
+                      url: { type: string, format: uri, description: Short-lived signed URL }
+            families: { type: array, items: { $ref: '#/components/schemas/PersonRef' } }
+            schedule: { type: array, items: { $ref: '#/components/schemas/Booking' } }
+            complaints: { type: array, items: { $ref: '#/components/schemas/Complaint' } }
+            briefs_received:
+              type: array
+              items:
+                type: object
+                required: [parent, sent_at]
+                properties:
+                  parent: { $ref: '#/components/schemas/PersonRef' }
+                  sent_at: { type: string, format: date-time }
+    FlagReviewRequest:
+      type: object
+      required: [decision, reason]
+      properties:
+        decision: { type: string, enum: [CLEAR, SUSPEND] }
+        reason: { type: string, minLength: 5, maxLength: 1000 }
+
+    # --------------------------------------------------------- CM: complaints
+    Complaint:
+      type: object
+      required: [id, parent, category, status, owner, raised_at]
+      properties:
+        id: { type: string }
+        parent: { $ref: '#/components/schemas/PersonRef' }
+        nanny: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        booking_id: { type: [string, 'null'] }
+        category: { $ref: '#/components/schemas/ComplaintCategory' }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/ComplaintStatus' }
+        owner: { $ref: '#/components/schemas/PersonRef' }
+        escalated_to: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        trial_refund_issued: { type: boolean }
+        resolution: { type: [string, 'null'] }
+        raised_at: { type: string, format: date-time }
+        closed_at: { type: [string, 'null'], format: date-time }
+    ComplaintPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Complaint' } }
+        next_cursor: { type: [string, 'null'] }
+    RaiseComplaintRequest:
+      type: object
+      required: [parent_id, category, description]
+      properties:
+        parent_id: { type: string }
+        nanny_id: { type: string }
+        booking_id: { type: string }
+        category: { $ref: '#/components/schemas/ComplaintCategory' }
+        description: { type: string, minLength: 5, maxLength: 2000 }
+    UpdateComplaintRequest:
+      type: object
+      properties:
+        status: { $ref: '#/components/schemas/ComplaintStatus' }
+        resolution: { type: string, maxLength: 2000, description: Required when status is CLOSED }
+        issue_trial_refund: { type: boolean }
+
+    # ------------------------------------------------------------------ Admin
+    CareManagerAdmin:
+      type: object
+      required: [id, name, phone, email, area, active, max_parents, families_count, nannies_count, on_shift]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string, format: email }
+        photo_url: { type: [string, 'null'], format: uri }
+        area: { $ref: '#/components/schemas/Area' }
+        active: { type: boolean }
+        max_parents: { type: integer }
+        families_count: { type: integer }
+        nannies_count: { type: integer }
+        shift_start: { type: string, pattern: '^\d{2}:\d{2}$' }
+        shift_end: { type: string, pattern: '^\d{2}:\d{2}$' }
+        on_shift: { type: boolean }
+        created_at: { type: string, format: date-time }
+    CreateCareManagerRequest:
+      type: object
+      required: [name, phone, email, area, shift_start, shift_end]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        phone: { type: string, pattern: '^\+91\d{10}$' }
+        email: { type: string, format: email }
+        area: { $ref: '#/components/schemas/Area' }
+        max_parents: { type: integer, minimum: 1, maximum: 500, default: 150 }
+        shift_start: { type: string, pattern: '^\d{2}:\d{2}$' }
+        shift_end: { type: string, pattern: '^\d{2}:\d{2}$' }
+    UpdateCareManagerRequest:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string, pattern: '^\+91\d{10}$' }
+        email: { type: string, format: email }
+        max_parents: { type: integer, minimum: 1, maximum: 500 }
+        shift_start: { type: string, pattern: '^\d{2}:\d{2}$' }
+        shift_end: { type: string, pattern: '^\d{2}:\d{2}$' }
+    ConnectRequest:
+      type: object
+      required: [reason]
+      properties:
+        auto_assign_new_signups: { type: boolean, default: false }
+        parent_ids: { type: array, items: { type: string }, maxItems: 500 }
+        nanny_ids: { type: array, items: { type: string }, maxItems: 100 }
+        notify_parents: { type: boolean, default: true }
+        reason: { $ref: '#/components/schemas/AssignmentReason' }
+    ConnectResponse:
+      type: object
+      required: [connected, skipped, care_manager]
+      properties:
+        connected:
+          type: object
+          required: [parents, nannies]
+          properties:
+            parents: { type: integer }
+            nannies: { type: integer }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, code]
+            properties:
+              id: { type: string }
+              code: { type: string, enum: [ALREADY_ASSIGNED, NOT_FOUND, WRONG_AREA] }
+        care_manager: { $ref: '#/components/schemas/CareManagerAdmin' }
+    ReassignRequest:
+      type: object
+      required: [care_manager_id, reason]
+      properties:
+        care_manager_id: { type: string }
+        reason: { $ref: '#/components/schemas/AssignmentReason' }
+        notify_parent: { type: boolean, default: true }
+    Assignment:
+      type: object
+      required: [care_manager, assigned_at, reason]
+      properties:
+        care_manager: { $ref: '#/components/schemas/PersonRef' }
+        assigned_at: { type: string, format: date-time }
+        unassigned_at: { type: [string, 'null'], format: date-time }
+        assigned_by: { oneOf: [ { $ref: '#/components/schemas/PersonRef' }, { type: 'null' } ] }
+        reason: { $ref: '#/components/schemas/AssignmentReason' }
+    DutyShiftInput:
+      type: object
+      required: [care_manager_id, starts_at, ends_at]
+      properties:
+        care_manager_id: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+    DutyShift:
+      allOf:
+        - $ref: '#/components/schemas/DutyShiftInput'
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string }
+    AccessLogEntry:
+      type: object
+      required: [actor, record_type, record_id, action, at]
+      properties:
+        actor: { $ref: '#/components/schemas/PersonRef' }
+        record_type: { type: string, enum: [PARENT, NANNY] }
+        record_id: { type: string }
+        action: { type: string, enum: [VIEW, EDIT] }
+        section: { type: [string, 'null'] }
+        at: { type: string, format: date-time }

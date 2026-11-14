@@ -507,11 +507,15 @@ public class AuthServiceImpl implements AuthService {
 
 	// ----------------------------------------------------------------- Helpers
 
-	/** ADMIN accounts are only ever created via AdminUserSeeder (dev/stage startup) — never through public signup. */
+	/**
+	 * ADMIN accounts are only ever created via AdminUserSeeder (dev/stage startup) — never through
+	 * public signup. CARE_MANAGER accounts are the same: only ever created via
+	 * POST /v1/admin/care-managers (AdminCareManagerServiceImpl), never self-registered.
+	 */
 	private void rejectAdminSelfRegistration(UserType role) {
-		if (role == UserType.ADMIN) {
-			log.warn("Blocked attempt to self-register with role=ADMIN");
-			throw new IllegalArgumentException("ADMIN accounts cannot be self-registered");
+		if (role == UserType.ADMIN || role == UserType.CARE_MANAGER) {
+			log.warn("Blocked attempt to self-register with role={}", role);
+			throw new IllegalArgumentException(role + " accounts cannot be self-registered");
 		}
 	}
 

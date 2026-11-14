@@ -14,6 +14,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+
+import com.ektrepha.util.PublicIds;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -36,6 +39,10 @@ public class Booking {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	/** Opaque external id (e.g. bkg_1a4) — Care Manager feature only; every other endpoint still uses {@link #id}. */
+	@Column(name = "public_id", nullable = false, unique = true, length = 20)
+	private String publicId;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "parent_id", nullable = false)
@@ -164,6 +171,9 @@ public class Booking {
 	@PrePersist
 	void onCreate() {
 		this.createdAt = Instant.now();
+		if (this.publicId == null) {
+			this.publicId = PublicIds.of(PublicIds.BOOKING_PREFIX);
+		}
 	}
 
 }

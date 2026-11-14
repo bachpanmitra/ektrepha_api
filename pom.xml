@@ -160,6 +160,28 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
+		<!-- Care Manager feature's integration tests (CmIntegrationTestBase) — the first use of
+			 Testcontainers in this repo; every other existing test still runs against the local
+			 docker-compose Postgres, unchanged. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Pinned explicitly: the parent BOM's managed testcontainers.version (2.0.5) isn't
+			 resolvable from this environment's Maven Central mirror. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>1.21.3</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>1.21.3</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

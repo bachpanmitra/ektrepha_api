@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 53
+      author: ektrepha
+      description: Care Manager feature - new tables, outbox/idempotency infra, public ids and care_manager_id/status columns on parent/nanny/booking
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/053-care-manager-schema.sql
+            relativeToChangelogFile: false

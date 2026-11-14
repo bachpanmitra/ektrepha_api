@@ -18,6 +18,8 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.ektrepha.util.PublicIds;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,9 +39,18 @@ public class Parent {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	/** Opaque external id (e.g. par_1a4) — Care Manager feature only; every other endpoint still uses {@link #id}. */
+	@Column(name = "public_id", nullable = false, unique = true, length = 20)
+	private String publicId;
+
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "user_id", nullable = false, unique = true)
 	private User user;
+
+	/** This parent's one fixed Care Manager — nullable until the backfill migration runs; NOT NULL in a later migration. Changes only via an Admin reassign/connect, never automatically. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "care_manager_id")
+	private CareManager careManager;
 
 	// Nullable (migration 029) — an auto-vivified stub row (created on a first child/address, before
 	// P1/P2 is ever completed) has no name yet.
@@ -74,6 +85,9 @@ public class Parent {
 		Instant now = Instant.now();
 		this.createdAt = now;
 		this.updatedAt = now;
+		if (this.publicId == null) {
+			this.publicId = PublicIds.of(PublicIds.PARENT_PREFIX);
+		}
 	}
 
 	@PreUpdate

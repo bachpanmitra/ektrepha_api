@@ -7,6 +7,8 @@ import java.time.Period;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -20,6 +22,8 @@ import jakarta.persistence.Table;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import com.ektrepha.util.PublicIds;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -41,9 +45,28 @@ public class Nanny {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	/** Opaque external id (e.g. nan_1a4) — Care Manager feature only; every other endpoint still uses {@link #id}. */
+	@Column(name = "public_id", nullable = false, unique = true, length = 20)
+	private String publicId;
+
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "user_id", nullable = false, unique = true)
 	private User user;
+
+	/** This nanny's one fixed Care Manager — nullable until the backfill migration runs; NOT NULL in a later migration. Only Admin can move her. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "care_manager_id")
+	private CareManager careManager;
+
+	/**
+	 * Operational status (flag/suspend/leave) driven by the Care Manager feature — distinct from
+	 * {@link #overallVerificationStatus}, which is the KYC/onboarding rollup. FLAGGED/SUSPENDED here
+	 * block new bookings regardless of verification status.
+	 */
+	@Builder.Default
+	@Enumerated(EnumType.STRING)
+	@Column(name = "status", nullable = false, length = 15)
+	private NannyOperationalStatus status = NannyOperationalStatus.ACTIVE;
 
 	@Column(name = "first_name", nullable = false, length = 100)
 	private String firstName;
@@ -147,6 +170,9 @@ public class Nanny {
 		Instant now = Instant.now();
 		this.createdAt = now;
 		this.updatedAt = now;
+		if (this.publicId == null) {
+			this.publicId = PublicIds.of(PublicIds.NANNY_PREFIX);
+		}
 	}
 
 	@PreUpdate
