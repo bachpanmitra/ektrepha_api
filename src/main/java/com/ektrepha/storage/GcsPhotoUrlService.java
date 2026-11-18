@@ -40,9 +40,9 @@ public class GcsPhotoUrlService {
 		storage.create(blobInfo, content);
 	}
 
-	/** Returns null unchanged when {@code key} is null (most photo fields are unset) or when GCS is disabled - no real object exists to sign a URL for. */
+	/** Returns null unchanged when {@code key} is null/blank (most photo fields are unset, and the banner desktop image is optional) or when GCS is disabled - no real object exists to sign a URL for. */
 	public String presign(String key) {
-		if (key == null || !appProperties.gcs().enabled()) {
+		if (key == null || key.isBlank() || !appProperties.gcs().enabled()) {
 			return null;
 		}
 		BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(appProperties.gcs().bucket(), key)).build();

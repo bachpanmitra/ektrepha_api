@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 56
+      author: ektrepha
+      description: Admin-managed home page banners (PRD home banner management, Phase 1)
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/056-home-banners-schema.sql
+            relativeToChangelogFile: false

@@ -59,6 +59,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/search").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/live-zones").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/serviceability/localities").permitAll()
+						// Home page carousel (PRD: Admin Home Page Banner Management) - read by anonymous visitors.
+						.requestMatchers(HttpMethod.GET, "/api/v1/home/banners").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/serviceability/waitlist", "/api/waitlist", "/api/v1/waitlist").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/pricing/calculate").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/users/identify").permitAll()
