@@ -56,6 +56,13 @@ app:
       enabled: ${MOBILE_OTP_FIXED_ENABLED:true}
       code: ${MOBILE_OTP_FIXED_CODE:123456}
       allowed-numbers: ${MOBILE_OTP_FIXED_ALLOWED_NUMBERS:+919999999999,+919000000002, +919153766118,+918002638274, +918002638271}
+  # fixed-otp.enabled by default here (dev only) so the nanny app's check-in/check-out code entry
+  # can be exercised end-to-end without fetching the real per-booking code from the parent side
+  # every time. Accepted in addition to the real generated code, not instead of it.
+  attendance-otp:
+    fixed-otp:
+      enabled: ${ATTENDANCE_OTP_FIXED_ENABLED:true}
+      code: ${ATTENDANCE_OTP_FIXED_CODE:1234}
   # Real Razorpay TEST-mode credentials (see com.ektrepha.payment) — order creation and webhook
   # signature verification were both verified end-to-end against these on 2026-09-26. Test-mode
   # only, no real money moves, but still a real account credential — rotate in the Razorpay

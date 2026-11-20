@@ -31,6 +31,7 @@ public record AppProperties(
 		@Valid @NotNull Firebase firebase,
 		@Valid @NotNull Geocoding geocoding,
 		@Valid @NotNull MobileOtp mobileOtp,
+		@Valid @NotNull AttendanceOtp attendanceOtp,
 		@Valid @NotNull Sms sms,
 		@Valid @NotNull OlaMaps olaMaps,
 		@Valid @NotNull Razorpay razorpay,
@@ -170,6 +171,23 @@ public record AppProperties(
 				@DefaultValue("false") boolean enabled,
 				String code,
 				@Size(max = 3, message = "app.mobile-otp.review-account.allowed-numbers must stay small (max 3) — this bypass is for a handful of reviewer/test accounts, not general testing") List<String> allowedNumbers) {
+		}
+	}
+
+	/**
+	 * Dev/stage-only fixed-code bypass for the per-booking check-in/check-out attendance codes (see
+	 * NannyAttendanceServiceImpl) — the family-facing code the nanny app otherwise fetches from
+	 * {@code AttendanceCodeGenerator}/{@code AttendanceOtpCache} per booking per day. Same shape and
+	 * safety invariant as {@link MobileOtp.FixedOtp}: {@link com.ektrepha.startup.MobileOtpFixedCodeGuard}
+	 * fails startup if this is ever enabled while the active profile is prod. Applies to every
+	 * booking's check-in and check-out code alike — there's no per-number allowlist here since, unlike
+	 * sign-in, there's no "real" account for this value to even collide with.
+	 */
+	public record AttendanceOtp(@Valid @NotNull FixedOtp fixedOtp) {
+
+		public record FixedOtp(
+				@DefaultValue("false") boolean enabled,
+				String code) {
 		}
 	}
 

@@ -72,18 +72,26 @@ public class CmScheduledTaskJob {
 
 	private void createTrialCheckInTasks() {
 		for (ParentTrial trial : parentTrialRepository.findByStatus(TrialStatus.ACTIVE)) {
-			Parent parent = parentRepository.findById(trial.getParentId()).orElse(null);
-			if (parent == null) {
-				continue;
+			try {
+				Parent parent = parentRepository.findById(trial.getParentId()).orElse(null);
+				if (parent == null) {
+					continue;
+				}
+				Integer trialDay = parentStageService.resolveTrialDay(parent);
+				if (trialDay == null) {
+					continue;
+				}
+				Instant endOfDay = endOfTodayIst();
+				createIfNotAlreadyToday(parent, CmTaskType.TRIAL_DAILY_CHECKIN, CmTaskPriority.LOW, "Daily trial check-in", endOfDay);
+				if (trialDay == 4) {
+					createIfNotAlreadyToday(parent, CmTaskType.TRIAL_DAY4_CALL, CmTaskPriority.NORMAL, "Trial Day 4 call", endOfDay);
+				}
 			}
-			Integer trialDay = parentStageService.resolveTrialDay(parent);
-			if (trialDay == null) {
-				continue;
-			}
-			Instant endOfDay = endOfTodayIst();
-			createIfNotAlreadyToday(parent, CmTaskType.TRIAL_DAILY_CHECKIN, CmTaskPriority.LOW, "Daily trial check-in", endOfDay);
-			if (trialDay == 4) {
-				createIfNotAlreadyToday(parent, CmTaskType.TRIAL_DAY4_CALL, CmTaskPriority.NORMAL, "Trial Day 4 call", endOfDay);
+			catch (RuntimeException ex) {
+				// run() is @Transactional - an uncaught exception here would roll back every other
+				// parent's check-in in this sweep too, not just this one (and the monthly/overdue
+				// sweeps below, since they share the same transaction).
+				log.error("Trial check-in sweep failed for parent {}", trial.getParentId(), ex);
 			}
 		}
 	}
@@ -91,14 +99,19 @@ public class CmScheduledTaskJob {
 	private void createMonthlyCheckIns() {
 		Instant cutoff = Instant.now(clock).minus(MONTHLY_CHECKIN_CADENCE);
 		for (Parent parent : parentRepository.findAll()) {
-			if (parentStageService.resolveStage(parent) != ParentStage.REGULAR) {
-				continue;
+			try {
+				if (parentStageService.resolveStage(parent) != ParentStage.REGULAR) {
+					continue;
+				}
+				boolean dueForOne = !cmTaskRepository.existsByParentIdAndTypeAndCreatedAtBetween(
+						parent.getId(), CmTaskType.MONTHLY_CHECKIN, cutoff, Instant.now(clock));
+				if (dueForOne) {
+					createTask(parent, CmTaskType.MONTHLY_CHECKIN, CmTaskPriority.LOW, "Monthly check-in",
+							Instant.now(clock).plus(Duration.ofDays(7)));
+				}
 			}
-			boolean dueForOne = !cmTaskRepository.existsByParentIdAndTypeAndCreatedAtBetween(
-					parent.getId(), CmTaskType.MONTHLY_CHECKIN, cutoff, Instant.now(clock));
-			if (dueForOne) {
-				createTask(parent, CmTaskType.MONTHLY_CHECKIN, CmTaskPriority.LOW, "Monthly check-in",
-						Instant.now(clock).plus(Duration.ofDays(7)));
+			catch (RuntimeException ex) {
+				log.error("Monthly check-in sweep failed for parent {}", parent.getId(), ex);
 			}
 		}
 	}
@@ -106,9 +119,14 @@ public class CmScheduledTaskJob {
 	private void raiseOverdueAlerts() {
 		Instant now = Instant.now(clock);
 		for (CmTask task : cmTaskRepository.findByStatusAndDueAtBeforeAndOverdueAlertedAtIsNull(CmTaskStatus.OPEN, now)) {
-			task.setOverdueAlertedAt(now);
-			cmTaskRepository.save(task);
-			cmNotificationService.alertTaskOverdue(task);
+			try {
+				task.setOverdueAlertedAt(now);
+				cmTaskRepository.save(task);
+				cmNotificationService.alertTaskOverdue(task);
+			}
+			catch (RuntimeException ex) {
+				log.error("Overdue alert sweep failed for task {}", task.getId(), ex);
+			}
 		}
 	}
 

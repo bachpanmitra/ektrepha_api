@@ -3,7 +3,10 @@ package com.ektrepha.booking.service;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.ektrepha.booking.dto.request.DutyUpdateRequest;
+import com.ektrepha.booking.dto.request.NannyStayReviewRequest;
 import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
+import com.ektrepha.booking.dto.response.DutyUpdateResponse;
 import com.ektrepha.booking.dto.response.NannyCareDetailsResponse;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
 import com.ektrepha.booking.dto.response.RosterEntryResponse;
@@ -26,5 +29,11 @@ public interface NannyBookingService {
 
 	/** The nanny app's Roster screen (API Map row 29) — this caregiver's bookings overlapping [from, to] (max 62 days), one entry per working day. */
 	List<RosterEntryResponse> roster(Long userId, LocalDate from, LocalDate to);
+
+	/** The nanny's own rating/feedback on a completed stay — one per booking, never editable after submission. */
+	void submitReview(Long userId, Long bookingId, NannyStayReviewRequest request);
+
+	/** A free-text note logged during a shift (e.g. "started lunch") — append-only. */
+	DutyUpdateResponse addDutyUpdate(Long userId, Long bookingId, DutyUpdateRequest request);
 
 }

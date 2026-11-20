@@ -17,6 +17,9 @@ public interface WorkforceRequestService {
 
 	RequestCreatedResponse raiseSos(Long callerUserId, SosRaiseRequest request);
 
+	/** Nanny-initiated "this SOS is no longer needed" - only the nanny who raised it, and only while still open. */
+	RequestCreatedResponse cancelSos(Long callerUserId, Long sosAlertId);
+
 	RequestCreatedResponse reportIncident(Long callerUserId, IncidentReportCreateRequest request);
 
 }

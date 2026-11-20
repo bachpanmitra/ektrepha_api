@@ -9,8 +9,11 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.booking.dto.request.DutyUpdateRequest;
+import com.ektrepha.booking.dto.request.NannyStayReviewRequest;
 import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
 import com.ektrepha.booking.dto.response.ChildSummary;
+import com.ektrepha.booking.dto.response.DutyUpdateResponse;
 import com.ektrepha.booking.dto.response.NannyCareDetailsResponse;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
 import com.ektrepha.booking.dto.response.RosterEntryResponse;
@@ -20,17 +23,22 @@ import com.ektrepha.child.AgeDisplay;
 import com.ektrepha.child.dto.response.CareNotes;
 import com.ektrepha.child.service.ChildService;
 import com.ektrepha.exception.BookingNotFoundException;
+import com.ektrepha.exception.DuplicateStayReviewException;
 import com.ektrepha.exception.InvalidBookingTransitionException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.Booking;
+import com.ektrepha.model.BookingDutyUpdate;
 import com.ektrepha.model.BookingFrequency;
 import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Nanny;
+import com.ektrepha.model.NannyStayReview;
 import com.ektrepha.parent.impl.AddressResponseMapper;
 import com.ektrepha.repository.BookingAttendanceRepository;
+import com.ektrepha.repository.BookingDutyUpdateRepository;
 import com.ektrepha.repository.BookingRepository;
 import com.ektrepha.repository.LeaveRequestRepository;
 import com.ektrepha.repository.NannyRepository;
+import com.ektrepha.repository.NannyStayReviewRepository;
 import com.ektrepha.util.PhoneMasker;
 
 import lombok.RequiredArgsConstructor;
@@ -58,6 +66,8 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 	private final LeaveRequestRepository leaveRequestRepository;
 	private final AddressResponseMapper addressResponseMapper;
 	private final ChildService childService;
+	private final NannyStayReviewRepository nannyStayReviewRepository;
+	private final BookingDutyUpdateRepository bookingDutyUpdateRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -180,6 +190,30 @@ public class NannyBookingServiceImpl implements NannyBookingService {
 			return null;
 		}
 		return PhoneMasker.mask(booking.getParent().getUser().getPhone());
+	}
+
+	@Override
+	@Transactional
+	public void submitReview(Long userId, Long bookingId, NannyStayReviewRequest request) {
+		Booking booking = resolveOwnBooking(userId, bookingId);
+		if (nannyStayReviewRepository.existsByBookingId(booking.getId())) {
+			throw new DuplicateStayReviewException("This stay has already been reviewed");
+		}
+		nannyStayReviewRepository.save(NannyStayReview.builder()
+				.booking(booking).nanny(booking.getNanny()).stars(request.stars())
+				.tags(request.tags() == null ? List.of() : request.tags())
+				.privateNote(request.privateNote())
+				.build());
+	}
+
+	@Override
+	@Transactional
+	public DutyUpdateResponse addDutyUpdate(Long userId, Long bookingId, DutyUpdateRequest request) {
+		Booking booking = resolveOwnBooking(userId, bookingId);
+		BookingDutyUpdate saved = bookingDutyUpdateRepository.save(BookingDutyUpdate.builder()
+				.booking(booking).nanny(booking.getNanny()).note(request.text())
+				.build());
+		return new DutyUpdateResponse(saved.getId(), saved.getCreatedAt());
 	}
 
 	private Booking resolveOwnBooking(Long userId, Long bookingId) {

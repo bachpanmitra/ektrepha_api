@@ -42,6 +42,14 @@ app:
       enabled: ${MOBILE_OTP_REVIEW_ACCOUNT_ENABLED:false}
       code: ${MOBILE_OTP_REVIEW_ACCOUNT_CODE:123456}
       allowed-numbers: ${MOBILE_OTP_REVIEW_ACCOUNT_ALLOWED_NUMBERS:}
+  # Dev/stage-only bypass for the per-booking check-in/check-out attendance code (see
+  # NannyAttendanceServiceImpl) — safe, do-nothing default (disabled). Same startup guard as
+  # mobile-otp.fixed-otp: MobileOtpFixedCodeGuard fails startup outright if this is ever true with
+  # the prod profile active.
+  attendance-otp:
+    fixed-otp:
+      enabled: ${ATTENDANCE_OTP_FIXED_ENABLED:false}
+      code: ${ATTENDANCE_OTP_FIXED_CODE:1234}
   login-lockout:
     max-failures: ${LOGIN_LOCKOUT_MAX_FAILURES:5}
     lockout-minutes: ${LOGIN_LOCKOUT_MINUTES:15}

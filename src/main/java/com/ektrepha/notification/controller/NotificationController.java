@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ektrepha.notification.dto.request.DeviceRegisterRequest;
 import com.ektrepha.notification.dto.request.NotificationPreferenceUpdateRequest;
 import com.ektrepha.notification.dto.response.DeviceResponse;
+import com.ektrepha.notification.dto.response.NotificationItemResponse;
 import com.ektrepha.notification.dto.response.NotificationPreferenceResponse;
 import com.ektrepha.notification.service.NotificationService;
 
@@ -43,6 +45,23 @@ public class NotificationController {
 	@PostMapping("/devices")
 	public ResponseEntity<DeviceResponse> registerDevice(Authentication authentication, @Valid @RequestBody DeviceRegisterRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(notificationService.registerDevice(userId(authentication), request));
+	}
+
+	@GetMapping("/notifications")
+	public ResponseEntity<List<NotificationItemResponse>> listNotifications(Authentication authentication) {
+		return ResponseEntity.ok(notificationService.listNotifications(userId(authentication)));
+	}
+
+	@PostMapping("/notifications/{id}/read")
+	public ResponseEntity<Void> markRead(Authentication authentication, @PathVariable Long id) {
+		notificationService.markRead(userId(authentication), id);
+		return ResponseEntity.ok().build();
+	}
+
+	@PostMapping("/notifications/read-all")
+	public ResponseEntity<Void> markAllRead(Authentication authentication) {
+		notificationService.markAllRead(userId(authentication));
+		return ResponseEntity.ok().build();
 	}
 
 	private Long userId(Authentication authentication) {

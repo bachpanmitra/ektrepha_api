@@ -3,6 +3,7 @@ package com.ektrepha.workforce.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +27,11 @@ public class NannySosController {
 	public ResponseEntity<RequestCreatedResponse> raise(Authentication authentication, @RequestBody(required = false) SosRaiseRequest request) {
 		SosRaiseRequest body = request != null ? request : new SosRaiseRequest(null, null, null, null);
 		return ResponseEntity.status(HttpStatus.CREATED).body(workforceRequestService.raiseSos(userId(authentication), body));
+	}
+
+	@PostMapping("/{id}/cancel")
+	public ResponseEntity<RequestCreatedResponse> cancel(Authentication authentication, @PathVariable Long id) {
+		return ResponseEntity.ok(workforceRequestService.cancelSos(userId(authentication), id));
 	}
 
 	private Long userId(Authentication authentication) {

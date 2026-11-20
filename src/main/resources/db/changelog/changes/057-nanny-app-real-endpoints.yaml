@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 57
+      author: ektrepha
+      description: Nanny app real endpoints - profile, emergency contact, stay review, duty updates, notification inbox
+      validCheckSum: ANY
+      changes:
+        - sqlFile:
+            path: classpath:db/changelog/changes/057-nanny-app-real-endpoints.sql
+            relativeToChangelogFile: false

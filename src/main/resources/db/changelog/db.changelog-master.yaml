@@ -115,3 +115,5 @@ databaseChangeLog:
       file: classpath:db/changelog/changes/055-users-public-id.yaml
   - include:
       file: classpath:db/changelog/changes/056-home-banners-schema.yaml
+  - include:
+      file: classpath:db/changelog/changes/057-nanny-app-real-endpoints.yaml

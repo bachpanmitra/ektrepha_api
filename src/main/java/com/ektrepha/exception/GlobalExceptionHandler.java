@@ -89,7 +89,8 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({ UserNotFoundException.class, BookingNotFoundException.class, NannyNotFoundException.class, ParentNotFoundException.class,
 			ApprovalRequestNotFoundException.class, SosAlertNotFoundException.class, IncidentReportNotFoundException.class,
 			NannyReferenceNotFoundException.class, NannyInterviewNotFoundException.class, ReviewNotFoundException.class,
-			NannyVerificationDocumentNotFoundException.class, ChildNotFoundException.class, BannerNotFoundException.class })
+			NannyVerificationDocumentNotFoundException.class, ChildNotFoundException.class, BannerNotFoundException.class,
+			NotificationNotFoundException.class })
 	public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, HttpServletRequest request) {
 		return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
 	}
@@ -104,7 +105,7 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
 	}
 
-	@ExceptionHandler({ DuplicateReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class,
+	@ExceptionHandler({ DuplicateReviewException.class, DuplicateStayReviewException.class, DuplicateZonePricingException.class, DuplicatePincodeException.class,
 			AddressInUseException.class, ChildInUseException.class, ElderInUseException.class, AccountHasActiveBookingsException.class,
 			NannyUnavailableException.class, BookingNotCancellableException.class, CareUnavailableException.class,
 			PaymentStateException.class, BookingNotAwaitingAssignmentException.class, InvalidBookingTransitionException.class,

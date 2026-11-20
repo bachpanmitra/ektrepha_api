@@ -1,6 +1,7 @@
 package com.ektrepha.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import com.ektrepha.model.SosAlert;
 
 public interface SosAlertRepository extends JpaRepository<SosAlert, Long> {
+
+	Optional<SosAlert> findByIdAndNannyId(Long id, Long nannyId);
 
 	@Query("""
 			SELECT a FROM SosAlert a JOIN FETCH a.nanny n JOIN FETCH n.user LEFT JOIN FETCH a.booking

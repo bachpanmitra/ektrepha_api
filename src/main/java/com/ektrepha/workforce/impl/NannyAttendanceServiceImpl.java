@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ektrepha.activity.service.OrderActivityService;
 import com.ektrepha.booking.dto.response.AttendanceMonthResponse;
 import com.ektrepha.booking.impl.AttendanceCodeGenerator;
+import com.ektrepha.config.properties.AppProperties;
 import com.ektrepha.booking.impl.AttendanceMonthMapper;
 import com.ektrepha.booking.impl.GeoUtil;
 import com.ektrepha.exception.BookingNotFoundException;
@@ -27,6 +28,7 @@ import com.ektrepha.model.AttendanceMethod;
 import com.ektrepha.model.AttendanceStatus;
 import com.ektrepha.model.Booking;
 import com.ektrepha.model.BookingAttendance;
+import com.ektrepha.model.BookingStatus;
 import com.ektrepha.model.Nanny;
 import com.ektrepha.model.OrderActivityActorType;
 import com.ektrepha.model.OrderActivityType;
@@ -58,6 +60,7 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 	private final PasswordEncoder passwordEncoder;
 	private final PushSenderService pushSenderService;
 	private final OrderActivityService orderActivityService;
+	private final AppProperties appProperties;
 
 	@Override
 	@Transactional
@@ -83,6 +86,16 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 		orderActivityService.log(booking, OrderActivityType.CHECKED_IN, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
 		log.info("Nanny checked in via OTP: bookingId={}, nannyId={}, date={}", booking.getId(), booking.getNanny().getId(), today);
 		notifyParent(booking, "Your nanny has arrived", nannyFirstName(booking) + " just checked in for booking BK-" + booking.getId() + ".");
+
+		// The nanny's own check-in IS the booking starting — mirrors AdminBookingServiceImpl#start,
+		// just attributed to the nanny instead of an admin. Guarded on CONFIRMED so a booking an
+		// admin already started (or that's in some other state) is left alone rather than blowing up
+		// a successful OTP check-in over an unrelated status mismatch.
+		if (booking.getStatus() == BookingStatus.CONFIRMED) {
+			booking.setStatus(BookingStatus.IN_PROGRESS);
+			bookingRepository.save(booking);
+			orderActivityService.log(booking, OrderActivityType.BOOKING_STARTED, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
+		}
 		return toResponse(row);
 	}
 
@@ -106,6 +119,15 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 		orderActivityService.log(booking, OrderActivityType.CHECKED_OUT, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
 		log.info("Nanny checked out via OTP: bookingId={}, nannyId={}, date={}", booking.getId(), booking.getNanny().getId(), row.getAttendanceDate());
 		notifyParent(booking, "Your nanny has left", nannyFirstName(booking) + " just checked out of booking BK-" + booking.getId() + ".");
+
+		// Mirrors checkIn's BOOKING_STARTED pairing above — the nanny's own check-out IS the booking
+		// ending. Guarded on IN_PROGRESS for the same reason: leave an already-completed/cancelled
+		// booking's status alone rather than fail a successful OTP check-out over it.
+		if (booking.getStatus() == BookingStatus.IN_PROGRESS) {
+			booking.setStatus(BookingStatus.COMPLETED);
+			bookingRepository.save(booking);
+			orderActivityService.log(booking, OrderActivityType.BOOKING_COMPLETED, OrderActivityActorType.NANNY, booking.getNanny().getId(), nannyFirstName(booking));
+		}
 		return toResponse(row);
 	}
 
@@ -168,6 +190,10 @@ public class NannyAttendanceServiceImpl implements NannyAttendanceService {
 	}
 
 	private void verifyOtpOrThrow(BookingAttendance row, String hash, String otp, boolean isCheckIn) {
+		AppProperties.AttendanceOtp.FixedOtp fixedOtp = appProperties.attendanceOtp().fixedOtp();
+		if (fixedOtp.enabled() && fixedOtp.code() != null && fixedOtp.code().equals(otp)) {
+			return;
+		}
 		if (passwordEncoder.matches(otp, hash)) {
 			return;
 		}

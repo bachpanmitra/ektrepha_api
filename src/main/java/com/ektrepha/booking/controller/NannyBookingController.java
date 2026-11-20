@@ -10,11 +10,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ektrepha.booking.dto.request.DutyUpdateRequest;
+import com.ektrepha.booking.dto.request.NannyStayReviewRequest;
 import com.ektrepha.booking.dto.response.BookingLifecycleResponse;
+import com.ektrepha.booking.dto.response.DutyUpdateResponse;
 import com.ektrepha.booking.dto.response.NannyCareDetailsResponse;
 import com.ektrepha.booking.dto.response.NannyTodayBookingResponse;
 import com.ektrepha.booking.dto.response.RosterEntryResponse;
@@ -28,6 +32,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** NANNY-role actions on hourly-care bookings: the assigned caregiver's own "Live care" actions - Start/Complete. Caregiver assignment itself lives at the ADMIN-only {@code POST /api/v1/admin/hourly-care/bookings/{id}/assign} (see {@link com.ektrepha.hourlycare.controller.HourlyCareAdminController}); it is not exposed here. Distinct base path from /api/v1/bookings, which is entirely PARENT-scoped. */
@@ -114,6 +119,23 @@ public class NannyBookingController {
 			@Parameter(description = "Range start (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 			@Parameter(description = "Range end (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
 		return ResponseEntity.ok(nannyBookingService.roster(userId(authentication), from, to));
+	}
+
+	@Operation(summary = "Submit a stay review", description = "The caregiver's own rating/feedback on a completed stay - one per booking, never editable after submission.")
+	@PostMapping("/{id}/review")
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<Void> submitReview(Authentication authentication,
+			@Parameter(description = "Booking id") @PathVariable Long id, @Valid @RequestBody NannyStayReviewRequest request) {
+		nannyBookingService.submitReview(userId(authentication), id, request);
+		return ResponseEntity.ok().build();
+	}
+
+	@Operation(summary = "Log a duty update", description = "A free-text note logged during a shift - append-only.")
+	@PostMapping("/{id}/updates")
+	@PreAuthorize("hasRole('NANNY')")
+	public ResponseEntity<DutyUpdateResponse> addDutyUpdate(Authentication authentication,
+			@Parameter(description = "Booking id") @PathVariable Long id, @Valid @RequestBody DutyUpdateRequest request) {
+		return ResponseEntity.ok(nannyBookingService.addDutyUpdate(userId(authentication), id, request));
 	}
 
 	private Long userId(Authentication authentication) {

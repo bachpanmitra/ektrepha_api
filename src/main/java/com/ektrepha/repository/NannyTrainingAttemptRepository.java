@@ -12,4 +12,6 @@ public interface NannyTrainingAttemptRepository extends JpaRepository<NannyTrain
 
 	boolean existsByNannyIdAndPassedTrue(Long nannyId);
 
+	long countByNannyIdAndPassedTrue(Long nannyId);
+
 }

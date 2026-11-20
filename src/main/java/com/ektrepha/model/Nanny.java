@@ -97,6 +97,20 @@ public class Nanny {
 	@Column(name = "device_id", length = 128)
 	private String deviceId;
 
+	/** Nanny app's language picker - "en"/"kn"/"hi" (ektrepha-nanny-ui's LanguageCode), free-form rather than an enum since the app owns this list. */
+	@Builder.Default
+	@Column(name = "language", nullable = false, length = 5)
+	private String language = "en";
+
+	@Column(name = "emergency_contact_name", length = 100)
+	private String emergencyContactName;
+
+	@Column(name = "emergency_contact_relation", length = 50)
+	private String emergencyContactRelation;
+
+	@Column(name = "emergency_contact_phone", length = 15)
+	private String emergencyContactPhone;
+
 	/**
 	 * Derived rollup, recomputed by {@code NannyVerificationServiceImpl} whenever a
 	 * nanny_verification row changes. No public setter — {@code @Setter(NONE)} here overrides the

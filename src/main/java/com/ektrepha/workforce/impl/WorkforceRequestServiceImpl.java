@@ -3,8 +3,12 @@ package com.ektrepha.workforce.impl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 import com.ektrepha.exception.BookingNotFoundException;
 import com.ektrepha.exception.NannyNotFoundException;
+import com.ektrepha.exception.RequestAlreadyDecidedException;
+import com.ektrepha.exception.SosAlertNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
 import com.ektrepha.model.AttendanceCorrectionRequest;
 import com.ektrepha.model.Booking;
@@ -91,6 +95,20 @@ public class WorkforceRequestServiceImpl implements WorkforceRequestService {
 				.nanny(nanny).booking(booking).lat(request.lat()).lng(request.lng()).notes(request.notes())
 				.build());
 		return new RequestCreatedResponse(saved.getId(), "OPEN");
+	}
+
+	@Override
+	@Transactional
+	public RequestCreatedResponse cancelSos(Long callerUserId, Long sosAlertId) {
+		Nanny nanny = resolveCallerNanny(callerUserId);
+		SosAlert alert = sosAlertRepository.findByIdAndNannyId(sosAlertId, nanny.getId())
+				.orElseThrow(() -> new SosAlertNotFoundException("No SOS alert with id " + sosAlertId + " raised by this nanny"));
+		if (alert.getResolvedAt() != null) {
+			throw new RequestAlreadyDecidedException("This SOS alert has already been resolved");
+		}
+		alert.setResolvedAt(Instant.now());
+		sosAlertRepository.save(alert);
+		return new RequestCreatedResponse(alert.getId(), "CANCELLED");
 	}
 
 	@Override

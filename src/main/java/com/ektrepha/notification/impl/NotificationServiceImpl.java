@@ -9,7 +9,9 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ektrepha.exception.NotificationNotFoundException;
 import com.ektrepha.exception.UserNotFoundException;
+import com.ektrepha.model.Notification;
 import com.ektrepha.model.NotificationCategory;
 import com.ektrepha.model.User;
 import com.ektrepha.model.UserDevice;
@@ -17,8 +19,10 @@ import com.ektrepha.model.UserNotificationPreference;
 import com.ektrepha.notification.dto.request.DeviceRegisterRequest;
 import com.ektrepha.notification.dto.request.NotificationPreferenceUpdateRequest;
 import com.ektrepha.notification.dto.response.DeviceResponse;
+import com.ektrepha.notification.dto.response.NotificationItemResponse;
 import com.ektrepha.notification.dto.response.NotificationPreferenceResponse;
 import com.ektrepha.notification.service.NotificationService;
+import com.ektrepha.repository.NotificationRepository;
 import com.ektrepha.repository.UserDeviceRepository;
 import com.ektrepha.repository.UserNotificationPreferenceRepository;
 import com.ektrepha.repository.UserRepository;
@@ -37,6 +41,7 @@ public class NotificationServiceImpl implements NotificationService {
 	private final UserRepository userRepository;
 	private final UserNotificationPreferenceRepository preferenceRepository;
 	private final UserDeviceRepository deviceRepository;
+	private final NotificationRepository notificationRepository;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -89,6 +94,32 @@ public class NotificationServiceImpl implements NotificationService {
 		device = deviceRepository.save(device);
 
 		return new DeviceResponse(device.getId(), device.getPlatform(), device.getLastActiveAt());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<NotificationItemResponse> listNotifications(Long userId) {
+		return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+				.map(n -> new NotificationItemResponse(n.getId(), n.getTitle(), n.getBody(), n.getCreatedAt(), n.getReadAt() != null,
+						n.getRoute(), n.getBooking() == null ? null : n.getBooking().getId()))
+				.toList();
+	}
+
+	@Override
+	@Transactional
+	public void markRead(Long userId, Long notificationId) {
+		Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
+				.orElseThrow(() -> new NotificationNotFoundException("No notification with id " + notificationId));
+		if (notification.getReadAt() == null) {
+			notification.setReadAt(Instant.now());
+			notificationRepository.save(notification);
+		}
+	}
+
+	@Override
+	@Transactional
+	public void markAllRead(Long userId) {
+		notificationRepository.markAllRead(userId, Instant.now());
 	}
 
 	private NotificationPreferenceResponse toResponse(NotificationCategory category, UserNotificationPreference preference) {
